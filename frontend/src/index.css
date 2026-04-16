@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  font-family: "Aptos", "Segoe UI Variable Text", "Trebuchet MS", sans-serif;
+  font-synthesis: none;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #102738;
+  background:
+    radial-gradient(circle at top, rgb(102 188 170 / 0.16), transparent 28%),
+    linear-gradient(180deg, #f5fbfb 0%, #eef3f4 100%);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  appearance: none;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@media (max-width: 1100px), (max-height: 700px) {
+  body {
+    overflow: auto;
+  }
+}
