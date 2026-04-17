@@ -6,8 +6,7 @@ export const requireAdmin = (
   _res: Response,
   next: NextFunction,
 ) => {
-  const authenticatedUser = req.authenticatedUser;
-
+  const authenticatedUser = req.authenticatedUser ?? req.authSession?.user;
   if (!authenticatedUser) {
     return next(
       new AppError({

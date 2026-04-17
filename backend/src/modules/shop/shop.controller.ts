@@ -7,7 +7,7 @@ export class ShopController {
 
   getProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
       const shop = await this.shopService.getProfile(shopId);
 
       return res.status(200).json({ data: shop });

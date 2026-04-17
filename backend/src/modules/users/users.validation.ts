@@ -1,13 +1,21 @@
 import { z } from "zod";
+import { collapseWhitespace, normalizeEmail } from "../../shared/utils/strings";
 
 export const inviteUserSchema = z.object({
-  fullName: z.string().trim().min(2).max(160),
-  email: z.string().trim().email().max(320),
+  fullName: z.string().trim().min(2).max(160).transform(collapseWhitespace),
+  email: z.string().trim().email().max(320).transform(normalizeEmail),
   role: z.enum(["staff", "accountant"]),
 });
 
 export const updateUserSchema = z.object({
-  fullName: z.string().trim().min(2).max(160).optional(),
+  fullName: z
+    .string()
+    .trim()
+    .min(2)
+    .max(160)
+    .transform(collapseWhitespace)
+    .optional(),
+  email: z.string().trim().email().max(320).transform(normalizeEmail).optional(),
   role: z.enum(["staff", "accountant"]).optional(),
 });
 
@@ -20,8 +28,8 @@ export const acceptInvitationSchema = z
     token: z.string().trim().min(10),
     password: z
       .string()
-      .min(8)
-      .max(128)
+      .min(12)
+      .max(72)
       .regex(/[A-Z]/, "Password must include at least one uppercase letter.")
       .regex(/[a-z]/, "Password must include at least one lowercase letter.")
       .regex(/[0-9]/, "Password must include at least one number.")
@@ -29,7 +37,7 @@ export const acceptInvitationSchema = z
         /[^A-Za-z0-9]/,
         "Password must include at least one special character.",
       ),
-    confirmPassword: z.string().min(8).max(128),
+    confirmPassword: z.string().min(12).max(72),
   })
   .superRefine((value, ctx) => {
     if (value.password !== value.confirmPassword) {

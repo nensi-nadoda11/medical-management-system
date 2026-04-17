@@ -1,10 +1,12 @@
 import { env } from "../../config/env";
+import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
 import { hashPassword } from "../../shared/security/password";
 import {
   generateInvitationToken,
   hashInvitationToken,
 } from "../../shared/utils/invitation_token";
+import { normalizeEmail } from "../../shared/utils/strings";
 import { emailService } from "../notifications/email/email.service";
 import { UsersRepository } from "./users.repository";
 import type {
@@ -14,7 +16,8 @@ import type {
   UpdateUserStatusInput,
 } from "./users.validation";
 
-const getAppBaseUrl = () => env.allowedOrigins[0] ?? "http://localhost:5173";
+const getAppBaseUrl = () =>
+  env.APP_BASE_URL ?? env.allowedOrigins[0] ?? "http://localhost:5173";
 
 const buildAppError = (statusCode: number, code: string, message: string) =>
   new AppError({
@@ -23,15 +26,79 @@ const buildAppError = (statusCode: number, code: string, message: string) =>
     message,
   });
 
+const buildSafeInternalError = (message: string) =>
+  new AppError({
+    statusCode: 500,
+    code: "INTERNAL_SERVER_ERROR",
+    message,
+    expose: false,
+  });
+
+const toPublicUser = (user: {
+  id: string;
+  shopId: string;
+  role: "admin" | "staff" | "accountant";
+  fullName: string;
+  email: string;
+  mobileNumber: string | null;
+  isActive: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: user.id,
+  shopId: user.shopId,
+  role: user.role,
+  fullName: user.fullName,
+  email: user.email,
+  mobileNumber: user.mobileNumber,
+  isActive: user.isActive,
+  lastLoginAt: user.lastLoginAt,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const toPublicInvitation = (invitation: {
+  id: string;
+  shopId: string;
+  email: string;
+  fullName: string;
+  role: "admin" | "staff" | "accountant";
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  revokedAt: Date | null;
+  lastSentAt: Date;
+  invitedByUserId: string;
+  createdUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: invitation.id,
+  shopId: invitation.shopId,
+  email: invitation.email,
+  fullName: invitation.fullName,
+  role: invitation.role,
+  expiresAt: invitation.expiresAt,
+  acceptedAt: invitation.acceptedAt,
+  revokedAt: invitation.revokedAt,
+  lastSentAt: invitation.lastSentAt,
+  invitedByUserId: invitation.invitedByUserId,
+  createdUserId: invitation.createdUserId,
+  createdAt: invitation.createdAt,
+  updatedAt: invitation.updatedAt,
+});
+
 export class UsersService {
   constructor(private readonly usersRepository = new UsersRepository()) {}
 
   async listUsers(shopId: string) {
-    return this.usersRepository.listByShopId(shopId);
+    const users = await this.usersRepository.listByShopId(shopId);
+    return users.map(toPublicUser);
   }
 
   async listInvitations(shopId: string) {
-    return this.usersRepository.listInvitationsByShopId(shopId);
+    const invitations = await this.usersRepository.listInvitationsByShopId(shopId);
+    return invitations.map(toPublicInvitation);
   }
 
   async inviteUser(
@@ -39,7 +106,8 @@ export class UsersService {
     invitedByUserId: string,
     input: InviteUserInput,
   ) {
-    const existingUser = await this.usersRepository.findByEmail(input.email);
+    const normalizedEmail = normalizeEmail(input.email);
+    const existingUser = await this.usersRepository.findByEmail(normalizedEmail);
 
     if (existingUser) {
       throw buildAppError(
@@ -49,8 +117,10 @@ export class UsersService {
       );
     }
 
-    const activeInvitation =
-      await this.usersRepository.findActiveInvitationByEmail(shopId, input.email);
+    const activeInvitation = await this.usersRepository.findActiveInvitationByEmail(
+      shopId,
+      normalizedEmail,
+    );
 
     if (activeInvitation) {
       const now = Date.now();
@@ -80,7 +150,7 @@ export class UsersService {
         )
       : await this.usersRepository.createInvitation({
           shopId,
-          email: input.email,
+          email: normalizedEmail,
           fullName: input.fullName,
           role: input.role,
           tokenHash,
@@ -88,23 +158,43 @@ export class UsersService {
           invitedByUserId,
         });
 
+    if (!invitation) {
+      throw buildSafeInternalError("Failed to create the invitation.");
+    }
+
     const inviteLink = `${getAppBaseUrl()}/set-password?token=${token}`;
 
-    await emailService.send({
-      to: input.email,
-      subject: "You have been invited to join Medical Management System",
-      html: `
-        <p>Hello ${input.fullName},</p>
-        <p>You have been invited as <strong>${input.role}</strong>.</p>
-        <p>Click the button below to set your password and activate your account:</p>
-        <p><a href="${inviteLink}" target="_blank" rel="noopener noreferrer">Set Password</a></p>
-        <p>This link will expire in ${env.INVITATION_EXPIRY_HOURS} hours.</p>
-      `,
-      text: `Hello ${input.fullName}, you have been invited as ${input.role}. Set your password here: ${inviteLink}`,
-    });
+    try {
+      await emailService.send({
+        to: normalizedEmail,
+        subject: "You have been invited to join Medical Management System",
+        html: `
+          <p>Hello ${input.fullName},</p>
+          <p>You have been invited as <strong>${input.role}</strong>.</p>
+          <p>Click the button below to set your password and activate your account:</p>
+          <p><a href="${inviteLink}" target="_blank" rel="noopener noreferrer">Set Password</a></p>
+          <p>This link will expire in ${env.INVITATION_EXPIRY_HOURS} hours.</p>
+        `,
+        text: `Hello ${input.fullName}, you have been invited as ${input.role}. Set your password here: ${inviteLink}`,
+      });
+    } catch {
+      if (activeInvitation) {
+        await this.usersRepository.restoreInvitationAfterFailedSend(activeInvitation.id, {
+          tokenHash: activeInvitation.tokenHash,
+          expiresAt: activeInvitation.expiresAt,
+          lastSentAt: activeInvitation.lastSentAt,
+        });
+      } else {
+        await this.usersRepository.deleteInvitation(invitation.id);
+      }
+
+      throw buildSafeInternalError(
+        "Unable to send the invitation email right now. Please try again in a moment.",
+      );
+    }
 
     return {
-      invitation,
+      invitation: toPublicInvitation(invitation),
       inviteLink,
     };
   }
@@ -155,21 +245,38 @@ export class UsersService {
       tokenHash,
       expiresAt,
     );
+
+    if (!updatedInvitation) {
+      throw buildSafeInternalError("Failed to update the invitation.");
+    }
+
     const inviteLink = `${getAppBaseUrl()}/set-password?token=${token}`;
 
-    await emailService.send({
-      to: invitation.email,
-      subject: "Your invitation link has been resent",
-      html: `
-        <p>Hello ${invitation.fullName},</p>
-        <p>Click below to activate your account:</p>
-        <p><a href="${inviteLink}" target="_blank" rel="noopener noreferrer">Set Password</a></p>
-        <p>This link will expire in ${env.INVITATION_EXPIRY_HOURS} hours.</p>
-      `,
-      text: `Set your password here: ${inviteLink}`,
-    });
+    try {
+      await emailService.send({
+        to: invitation.email,
+        subject: "Your invitation link has been resent",
+        html: `
+          <p>Hello ${invitation.fullName},</p>
+          <p>Click below to activate your account:</p>
+          <p><a href="${inviteLink}" target="_blank" rel="noopener noreferrer">Set Password</a></p>
+          <p>This link will expire in ${env.INVITATION_EXPIRY_HOURS} hours.</p>
+        `,
+        text: `Set your password here: ${inviteLink}`,
+      });
+    } catch {
+      await this.usersRepository.restoreInvitationAfterFailedSend(invitation.id, {
+        tokenHash: invitation.tokenHash,
+        expiresAt: invitation.expiresAt,
+        lastSentAt: invitation.lastSentAt,
+      });
 
-    return updatedInvitation;
+      throw buildSafeInternalError(
+        "Unable to resend the invitation email right now. Please try again shortly.",
+      );
+    }
+
+    return toPublicInvitation(updatedInvitation);
   }
 
   async revokeInvitation(shopId: string, invitationId: string) {
@@ -195,7 +302,13 @@ export class UsersService {
       );
     }
 
-    return this.usersRepository.revokeInvitation(invitationId);
+    const revokedInvitation = await this.usersRepository.revokeInvitation(invitationId);
+
+    if (!revokedInvitation) {
+      throw buildSafeInternalError("Failed to revoke the invitation.");
+    }
+
+    return toPublicInvitation(revokedInvitation);
   }
 
   async getInvitationByToken(token: string) {
@@ -251,23 +364,33 @@ export class UsersService {
     }
 
     if (invitation.role !== "staff" && invitation.role !== "accountant") {
-      throw buildAppError(
-        500,
-        "INVITATION_ROLE_INVALID",
+      throw buildSafeInternalError(
         "The invitation role is not supported for user creation.",
       );
     }
 
+    const invitedRole = invitation.role;
     const passwordHash = await hashPassword(input.password);
-    const user = await this.usersRepository.createInvitedUser({
-      shopId: invitation.shopId,
-      role: invitation.role,
-      fullName: invitation.fullName,
-      email: invitation.email,
-      passwordHash,
-    });
+    const user = await db.transaction(async (tx) => {
+      const createdUser = await this.usersRepository.createInvitedUser(
+        {
+          shopId: invitation.shopId,
+          role: invitedRole,
+          fullName: invitation.fullName,
+          email: invitation.email,
+          passwordHash,
+        },
+        tx,
+      );
 
-    await this.usersRepository.markInvitationAccepted(invitation.id, user.id);
+      await this.usersRepository.markInvitationAccepted(
+        invitation.id,
+        createdUser.id,
+        tx,
+      );
+
+      return createdUser;
+    });
 
     return user;
   }
@@ -300,13 +423,30 @@ export class UsersService {
       );
     }
 
+    if (input.email !== undefined) {
+      const existingUserWithEmail = await this.usersRepository.findByEmail(input.email);
+
+      if (existingUserWithEmail && existingUserWithEmail.id !== user.id) {
+        throw buildAppError(
+          409,
+          "USER_EMAIL_CONFLICT",
+          "Another user already uses this email address.",
+        );
+      }
+    }
+
     const payload: {
       fullName?: string;
+      email?: string;
       role?: "staff" | "accountant";
     } = {};
 
     if (input.fullName !== undefined) {
       payload.fullName = input.fullName;
+    }
+
+    if (input.email !== undefined) {
+      payload.email = input.email;
     }
 
     if (input.role !== undefined) {
@@ -316,14 +456,10 @@ export class UsersService {
     const updatedUser = await this.usersRepository.updateUser(userId, payload);
 
     if (!updatedUser) {
-      throw buildAppError(
-        500,
-        "USER_UPDATE_FAILED",
-        "Failed to update user.",
-      );
+      throw buildSafeInternalError("Failed to update user.");
     }
 
-    return updatedUser;
+    return toPublicUser(updatedUser);
   }
 
   async updateUserStatus(
@@ -354,19 +490,28 @@ export class UsersService {
       );
     }
 
-    const updatedUser = await this.usersRepository.updateStatus(
-      userId,
-      input.isActive,
-    );
+    const updatedUser = await db.transaction(async (tx) => {
+      const nextUser = await this.usersRepository.updateStatus(
+        userId,
+        input.isActive,
+        tx,
+      );
+
+      if (!nextUser) {
+        return null;
+      }
+
+      if (!input.isActive) {
+        await this.usersRepository.revokeSessionsByUserId(userId, tx);
+      }
+
+      return nextUser;
+    });
 
     if (!updatedUser) {
-      throw buildAppError(
-        500,
-        "USER_STATUS_UPDATE_FAILED",
-        "Failed to update user status.",
-      );
+      throw buildSafeInternalError("Failed to update user status.");
     }
 
-    return updatedUser;
+    return toPublicUser(updatedUser);
   }
 }

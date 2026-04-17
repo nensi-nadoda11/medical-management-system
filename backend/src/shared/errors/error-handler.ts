@@ -43,7 +43,9 @@ export const errorHandler = (
       success: false,
       error: {
         code: error.code,
-        message: error.message,
+        message: error.expose
+          ? error.message
+          : "Something went wrong. Please try again later.",
         ...(error.details ? { details: error.details } : {}),
       },
     });
@@ -72,12 +74,7 @@ export const errorHandler = (
     success: false,
     error: {
       code: "INTERNAL_SERVER_ERROR",
-      message:
-        env.NODE_ENV === "production"
-          ? "Something went wrong. Please try again later."
-          : error instanceof Error
-            ? error.message
-            : "Something went wrong. Please try again later.",
+      message: "Something went wrong. Please try again later.",
     },
   });
 };

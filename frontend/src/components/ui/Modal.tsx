@@ -6,6 +6,8 @@ interface ModalProps extends PropsWithChildren {
   description?: string;
   onClose: () => void;
   footer?: ReactNode;
+  panelClassName?: string;
+  bodyClassName?: string;
 }
 
 export const Modal = ({
@@ -14,6 +16,8 @@ export const Modal = ({
   description,
   onClose,
   footer,
+  panelClassName,
+  bodyClassName,
   children,
 }: ModalProps) => {
   if (!open) {
@@ -22,7 +26,9 @@ export const Modal = ({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10">
+      <div
+        className={`w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 ${panelClassName ?? ""}`}
+      >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div className="space-y-1">
             <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
@@ -38,7 +44,9 @@ export const Modal = ({
             Close
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{children}</div>
+        <div className={`max-h-[70vh] overflow-y-auto px-6 py-5 ${bodyClassName ?? ""}`}>
+          {children}
+        </div>
         {footer ? (
           <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:justify-end">
             {footer}

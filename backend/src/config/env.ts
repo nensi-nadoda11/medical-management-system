@@ -37,6 +37,7 @@ const envSchema = z
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required."),
     CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
+    APP_BASE_URL: optionalString,
     TRUST_PROXY: booleanSchema.default(false),
     INVITATION_EXPIRY_HOURS: z.coerce.number().int().positive(),
     INVITATION_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive(),
@@ -45,7 +46,7 @@ const envSchema = z
     AUTH_COOKIE_DOMAIN: optionalString,
     AUTH_COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
     AUTH_COOKIE_SECURE: booleanSchema.optional(),
-    AUTH_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+    AUTH_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
     SESSION_TOKEN_SECRET: z
       .string()
       .trim()

@@ -30,7 +30,12 @@ export const authRepository = {
     const [result] = await database
       .select()
       .from(users)
-      .where(or(eq(users.email, email), eq(users.mobileNumber, mobileNumber)))
+      .where(
+        or(
+          sql`lower(${users.email}) = lower(${email})`,
+          eq(users.mobileNumber, mobileNumber),
+        ),
+      )
       .limit(1);
 
     return result ?? null;
@@ -140,7 +145,12 @@ export const authRepository = {
       .select({ user: users, shop: shops })
       .from(users)
       .innerJoin(shops, eq(users.shopId, shops.id))
-      .where(and(eq(users.email, email), eq(users.mobileNumber, mobileNumber)))
+      .where(
+        and(
+          sql`lower(${users.email}) = lower(${email})`,
+          eq(users.mobileNumber, mobileNumber),
+        ),
+      )
       .limit(1);
 
     return result ?? null;
@@ -313,7 +323,7 @@ export const authRepository = {
       .select({ user: users, shop: shops })
       .from(users)
       .innerJoin(shops, eq(users.shopId, shops.id))
-      .where(eq(users.email, email))
+      .where(sql`lower(${users.email}) = lower(${email})`)
       .limit(1);
 
     return result ?? null;

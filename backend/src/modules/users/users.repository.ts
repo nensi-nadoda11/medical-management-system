@@ -1,18 +1,25 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { userInvitations, users } from "../../db/schema";
+import { authSessions, userInvitations, users } from "../../db/schema";
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DbExecutor = typeof db | Transaction;
+
+const getExecutor = (executor?: DbExecutor) => executor ?? db;
 
 export class UsersRepository {
-  async listByShopId(shopId: string) {
-    return db
+  async listByShopId(shopId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    return database
       .select()
       .from(users)
       .where(eq(users.shopId, shopId))
       .orderBy(desc(users.createdAt));
   }
 
-  async findById(userId: string) {
-    const [user] = await db
+  async findById(userId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    const [user] = await database
       .select()
       .from(users)
       .where(eq(users.id, userId))
@@ -20,20 +27,27 @@ export class UsersRepository {
     return user ?? null;
   }
 
-  async findByEmail(email: string) {
-    const [user] = await db
+  async findByEmail(email: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    const [user] = await database
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(sql`lower(${users.email}) = lower(${email})`)
       .limit(1);
     return user ?? null;
   }
 
   async updateUser(
     userId: string,
-    payload: Partial<{ fullName: string; role: "staff" | "accountant" }>,
+    payload: Partial<{
+      fullName: string;
+      email: string;
+      role: "staff" | "accountant";
+    }>,
+    executor?: DbExecutor,
   ) {
-    const [user] = await db
+    const database = getExecutor(executor);
+    const [user] = await database
       .update(users)
       .set({
         ...payload,
@@ -45,8 +59,13 @@ export class UsersRepository {
     return user ?? null;
   }
 
-  async updateStatus(userId: string, isActive: boolean) {
-    const [user] = await db
+  async updateStatus(
+    userId: string,
+    isActive: boolean,
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
+    const [user] = await database
       .update(users)
       .set({
         isActive,
@@ -58,16 +77,20 @@ export class UsersRepository {
     return user ?? null;
   }
 
-  async createInvitation(payload: {
-    shopId: string;
-    email: string;
-    fullName: string;
-    role: "staff" | "accountant";
-    tokenHash: string;
-    expiresAt: Date;
-    invitedByUserId: string;
-  }) {
-    const [invitation] = await db
+  async createInvitation(
+    payload: {
+      shopId: string;
+      email: string;
+      fullName: string;
+      role: "staff" | "accountant";
+      tokenHash: string;
+      expiresAt: Date;
+      invitedByUserId: string;
+    },
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .insert(userInvitations)
       .values({
         shopId: payload.shopId,
@@ -83,16 +106,25 @@ export class UsersRepository {
     return invitation;
   }
 
-  async listInvitationsByShopId(shopId: string) {
-    return db
+  async deleteInvitation(invitationId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    await database
+      .delete(userInvitations)
+      .where(eq(userInvitations.id, invitationId));
+  }
+
+  async listInvitationsByShopId(shopId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    return database
       .select()
       .from(userInvitations)
       .where(eq(userInvitations.shopId, shopId))
       .orderBy(desc(userInvitations.createdAt));
   }
 
-  async findInvitationById(invitationId: string) {
-    const [invitation] = await db
+  async findInvitationById(invitationId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .select()
       .from(userInvitations)
       .where(eq(userInvitations.id, invitationId))
@@ -101,14 +133,19 @@ export class UsersRepository {
     return invitation ?? null;
   }
 
-  async findActiveInvitationByEmail(shopId: string, email: string) {
-    const [invitation] = await db
+  async findActiveInvitationByEmail(
+    shopId: string,
+    email: string,
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .select()
       .from(userInvitations)
       .where(
         and(
           eq(userInvitations.shopId, shopId),
-          eq(userInvitations.email, email),
+          sql`lower(${userInvitations.email}) = lower(${email})`,
           isNull(userInvitations.acceptedAt),
           isNull(userInvitations.revokedAt),
         ),
@@ -119,8 +156,9 @@ export class UsersRepository {
     return invitation ?? null;
   }
 
-  async findInvitationByTokenHash(tokenHash: string) {
-    const [invitation] = await db
+  async findInvitationByTokenHash(tokenHash: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .select()
       .from(userInvitations)
       .where(eq(userInvitations.tokenHash, tokenHash))
@@ -133,8 +171,10 @@ export class UsersRepository {
     invitationId: string,
     tokenHash: string,
     expiresAt: Date,
+    executor?: DbExecutor,
   ) {
-    const [invitation] = await db
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .update(userInvitations)
       .set({
         tokenHash,
@@ -148,8 +188,30 @@ export class UsersRepository {
     return invitation ?? null;
   }
 
-  async revokeInvitation(invitationId: string) {
-    const [invitation] = await db
+  async restoreInvitationAfterFailedSend(
+    invitationId: string,
+    payload: {
+      tokenHash: string;
+      expiresAt: Date;
+      lastSentAt: Date;
+    },
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
+    await database
+      .update(userInvitations)
+      .set({
+        tokenHash: payload.tokenHash,
+        expiresAt: payload.expiresAt,
+        lastSentAt: payload.lastSentAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(userInvitations.id, invitationId));
+  }
+
+  async revokeInvitation(invitationId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .update(userInvitations)
       .set({
         revokedAt: new Date(),
@@ -161,15 +223,19 @@ export class UsersRepository {
     return invitation ?? null;
   }
 
-  async createInvitedUser(payload: {
-    shopId: string;
-    role: "staff" | "accountant";
-    fullName: string;
-    email: string;
-    passwordHash: string;
-  }) {
+  async createInvitedUser(
+    payload: {
+      shopId: string;
+      role: "staff" | "accountant";
+      fullName: string;
+      email: string;
+      passwordHash: string;
+    },
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
     const now = new Date();
-    const [user] = await db
+    const [user] = await database
       .insert(users)
       .values({
         shopId: payload.shopId,
@@ -191,8 +257,13 @@ export class UsersRepository {
     return user;
   }
 
-  async markInvitationAccepted(invitationId: string, createdUserId: string) {
-    const [invitation] = await db
+  async markInvitationAccepted(
+    invitationId: string,
+    createdUserId: string,
+    executor?: DbExecutor,
+  ) {
+    const database = getExecutor(executor);
+    const [invitation] = await database
       .update(userInvitations)
       .set({
         acceptedAt: new Date(),
@@ -203,5 +274,15 @@ export class UsersRepository {
       .returning();
 
     return invitation ?? null;
+  }
+
+  async revokeSessionsByUserId(userId: string, executor?: DbExecutor) {
+    const database = getExecutor(executor);
+    await database
+      .update(authSessions)
+      .set({
+        revokedAt: new Date(),
+      })
+      .where(and(eq(authSessions.userId, userId), isNull(authSessions.revokedAt)));
   }
 }

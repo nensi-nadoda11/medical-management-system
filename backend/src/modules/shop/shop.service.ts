@@ -29,27 +29,7 @@ export class ShopService {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
     }
 
-    const payload: UpdateShopProfileInput = {
-      name: input.name,
-      ...(input.phone !== undefined ? { phone: input.phone } : {}),
-      ...(input.email !== undefined ? { email: input.email } : {}),
-      ...(input.addressLine1 !== undefined
-        ? { addressLine1: input.addressLine1 }
-        : {}),
-      ...(input.addressLine2 !== undefined
-        ? { addressLine2: input.addressLine2 }
-        : {}),
-      ...(input.city !== undefined ? { city: input.city } : {}),
-      ...(input.state !== undefined ? { state: input.state } : {}),
-      ...(input.pincode !== undefined ? { pincode: input.pincode } : {}),
-      ...(input.gstNumber !== undefined ? { gstNumber: input.gstNumber } : {}),
-      ...(input.licenseNumber !== undefined
-        ? { licenseNumber: input.licenseNumber }
-        : {}),
-      ...(input.invoicePrefix !== undefined
-        ? { invoicePrefix: input.invoicePrefix }
-        : {}),
-    };
+    const payload = input;
 
     const updatedShop = await this.shopRepository.updateProfile(shopId, payload);
 

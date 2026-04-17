@@ -24,6 +24,7 @@ import { EditUserDialog } from "../components/EditUserDialog";
 import { InviteUserDialog } from "../components/InviteUserDialog";
 
 type StaffTab = "users" | "invitations";
+type UserFilter = "active" | "all" | "inactive";
 type PendingAction =
   | { kind: "toggle-user"; user: StaffUser }
   | { kind: "resend-invitation"; invitation: UserInvitation }
@@ -35,6 +36,7 @@ export const StaffManagementPage = () => {
   const { pushToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("users");
+  const [userFilter, setUserFilter] = useState<UserFilter>("active");
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -128,6 +130,17 @@ export const StaffManagementPage = () => {
 
   const users = usersQuery.data ?? [];
   const invitations = invitationsQuery.data ?? [];
+  const visibleUsers = users.filter((user) => {
+    if (userFilter === "active") {
+      return user.isActive;
+    }
+
+    if (userFilter === "inactive") {
+      return !user.isActive;
+    }
+
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -187,7 +200,30 @@ export const StaffManagementPage = () => {
       >
         {activeTab === "users" ? (
           users.length ? (
-            <div className="overflow-x-auto">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "active", label: "Active users" },
+                  { id: "all", label: "All users" },
+                  { id: "inactive", label: "Inactive users" },
+                ].map((filter) => (
+                  <button
+                    className={
+                      userFilter === filter.id
+                        ? "rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white"
+                        : "rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                    }
+                    key={filter.id}
+                    onClick={() => setUserFilter(filter.id as UserFilter)}
+                    type="button"
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+
+              {visibleUsers.length ? (
+                <div className="overflow-x-auto">
               <table className="min-w-[760px] w-full border-separate border-spacing-y-3">
                 <thead>
                   <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -199,7 +235,7 @@ export const StaffManagementPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
+                  {visibleUsers.map((user) => (
                     <tr className="rounded-3xl bg-slate-50" key={user.id}>
                       <td className="rounded-l-3xl px-4 py-4">
                         <div>
@@ -240,6 +276,13 @@ export const StaffManagementPage = () => {
                   ))}
                 </tbody>
               </table>
+                </div>
+              ) : (
+                <EmptyState
+                  description="No users match the selected filter right now."
+                  title="No matching users"
+                />
+              )}
             </div>
           ) : (
             <EmptyState

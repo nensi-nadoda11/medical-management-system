@@ -27,7 +27,7 @@ export class UsersController {
 
   listUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
       const users = await this.usersService.listUsers(shopId);
 
       return res.status(200).json({ data: users });
@@ -38,7 +38,7 @@ export class UsersController {
 
   listInvitations = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
       const invitations = await this.usersService.listInvitations(shopId);
 
       return res.status(200).json({ data: invitations });
@@ -49,8 +49,9 @@ export class UsersController {
 
   inviteUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
-      const invitedByUserId = req.authenticatedUser!.id;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
+      const invitedByUserId = (req.authenticatedUser ?? req.authSession!.user)
+        .id;
       const payload = inviteUserSchema.parse(req.body);
 
       const result = await this.usersService.inviteUser(
@@ -74,7 +75,7 @@ export class UsersController {
     next: NextFunction,
   ) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
       const invitation = await this.usersService.resendInvitation(
         shopId,
         getRequiredParam(req, "id"),
@@ -95,7 +96,7 @@ export class UsersController {
     next: NextFunction,
   ) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
       const invitation = await this.usersService.revokeInvitation(
         shopId,
         getRequiredParam(req, "id"),
@@ -157,8 +158,8 @@ export class UsersController {
 
   updateUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
-      const currentUserId = req.authenticatedUser!.id;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
+      const currentUserId = (req.authenticatedUser ?? req.authSession!.user).id;
       const payload = updateUserSchema.parse(req.body);
 
       const user = await this.usersService.updateUser(
@@ -183,8 +184,8 @@ export class UsersController {
     next: NextFunction,
   ) => {
     try {
-      const shopId = req.authenticatedUser!.shopId;
-      const currentUserId = req.authenticatedUser!.id;
+      const shopId = (req.authenticatedUser ?? req.authSession!.user).shopId;
+      const currentUserId = (req.authenticatedUser ?? req.authSession!.user).id;
       const payload = updateUserStatusSchema.parse(req.body);
 
       const user = await this.usersService.updateUserStatus(

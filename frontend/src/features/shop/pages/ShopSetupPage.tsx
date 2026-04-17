@@ -26,7 +26,10 @@ const shopProfileSchema = z.object({
   phone: z
     .string()
     .trim()
-    .max(20, "Phone number is too long.")
+    .refine(
+      (value) => value.length === 0 || value.replace(/\D/g, "").length >= 10,
+      "Enter a valid phone number.",
+    )
     .optional()
     .or(z.literal("")),
   email: z
@@ -39,14 +42,33 @@ const shopProfileSchema = z.object({
   addressLine2: optionalTextField,
   city: z.string().trim().max(100).optional().or(z.literal("")),
   state: z.string().trim().max(100).optional().or(z.literal("")),
-  pincode: z.string().trim().max(20).optional().or(z.literal("")),
-  gstNumber: z.string().trim().max(50).optional().or(z.literal("")),
+  pincode: z
+    .string()
+    .trim()
+    .refine((value) => value.length === 0 || /^\d{6}$/.test(value), "Enter a valid 6-digit pincode.")
+    .optional()
+    .or(z.literal("")),
+  gstNumber: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value.length === 0 || /^[0-9A-Za-z]{15}$/.test(value),
+      "GST number must be 15 characters.",
+    )
+    .optional()
+    .or(z.literal("")),
   licenseNumber: z.string().trim().max(100).optional().or(z.literal("")),
   invoicePrefix: z
     .string()
     .trim()
-    .min(2, "Invoice prefix should be at least 2 characters.")
-    .max(20)
+    .refine(
+      (value) => value.length === 0 || (value.length >= 2 && value.length <= 20),
+      "Invoice prefix should be between 2 and 20 characters.",
+    )
+    .refine(
+      (value) => value.length === 0 || /^[A-Za-z0-9-]+$/.test(value),
+      "Invoice prefix may contain only letters, numbers, and hyphens.",
+    )
     .optional()
     .or(z.literal("")),
 });
@@ -76,9 +98,9 @@ const toPayload = (values: ShopProfileFormValues): UpdateShopProfilePayload => (
   city: values.city?.trim() ? values.city.trim() : null,
   state: values.state?.trim() ? values.state.trim() : null,
   pincode: values.pincode?.trim() ? values.pincode.trim() : null,
-  gstNumber: values.gstNumber?.trim() ? values.gstNumber.trim() : null,
+  gstNumber: values.gstNumber?.trim() ? values.gstNumber.trim().toUpperCase() : null,
   licenseNumber: values.licenseNumber?.trim() ? values.licenseNumber.trim() : null,
-  invoicePrefix: values.invoicePrefix?.trim() ? values.invoicePrefix.trim() : null,
+  invoicePrefix: values.invoicePrefix?.trim() ? values.invoicePrefix.trim().toUpperCase() : null,
 });
 
 export const ShopSetupPage = () => {

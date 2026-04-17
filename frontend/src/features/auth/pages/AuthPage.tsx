@@ -70,18 +70,22 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
   const queryClient = useQueryClient();
 
   const [view, setView] = useState<AppView>(initialView);
-  const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
+  const [pendingRegistration, setPendingRegistration] =
+    useState<PendingRegistration | null>(null);
 
   const [registrationValues, setRegistrationValues] =
     useState<RegistrationValues>(defaultRegistrationValues);
-  const [registrationErrors, setRegistrationErrors] = useState<FieldErrors<RegistrationValues>>({});
+  const [registrationErrors, setRegistrationErrors] = useState<
+    FieldErrors<RegistrationValues>
+  >({});
   const [registrationStatus, setRegistrationStatus] = useState("");
 
   const [otpValues, setOtpValues] = useState<OtpValues>(defaultOtpValues);
   const [otpErrors, setOtpErrors] = useState<FieldErrors<OtpValues>>({});
   const [otpStatus, setOtpStatus] = useState("");
 
-  const [loginValues, setLoginValues] = useState<LoginValues>(defaultLoginValues);
+  const [loginValues, setLoginValues] =
+    useState<LoginValues>(defaultLoginValues);
   const [loginErrors, setLoginErrors] = useState<FieldErrors<LoginValues>>({});
   const [loginStatus, setLoginStatus] = useState("");
 
@@ -103,7 +107,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
   }, [initialView]);
 
   useEffect(() => {
-    const cachedPending = window.sessionStorage.getItem(pendingRegistrationStorageKey);
+    const cachedPending = window.sessionStorage.getItem(
+      pendingRegistrationStorageKey,
+    );
 
     if (cachedPending) {
       try {
@@ -133,18 +139,26 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
     setRegistrationErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const handleOtpChange = <K extends keyof OtpValues>(field: K, value: OtpValues[K]) => {
+  const handleOtpChange = <K extends keyof OtpValues>(
+    field: K,
+    value: OtpValues[K],
+  ) => {
     const sanitizedValue = value.replace(/\D/g, "").slice(0, 6) as OtpValues[K];
     setOtpValues((current) => ({ ...current, [field]: sanitizedValue }));
     setOtpErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const handleLoginChange = <K extends keyof LoginValues>(field: K, value: LoginValues[K]) => {
+  const handleLoginChange = <K extends keyof LoginValues>(
+    field: K,
+    value: LoginValues[K],
+  ) => {
     setLoginValues((current) => ({ ...current, [field]: value }));
     setLoginErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const handleRegisterSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRegisterSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     const nextErrors = validateRegistration(registrationValues);
     setRegistrationErrors(nextErrors);
@@ -175,7 +189,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
       );
       setOtpValues(defaultOtpValues);
       switchView("verify");
-      setOtpStatus(`${response.message} We sent verification codes to your email and mobile.`);
+      setOtpStatus(
+        `${response.message} We sent verification codes to your email and mobile.`,
+      );
     } catch (error) {
       setRegistrationErrors((current) => ({
         ...current,
@@ -184,11 +200,15 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
     }
   };
 
-  const handleVerifySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleVerifySubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     if (!pendingRegistration) {
-      setOtpErrors({ form: "Start registration first so we know where to verify the account." });
+      setOtpErrors({
+        form: "Start registration first so we know where to verify the account.",
+      });
       switchView("register");
       return;
     }
@@ -232,7 +252,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
         }));
         setRegistrationValues(defaultRegistrationValues);
         switchView("login");
-        setLoginStatus("Verification completed. Sign in with your email address and password.");
+        setLoginStatus(
+          "Verification completed. Sign in with your email address and password.",
+        );
       }
     } catch (error) {
       setOtpErrors((current) => ({
@@ -289,7 +311,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
 
     try {
       await loginMutation.mutateAsync(loginValues);
-      const nextSession = await authService.getSession().catch<AuthSession | null>(() => null);
+      const nextSession = await authService
+        .getSession()
+        .catch<AuthSession | null>(() => null);
 
       if (!nextSession) {
         throw new ApiError(
@@ -313,53 +337,85 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
     <main className="auth-shell">
       <section className="auth-hero">
         <div className="auth-hero__eyebrow">Medical Management System</div>
-        <h1>Secure access for clinics, staff operations, and financial workflows.</h1>
+        <h1>
+          Secure access for clinics, staff operations, and financial workflows.
+        </h1>
         <p className="auth-hero__lead">
-          Register the first shop administrator, verify both communication channels, and use the
-          same login architecture that is already ready for admin, staff, and accountant roles.
+          Register the first shop administrator, verify both communication
+          channels, and use the same login architecture that is already ready
+          for admin, staff, and accountant roles.
         </p>
 
         <div className="hero-grid">
           <article className="hero-metric">
             <strong>Shared OTP delivery</strong>
-            <span>The same 6-digit OTP is sent to both email and SMS for backup delivery.</span>
+            <span>
+              The same 6-digit OTP is sent to both email and SMS for backup
+              delivery.
+            </span>
           </article>
           <article className="hero-metric">
             <strong>Role-ready login</strong>
-            <span>Single secure sign-in path for all current and future users.</span>
+            <span>
+              Single secure sign-in path for all current and future users.
+            </span>
           </article>
           <article className="hero-metric">
             <strong>Protected sessions</strong>
-            <span>Cookie-based auth with backend-managed session validation.</span>
+            <span>
+              Cookie-based auth with backend-managed session validation.
+            </span>
           </article>
         </div>
 
         <div className="hero-note">
           <span className="hero-note__label">Flow</span>
-          <p>Register shop admin -&gt; receive one OTP on email and SMS -&gt; sign in with email + password.</p>
+          <p>
+            Register shop admin -&gt; receive one OTP on email and SMS -&gt;
+            sign in with email + password.
+          </p>
         </div>
       </section>
 
       <section className="auth-panel">
         <div className="auth-card">
-          <div className="view-switcher" role="tablist" aria-label="Authentication views">
+          <div
+            className="view-switcher"
+            role="tablist"
+            aria-label="Authentication views"
+          >
             <button
-              className={view === "register" ? "view-switcher__tab is-active" : "view-switcher__tab"}
+              className={
+                view === "register"
+                  ? "view-switcher__tab is-active"
+                  : "view-switcher__tab"
+              }
               onClick={() => switchView("register")}
+              role="tab"
               type="button"
             >
               Admin registration
             </button>
             <button
-              className={view === "verify" ? "view-switcher__tab is-active" : "view-switcher__tab"}
+              className={
+                view === "verify"
+                  ? "view-switcher__tab is-active"
+                  : "view-switcher__tab"
+              }
               onClick={() => switchView("verify")}
+              role="tab"
               type="button"
             >
               OTP verification
             </button>
             <button
-              className={view === "login" ? "view-switcher__tab is-active" : "view-switcher__tab"}
+              className={
+                view === "login"
+                  ? "view-switcher__tab is-active"
+                  : "view-switcher__tab"
+              }
               onClick={() => switchView("login")}
+              role="tab"
               type="button"
             >
               Login
@@ -380,12 +436,16 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <span>Shop name</span>
                   <input
                     autoComplete="organization"
-                    onChange={(event) => handleRegistrationChange("shopName", event.target.value)}
+                    onChange={(event) =>
+                      handleRegistrationChange("shopName", event.target.value)
+                    }
                     placeholder="CarePoint Diagnostics"
                     value={registrationValues.shopName}
                   />
                   {registrationErrors.shopName ? (
-                    <small className="field__error">{registrationErrors.shopName}</small>
+                    <small className="field__error">
+                      {registrationErrors.shopName}
+                    </small>
                   ) : null}
                 </label>
 
@@ -393,12 +453,16 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <span>Full name</span>
                   <input
                     autoComplete="name"
-                    onChange={(event) => handleRegistrationChange("fullName", event.target.value)}
+                    onChange={(event) =>
+                      handleRegistrationChange("fullName", event.target.value)
+                    }
                     placeholder="Dr. Meera Nair"
                     value={registrationValues.fullName}
                   />
                   {registrationErrors.fullName ? (
-                    <small className="field__error">{registrationErrors.fullName}</small>
+                    <small className="field__error">
+                      {registrationErrors.fullName}
+                    </small>
                   ) : null}
                 </label>
 
@@ -407,12 +471,16 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <input
                     autoComplete="email"
                     inputMode="email"
-                    onChange={(event) => handleRegistrationChange("email", event.target.value)}
+                    onChange={(event) =>
+                      handleRegistrationChange("email", event.target.value)
+                    }
                     placeholder="admin@carepoint.com"
                     value={registrationValues.email}
                   />
                   {registrationErrors.email ? (
-                    <small className="field__error">{registrationErrors.email}</small>
+                    <small className="field__error">
+                      {registrationErrors.email}
+                    </small>
                   ) : null}
                 </label>
 
@@ -421,12 +489,19 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <input
                     autoComplete="tel"
                     inputMode="tel"
-                    onChange={(event) => handleRegistrationChange("mobileNumber", event.target.value)}
+                    onChange={(event) =>
+                      handleRegistrationChange(
+                        "mobileNumber",
+                        event.target.value,
+                      )
+                    }
                     placeholder="+91 98765 43210"
                     value={registrationValues.mobileNumber}
                   />
                   {registrationErrors.mobileNumber ? (
-                    <small className="field__error">{registrationErrors.mobileNumber}</small>
+                    <small className="field__error">
+                      {registrationErrors.mobileNumber}
+                    </small>
                   ) : null}
                 </label>
 
@@ -434,17 +509,21 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <span>Password</span>
                   <input
                     autoComplete="new-password"
-                    onChange={(event) => handleRegistrationChange("password", event.target.value)}
+                    onChange={(event) =>
+                      handleRegistrationChange("password", event.target.value)
+                    }
                     placeholder="Create a strong password"
                     type="password"
                     value={registrationValues.password}
                   />
                   <small className="field__hint">
-                    Minimum 12 characters with uppercase, lowercase, number, and special
-                    character.
+                    Minimum 12 characters with uppercase, lowercase, number, and
+                    special character.
                   </small>
                   {registrationErrors.password ? (
-                    <small className="field__error">{registrationErrors.password}</small>
+                    <small className="field__error">
+                      {registrationErrors.password}
+                    </small>
                   ) : null}
                 </label>
 
@@ -453,14 +532,19 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <input
                     autoComplete="new-password"
                     onChange={(event) =>
-                      handleRegistrationChange("confirmPassword", event.target.value)
+                      handleRegistrationChange(
+                        "confirmPassword",
+                        event.target.value,
+                      )
                     }
                     placeholder="Repeat your password"
                     type="password"
                     value={registrationValues.confirmPassword}
                   />
                   {registrationErrors.confirmPassword ? (
-                    <small className="field__error">{registrationErrors.confirmPassword}</small>
+                    <small className="field__error">
+                      {registrationErrors.confirmPassword}
+                    </small>
                   ) : null}
                 </label>
               </div>
@@ -469,26 +553,44 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                 <input
                   checked={registrationValues.termsAccepted}
                   onChange={(event) =>
-                    handleRegistrationChange("termsAccepted", event.target.checked)
+                    handleRegistrationChange(
+                      "termsAccepted",
+                      event.target.checked,
+                    )
                   }
                   type="checkbox"
                 />
-                <span>I confirm that I accept the platform terms and responsible use policies.</span>
+                <span>
+                  I confirm that I accept the platform terms and responsible use
+                  policies.
+                </span>
               </label>
               {registrationErrors.termsAccepted ? (
-                <small className="field__error">{registrationErrors.termsAccepted}</small>
+                <small className="field__error">
+                  {registrationErrors.termsAccepted}
+                </small>
               ) : null}
 
               {registrationErrors.form ? (
-                <div className="message-banner message-banner--error">{registrationErrors.form}</div>
+                <div className="message-banner message-banner--error">
+                  {registrationErrors.form}
+                </div>
               ) : null}
               {registrationStatus ? (
-                <div className="message-banner message-banner--success">{registrationStatus}</div>
+                <div className="message-banner message-banner--success">
+                  {registrationStatus}
+                </div>
               ) : null}
 
               <div className="form-actions">
-                <button className="primary-button" disabled={registerMutation.isPending} type="submit">
-                  {registerMutation.isPending ? "Creating secure registration..." : "Create admin account"}
+                <button
+                  className="primary-button"
+                  disabled={registerMutation.isPending}
+                  type="submit"
+                >
+                  {registerMutation.isPending
+                    ? "Creating secure registration..."
+                    : "Create admin account"}
                 </button>
                 <button
                   className="ghost-button"
@@ -526,18 +628,21 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   </div>
                   <div>
                     <span>OTP expiry</span>
-                    <strong>{formatExpiry(pendingRegistration.expiresAt)}</strong>
+                    <strong>
+                      {formatExpiry(pendingRegistration.expiresAt)}
+                    </strong>
                   </div>
                 </div>
               ) : (
                 <div className="message-banner message-banner--error">
-                  No pending registration was found. Start with admin registration first.
+                  No pending registration was found. Start with admin
+                  registration first.
                 </div>
               )}
 
               <div className="message-banner message-banner--neutral">
-                The same 6-digit OTP is sent to your email and mobile number. You only need to
-                enter it once here.
+                The same 6-digit OTP is sent to your email and mobile number.
+                You only need to enter it once here.
               </div>
 
               <div className="form-grid form-grid--single">
@@ -546,19 +651,27 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <input
                     inputMode="numeric"
                     maxLength={6}
-                    onChange={(event) => handleOtpChange("otp", event.target.value)}
+                    onChange={(event) =>
+                      handleOtpChange("otp", event.target.value)
+                    }
                     placeholder="6-digit code"
                     value={otpValues.otp}
                   />
-                  {otpErrors.otp ? <small className="field__error">{otpErrors.otp}</small> : null}
+                  {otpErrors.otp ? (
+                    <small className="field__error">{otpErrors.otp}</small>
+                  ) : null}
                 </label>
               </div>
 
               {otpErrors.form ? (
-                <div className="message-banner message-banner--error">{otpErrors.form}</div>
+                <div className="message-banner message-banner--error">
+                  {otpErrors.form}
+                </div>
               ) : null}
               {otpStatus ? (
-                <div className="message-banner message-banner--success">{otpStatus}</div>
+                <div className="message-banner message-banner--success">
+                  {otpStatus}
+                </div>
               ) : null}
 
               <div className="form-actions">
@@ -567,7 +680,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   disabled={verifyMutation.isPending || !pendingRegistration}
                   type="submit"
                 >
-                  {verifyMutation.isPending ? "Verifying codes..." : "Verify account"}
+                  {verifyMutation.isPending
+                    ? "Verifying codes..."
+                    : "Verify account"}
                 </button>
                 <button
                   className="secondary-button"
@@ -591,8 +706,8 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
               </div>
 
               <div className="message-banner message-banner--neutral">
-                One login path serves admin, staff, and accountant accounts. The system detects
-                the role and shop automatically.
+                One login path serves admin, staff, and accountant accounts. The
+                system detects the role and shop automatically.
               </div>
 
               <div className="form-grid form-grid--single">
@@ -601,7 +716,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <input
                     autoComplete="email"
                     inputMode="email"
-                    onChange={(event) => handleLoginChange("email", event.target.value)}
+                    onChange={(event) =>
+                      handleLoginChange("email", event.target.value)
+                    }
                     placeholder="you@clinic.com"
                     value={loginValues.email}
                   />
@@ -614,26 +731,38 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   <span>Password</span>
                   <input
                     autoComplete="current-password"
-                    onChange={(event) => handleLoginChange("password", event.target.value)}
+                    onChange={(event) =>
+                      handleLoginChange("password", event.target.value)
+                    }
                     placeholder="Enter your password"
                     type="password"
                     value={loginValues.password}
                   />
                   {loginErrors.password ? (
-                    <small className="field__error">{loginErrors.password}</small>
+                    <small className="field__error">
+                      {loginErrors.password}
+                    </small>
                   ) : null}
                 </label>
               </div>
 
               {loginErrors.form ? (
-                <div className="message-banner message-banner--error">{loginErrors.form}</div>
+                <div className="message-banner message-banner--error">
+                  {loginErrors.form}
+                </div>
               ) : null}
               {loginStatus ? (
-                <div className="message-banner message-banner--success">{loginStatus}</div>
+                <div className="message-banner message-banner--success">
+                  {loginStatus}
+                </div>
               ) : null}
 
               <div className="form-actions">
-                <button className="primary-button" disabled={loginMutation.isPending} type="submit">
+                <button
+                  className="primary-button"
+                  disabled={loginMutation.isPending}
+                  type="submit"
+                >
                   {loginMutation.isPending ? "Signing in..." : "Sign in"}
                 </button>
                 <button

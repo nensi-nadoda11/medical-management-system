@@ -56,6 +56,9 @@ export const authController = {
     res.cookie(env.AUTH_COOKIE_NAME, result.sessionToken, {
       ...buildAuthCookieOptions(),
       maxAge: env.AUTH_SESSION_TTL_HOURS * 60 * 60 * 1000,
+      expires: new Date(
+        Date.now() + env.AUTH_SESSION_TTL_HOURS * 60 * 60 * 1000,
+      ),
     });
 
     res.status(200).json({

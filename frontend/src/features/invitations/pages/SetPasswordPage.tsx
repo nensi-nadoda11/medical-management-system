@@ -14,13 +14,13 @@ const setPasswordSchema = z
   .object({
     password: z
       .string()
-      .min(8, "Password must be at least 8 characters.")
-      .max(128)
+      .min(12, "Password must be at least 12 characters.")
+      .max(72)
       .regex(/[A-Z]/, "Password must include at least one uppercase letter.")
       .regex(/[a-z]/, "Password must include at least one lowercase letter.")
       .regex(/[0-9]/, "Password must include at least one number.")
       .regex(/[^A-Za-z0-9]/, "Password must include at least one special character."),
-    confirmPassword: z.string().min(8).max(128),
+    confirmPassword: z.string().min(12).max(72),
   })
   .superRefine((value, context) => {
     if (value.password !== value.confirmPassword) {
@@ -63,9 +63,7 @@ export const SetPasswordPage = () => {
         description: "You can now sign in using your email and new password.",
         variant: "success",
       });
-      window.setTimeout(() => {
-        navigate("/login");
-      }, 1200);
+      navigate("/login", { replace: true });
     },
   });
 
@@ -172,8 +170,8 @@ export const SetPasswordPage = () => {
             </p>
             <h2 className="text-2xl font-semibold text-slate-950">Create your password</h2>
             <p className="text-sm leading-6 text-slate-600">
-              Use a strong password that includes uppercase, lowercase, number, and special
-              characters.
+              Use a strong password with at least 12 characters, including uppercase, lowercase,
+              number, and special characters.
             </p>
           </div>
 

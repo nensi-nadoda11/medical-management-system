@@ -10,10 +10,16 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {
+        "/api/v1": {
+          target: env.VITE_BACKEND_URL ?? "http://localhost:4000",
+          changeOrigin: true,
+          secure: false,
+        },
         "/api": {
           target: env.VITE_BACKEND_URL ?? "http://localhost:4000",
           changeOrigin: true,
           secure: false,
+          rewrite: (path) => path.replace(/^\/api/, "/api/v1"),
         },
       },
     },

@@ -4,7 +4,11 @@ import { env } from "../../config/env";
 import { AppError } from "../../shared/errors/app-error";
 import { authService } from "./auth.service";
 
-export const requireAuth = async (req: Request, _res: Response, next: NextFunction) => {
+export const requireAuth = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) => {
   try {
     const sessionToken = req.cookies?.[env.AUTH_COOKIE_NAME];
 
@@ -27,6 +31,7 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
     }
 
     req.authSession = session;
+    req.authenticatedUser = session.user;
     next();
   } catch (error) {
     next(error);

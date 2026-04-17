@@ -6,9 +6,16 @@ import { emailService } from "../notifications/email/email.service";
 import { smsService } from "../notifications/sms/sms.service";
 import { AppError } from "../../shared/errors/app-error";
 import { logger } from "../../shared/logger";
-import { generateNumericOtp, hashOtpCode, verifyOtpCodeHash } from "../../shared/security/otp";
+import {
+  generateNumericOtp,
+  hashOtpCode,
+  verifyOtpCodeHash,
+} from "../../shared/security/otp";
 import { hashPassword, verifyPassword } from "../../shared/security/password";
-import { generateSessionToken, hashSessionToken } from "../../shared/security/session";
+import {
+  generateSessionToken,
+  hashSessionToken,
+} from "../../shared/security/session";
 import { toSlug } from "../../shared/utils/strings";
 import {
   LOGIN_LOCK_DURATION_MINUTES,
@@ -22,10 +29,17 @@ import type {
   ResendRegistrationOtpInput,
   VerifyRegistrationInput,
 } from "./auth.schemas";
-import type { AuthenticatedRequestContext, OtpChannel, PublicShop, PublicUser } from "./auth.types";
+import type {
+  AuthenticatedRequestContext,
+  OtpChannel,
+  PublicShop,
+  PublicUser,
+} from "./auth.types";
 
-const addMinutes = (date: Date, minutes: number) => new Date(date.getTime() + minutes * 60_000);
-const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * 60 * 60_000);
+const addMinutes = (date: Date, minutes: number) =>
+  new Date(date.getTime() + minutes * 60_000);
+const addHours = (date: Date, hours: number) =>
+  new Date(date.getTime() + hours * 60 * 60_000);
 
 const buildPublicUser = (user: {
   id: string;
@@ -60,7 +74,8 @@ const getRequiredMobileNumber = (user: {
   throw new AppError({
     statusCode: 500,
     code: "MOBILE_NUMBER_MISSING",
-    message: "The user record is missing a mobile number required for this operation.",
+    message:
+      "The user record is missing a mobile number required for this operation.",
   });
 };
 
@@ -137,7 +152,10 @@ class AuthService {
       if (result.status === "rejected") {
         logger.warn("OTP delivery failed", {
           channel: index === 0 ? "email" : "mobile",
-          message: result.reason instanceof Error ? result.reason.message : "Unknown provider error",
+          message:
+            result.reason instanceof Error
+              ? result.reason.message
+              : "Unknown provider error",
         });
       }
     });
@@ -146,14 +164,19 @@ class AuthService {
   }
 
   async registerAdmin(input: RegisterAdminInput) {
-    const existingUser = await authRepository.findUserByEmailOrMobile(input.email, input.mobileNumber);
+    const existingUser = await authRepository.findUserByEmailOrMobile(
+      input.email,
+      input.mobileNumber,
+    );
 
     if (existingUser) {
       throw new AppError({
         statusCode: 409,
         code: "REGISTRATION_CONFLICT",
         message:
-          existingUser.isActive || existingUser.emailVerifiedAt || existingUser.mobileVerifiedAt
+          existingUser.isActive ||
+          existingUser.emailVerifiedAt ||
+          existingUser.mobileVerifiedAt
             ? "An account with this email address or mobile number already exists."
             : "A registration with this email address or mobile number is already pending verification.",
       });
@@ -264,7 +287,8 @@ class AuthService {
       throw new AppError({
         statusCode: 404,
         code: "REGISTRATION_NOT_FOUND",
-        message: "We could not find a pending registration for the provided details.",
+        message:
+          "We could not find a pending registration for the provided details.",
       });
     }
 
@@ -280,7 +304,10 @@ class AuthService {
     }
 
     if (!pendingChannels.length) {
-      if (!registration.user.isActive || registration.shop.status !== "active") {
+      if (
+        !registration.user.isActive ||
+        registration.shop.status !== "active"
+      ) {
         await db.transaction(async (tx) => {
           await authRepository.updateUserVerificationStatus(
             registration.user.id,
@@ -318,11 +345,17 @@ class AuthService {
           target,
         });
 
-        if (!otp || otp.expiresAt <= now || otp.invalidatedAt || otp.consumedAt) {
+        if (
+          !otp ||
+          otp.expiresAt <= now ||
+          otp.invalidatedAt ||
+          otp.consumedAt
+        ) {
           throw new AppError({
             statusCode: 400,
             code: "OTP_INVALID",
-            message: "The verification code is invalid or has expired. Please request a new code.",
+            message:
+              "The verification code is invalid or has expired. Please request a new code.",
           });
         }
 
@@ -330,7 +363,8 @@ class AuthService {
           throw new AppError({
             statusCode: 429,
             code: "OTP_ATTEMPTS_EXCEEDED",
-            message: "This verification code has been locked. Please request a new code.",
+            message:
+              "This verification code has been locked. Please request a new code.",
           });
         }
 
@@ -345,11 +379,15 @@ class AuthService {
 
         if (!isValid) {
           const nextAttempt = otp.attemptCount + 1;
-          await authRepository.incrementOtpAttempt(otp.id, nextAttempt >= MAX_OTP_ATTEMPTS);
+          await authRepository.incrementOtpAttempt(
+            otp.id,
+            nextAttempt >= MAX_OTP_ATTEMPTS,
+          );
           throw new AppError({
             statusCode: 400,
             code: "OTP_INVALID",
-            message: "The verification code is invalid or has expired. Please request a new code.",
+            message:
+              "The verification code is invalid or has expired. Please request a new code.",
           });
         }
 
@@ -357,9 +395,12 @@ class AuthService {
       }),
     );
 
-    const verifiedEmail = registration.user.emailVerifiedAt || channelPayloads.some((item) => item.channel === "email");
+    const verifiedEmail =
+      registration.user.emailVerifiedAt ||
+      channelPayloads.some((item) => item.channel === "email");
     const verifiedMobile =
-      registration.user.mobileVerifiedAt || channelPayloads.some((item) => item.channel === "mobile");
+      registration.user.mobileVerifiedAt ||
+      channelPayloads.some((item) => item.channel === "mobile");
     const isCompleted = Boolean(verifiedEmail && verifiedMobile);
 
     await db.transaction(async (tx) => {
@@ -384,7 +425,11 @@ class AuthService {
         verificationUpdate.mobileVerifiedAt = now;
       }
 
-      await authRepository.updateUserVerificationStatus(registration.user.id, verificationUpdate, tx);
+      await authRepository.updateUserVerificationStatus(
+        registration.user.id,
+        verificationUpdate,
+        tx,
+      );
 
       if (isCompleted) {
         await authRepository.activateShop(registration.shop.id, tx);
@@ -399,8 +444,12 @@ class AuthService {
       redirectTo: isCompleted ? "/login" : null,
       user: buildPublicUser({
         ...registration.user,
-        emailVerifiedAt: verifiedEmail ? now : registration.user.emailVerifiedAt,
-        mobileVerifiedAt: verifiedMobile ? now : registration.user.mobileVerifiedAt,
+        emailVerifiedAt: verifiedEmail
+          ? now
+          : registration.user.emailVerifiedAt,
+        mobileVerifiedAt: verifiedMobile
+          ? now
+          : registration.user.mobileVerifiedAt,
         isActive: isCompleted,
       }),
       shop: buildPublicShop({
@@ -420,14 +469,16 @@ class AuthService {
       throw new AppError({
         statusCode: 404,
         code: "REGISTRATION_NOT_FOUND",
-        message: "We could not find a pending registration for the provided details.",
+        message:
+          "We could not find a pending registration for the provided details.",
       });
     }
 
-    const outstandingChannels = (input.channels ?? ["email", "mobile"]).filter((channel) =>
-      channel === "email"
-        ? !registration.user.emailVerifiedAt
-        : !registration.user.mobileVerifiedAt,
+    const outstandingChannels = (input.channels ?? ["email", "mobile"]).filter(
+      (channel) =>
+        channel === "email"
+          ? !registration.user.emailVerifiedAt
+          : !registration.user.mobileVerifiedAt,
     ) as OtpChannel[];
 
     if (!outstandingChannels.length) {
@@ -452,12 +503,15 @@ class AuthService {
 
       if (
         latestOtp &&
-        latestOtp.lastSentAt.getTime() + env.OTP_RESEND_COOLDOWN_SECONDS * 1000 > now.getTime()
+        latestOtp.lastSentAt.getTime() +
+          env.OTP_RESEND_COOLDOWN_SECONDS * 1000 >
+          now.getTime()
       ) {
         throw new AppError({
           statusCode: 429,
           code: "OTP_RESEND_COOLDOWN",
-          message: "Please wait a little before requesting another verification code.",
+          message:
+            "Please wait a little before requesting another verification code.",
         });
       }
     }
@@ -488,7 +542,11 @@ class AuthService {
     });
 
     await db.transaction(async (tx) => {
-      await authRepository.invalidateOutstandingOtps(registration.user.id, outstandingChannels, tx);
+      await authRepository.invalidateOutstandingOtps(
+        registration.user.id,
+        outstandingChannels,
+        tx,
+      );
       await authRepository.insertVerificationOtps(
         otpRecords.map((record) => ({
           id: record.id,
@@ -533,7 +591,10 @@ class AuthService {
     };
   }
 
-  async login(input: LoginInput, context: { ipAddress?: string; userAgent?: string }) {
+  async login(
+    input: LoginInput,
+    context: { ipAddress?: string; userAgent?: string },
+  ) {
     const registration = await authRepository.findLoginUserByEmail(input.email);
     const now = new Date();
 
@@ -553,7 +614,10 @@ class AuthService {
       });
     }
 
-    const passwordMatches = await verifyPassword(input.password, registration.user.passwordHash);
+    const passwordMatches = await verifyPassword(
+      input.password,
+      registration.user.passwordHash,
+    );
 
     if (!passwordMatches) {
       const nextAttemptCount = registration.user.failedLoginAttempts + 1;
@@ -576,11 +640,15 @@ class AuthService {
       });
     }
 
-    if (!registration.user.emailVerifiedAt || !registration.user.mobileVerifiedAt) {
+    if (
+      !registration.user.emailVerifiedAt ||
+      !registration.user.mobileVerifiedAt
+    ) {
       throw new AppError({
         statusCode: 403,
         code: "ACCOUNT_NOT_VERIFIED",
-        message: "Please verify your email address and mobile number before signing in.",
+        message:
+          "Please verify your email address and mobile number before signing in.",
       });
     }
 
@@ -588,7 +656,8 @@ class AuthService {
       throw new AppError({
         statusCode: 403,
         code: "ACCOUNT_INACTIVE",
-        message: "Your account is not active. Please contact your administrator.",
+        message:
+          "Your account is not active. Please contact your administrator.",
       });
     }
 
@@ -640,10 +709,12 @@ class AuthService {
     };
   }
 
-  async getSessionContext(rawSessionToken: string): Promise<AuthenticatedRequestContext | null> {
+  async getSessionContext(
+    rawSessionToken: string,
+  ): Promise<AuthenticatedRequestContext | null> {
     const sessionTokenHash = hashSessionToken(rawSessionToken);
-    const record = await authRepository.findSessionByTokenHash(sessionTokenHash);
-
+    const record =
+      await authRepository.findSessionByTokenHash(sessionTokenHash);
     if (!record) {
       return null;
     }

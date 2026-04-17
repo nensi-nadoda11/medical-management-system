@@ -11,6 +11,7 @@ import { staffQueryKeys, updateUser } from "../api/staff";
 
 const editUserSchema = z.object({
   fullName: z.string().trim().min(2, "Full name is required.").max(160),
+  email: z.string().trim().email("Enter a valid email address.").max(320),
   role: z.enum(["staff", "accountant"]),
 });
 
@@ -30,6 +31,7 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
     resolver: zodResolver(editUserSchema),
     defaultValues: {
       fullName: "",
+      email: "",
       role: "staff",
     },
   });
@@ -42,6 +44,7 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
     if (user.role === "staff" || user.role === "accountant") {
       form.reset({
         fullName: user.fullName,
+        email: user.email,
         role: user.role,
       });
     }
@@ -106,6 +109,15 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
             {...register("fullName")}
           />
           {errors.fullName ? <span className="text-sm text-rose-600">{errors.fullName.message}</span> : null}
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Email
+          <input
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+            {...register("email")}
+          />
+          {errors.email ? <span className="text-sm text-rose-600">{errors.email.message}</span> : null}
         </label>
 
         <label className="grid gap-2 text-sm font-medium text-slate-700">

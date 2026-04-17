@@ -11,8 +11,10 @@ import { useSessionQuery } from "../../features/auth/hooks/use-session";
 import { AuthPage } from "../../features/auth/pages/AuthPage";
 import { DashboardHomePage } from "../../features/dashboard/pages/DashboardHomePage";
 import { SetPasswordPage } from "../../features/invitations/pages/SetPasswordPage";
+import { MedicinesPage } from "../../features/medicines/pages/MedicinesPage";
 import { ShopSetupPage } from "../../features/shop/pages/ShopSetupPage";
 import { StaffManagementPage } from "../../features/staff/pages/StaffManagementPage";
+import { SuppliersPage } from "../../features/suppliers/pages/SuppliersPage";
 
 const RootRedirect = () => {
   const sessionQuery = useSessionQuery();
@@ -42,6 +44,8 @@ export const AppRouter = () => (
         <Route element={<RequireAdmin />}>
           <Route element={<ShopSetupPage />} path="shop-setup" />
           <Route element={<StaffManagementPage />} path="staff-management" />
+          <Route element={<MedicinesPage />} path="medicines" />
+          <Route element={<SuppliersPage />} path="suppliers" />
         </Route>
       </Route>
     </Route>

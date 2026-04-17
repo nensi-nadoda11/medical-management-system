@@ -13,6 +13,8 @@ const navigation = [
   { label: "Overview", to: "/app", adminOnly: false },
   { label: "Shop Setup", to: "/app/shop-setup", adminOnly: true },
   { label: "Staff Management", to: "/app/staff-management", adminOnly: true },
+  { label: "Medicines", to: "/app/medicines", adminOnly: true },
+  { label: "Suppliers", to: "/app/suppliers", adminOnly: true },
 ] as const;
 
 export const AppLayout = () => {
@@ -73,7 +75,7 @@ export const AppLayout = () => {
                 </p>
                 <h1 className="mt-3 text-xl font-semibold">{session.shop.name}</h1>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Secure dashboard for shop profile, staff operations, and invitation handling.
+                  Secure dashboard for shop setup, staff operations, medicine master, and supplier management.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

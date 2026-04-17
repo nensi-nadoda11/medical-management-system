@@ -7,13 +7,8 @@ export interface StaffUser {
   fullName: string;
   email: string;
   mobileNumber: string | null;
-  passwordHash: string;
-  emailVerifiedAt: string | null;
-  mobileVerifiedAt: string | null;
   isActive: boolean;
   lastLoginAt: string | null;
-  failedLoginAttempts: number;
-  lockedUntil: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,7 +19,6 @@ export interface UserInvitation {
   email: string;
   fullName: string;
   role: "admin" | StaffRole;
-  tokenHash: string;
   expiresAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;

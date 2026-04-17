@@ -1,0 +1,48 @@
+interface PaginationProps {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}
+
+export const Pagination = ({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: PaginationProps) => {
+  const start = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-slate-500">
+        Showing {start}-{end} of {totalItems}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          type="button"
+        >
+          Previous
+        </button>
+        <span className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+          Page {page} of {Math.max(totalPages, 1)}
+        </span>
+        <button
+          className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          type="button"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
