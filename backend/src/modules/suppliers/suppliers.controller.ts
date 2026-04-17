@@ -13,7 +13,7 @@ export class SuppliersController {
     try {
       const result = await this.suppliersService.listSuppliers(
         getShopId(req),
-        req.query as never,
+        (req.validatedQuery ?? req.query) as never,
       );
 
       return res.status(200).json({ data: result });

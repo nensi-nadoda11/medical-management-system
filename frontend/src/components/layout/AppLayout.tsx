@@ -66,16 +66,16 @@ export const AppLayout = () => {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbfb_0%,#eef3f5_100%)] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col gap-6 px-4 py-4 lg:flex-row lg:px-6">
-        <aside className="w-full rounded-[32px] border border-slate-200/80 bg-[#0f2736] p-5 text-slate-50 shadow-xl shadow-slate-300/30 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[280px]">
-          <div className="flex h-full flex-col">
-            <div className="space-y-4">
+        <aside className="w-full rounded-[32px] border border-slate-200/80 bg-[#0f2736] p-5 text-slate-50 shadow-xl shadow-slate-300/30 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[292px] lg:overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 space-y-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-teal-300">
                   Medical Management
                 </p>
                 <h1 className="mt-3 text-xl font-semibold">{session.shop.name}</h1>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Secure dashboard for shop setup, staff operations, medicine master, and supplier management.
+                  Shop, staff, medicine, and supplier operations in one workspace.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -84,27 +84,36 @@ export const AppLayout = () => {
               </div>
             </div>
 
-            <nav className="mt-8 grid gap-2">
+            <nav className="mt-8 grid flex-1 auto-rows-min gap-2 overflow-y-auto pr-1">
               {visibleNavigation.map((item) => (
                 <NavLink
                   className={({ isActive }) =>
                     cn(
-                      "rounded-2xl px-4 py-3 text-sm font-medium transition",
+                      "rounded-2xl border px-4 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
                       isActive
-                        ? "bg-white text-slate-950 shadow-md"
-                        : "text-slate-300 hover:bg-white/10 hover:text-white",
+                        ? "border-transparent bg-white text-slate-950 shadow-md shadow-black/10"
+                        : "border-transparent text-slate-200 hover:border-white/10 hover:bg-white/10 hover:text-white",
                     )
                   }
                   end={item.to === "/app"}
                   key={item.to}
                   to={item.to}
                 >
-                  {item.label}
+                  {({ isActive }) => (
+                    <span
+                      className={cn(
+                        "block transition-colors",
+                        isActive ? "text-slate-950" : "text-slate-200",
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </nav>
 
-            <div className="mt-auto rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="mt-5 shrink-0 rounded-[24px] border border-white/10 bg-white/5 p-4">
               <p className="text-sm font-semibold">{session.user.fullName}</p>
               <p className="mt-1 text-sm text-slate-300">{session.user.email}</p>
               <button

@@ -5,6 +5,7 @@ declare global {
     interface Request {
       authSession?: AuthenticatedRequestContext;
       authenticatedUser?: AuthenticatedRequestContext["user"];
+      validatedQuery?: unknown;
     }
   }
 }

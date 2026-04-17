@@ -1,7 +1,6 @@
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { formatDateTime } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 
 export const DashboardHomePage = () => {
@@ -11,12 +10,12 @@ export const DashboardHomePage = () => {
     return null;
   }
 
-  const { user, shop, sessionExpiresAt } = sessionQuery.data;
+  const { user, shop } = sessionQuery.data;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Your authenticated workspace is active. Admin users can manage shop details and staff invitations from the navigation."
+        description="Monitor your workspace, role access, and core business setup from one professional dashboard."
         eyebrow="Workspace"
         title={`Welcome, ${user.fullName}`}
       />
@@ -24,7 +23,7 @@ export const DashboardHomePage = () => {
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <SectionCard
           description="A quick summary of the authenticated account and connected shop."
-          title="Session overview"
+          title="Workspace overview"
         >
           <div className="grid gap-4 md:grid-cols-2">
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -35,7 +34,7 @@ export const DashboardHomePage = () => {
                 <StatusBadge label={user.role} tone={user.role} />
               </div>
               <p className="mt-3 text-sm text-slate-600">
-                Permissions are automatically driven by the authenticated role.
+                Access stays aligned with your assigned responsibilities.
               </p>
             </article>
 
@@ -47,14 +46,14 @@ export const DashboardHomePage = () => {
                 <StatusBadge label={shop.status} tone={shop.status} />
               </div>
               <p className="mt-3 text-sm text-slate-600">
-                Session-linked shop details are available across the dashboard.
+                Your shop remains active and ready for operations.
               </p>
             </article>
           </div>
         </SectionCard>
 
         <SectionCard
-          description="Useful details for current sign-in and support checks."
+          description="Essential account details without technical noise."
           title="Account details"
         >
           <dl className="grid gap-4">
@@ -70,14 +69,6 @@ export const DashboardHomePage = () => {
               </dt>
               <dd className="mt-2 text-sm font-medium text-slate-900">
                 {user.mobileNumber || "Not configured"}
-              </dd>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-white px-4 py-3">
-              <dt className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Session expires
-              </dt>
-              <dd className="mt-2 text-sm font-medium text-slate-900">
-                {formatDateTime(sessionExpiresAt)}
               </dd>
             </div>
           </dl>

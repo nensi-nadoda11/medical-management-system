@@ -1,5 +1,19 @@
+import type { Request } from "express";
 import type { RequestHandler } from "express";
 import type { ZodTypeAny } from "zod";
+
+const setRequestValue = (
+  req: Request,
+  key: "body" | "params" | "query",
+  value: unknown,
+) => {
+  Object.defineProperty(req, key, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+};
 
 export const validateRequest =
   (schema: ZodTypeAny): RequestHandler =>
@@ -15,16 +29,17 @@ export const validateRequest =
         query?: unknown;
       };
 
-      if (result.body) {
-        req.body = result.body;
+      if (result.body !== undefined) {
+        setRequestValue(req, "body", result.body);
       }
 
-      if (result.params) {
-        req.params = result.params as typeof req.params;
+      if (result.params !== undefined) {
+        setRequestValue(req, "params", result.params);
       }
 
-      if (result.query) {
-        req.query = result.query as typeof req.query;
+      if (result.query !== undefined) {
+        req.validatedQuery = result.query;
+        setRequestValue(req, "query", result.query);
       }
 
       next();

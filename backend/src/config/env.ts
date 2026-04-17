@@ -36,7 +36,9 @@ const envSchema = z
       .default("development"),
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required."),
-    CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
+    CORS_ALLOWED_ORIGINS: z
+      .string()
+      .default("http://localhost:5173,http://localhost:5174"),
     APP_BASE_URL: optionalString,
     TRUST_PROXY: booleanSchema.default(false),
     INVITATION_EXPIRY_HOURS: z.coerce.number().int().positive(),
@@ -173,9 +175,23 @@ if (!parsedEnv.success) {
   throw new Error(`Invalid environment configuration: ${message}`);
 }
 
-const allowedOrigins = parsedEnv.data.CORS_ALLOWED_ORIGINS.split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const defaultLocalOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+];
+
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      ...parsedEnv.data.CORS_ALLOWED_ORIGINS.split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+      ...defaultLocalOrigins,
+    ],
+  ),
+);
 
 export const env = {
   ...parsedEnv.data,

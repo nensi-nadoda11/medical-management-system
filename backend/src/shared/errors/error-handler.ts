@@ -28,6 +28,10 @@ export const errorHandler = (
   _next: NextFunction,
 ) => {
   if (error instanceof ZodError) {
+    logger.warn("Validation error", {
+      issues: formatZodError(error),
+    });
+
     return res.status(422).json({
       success: false,
       error: {
@@ -39,6 +43,14 @@ export const errorHandler = (
   }
 
   if (isAppError(error)) {
+    logger.warn("Application error", {
+      code: error.code,
+      statusCode: error.statusCode,
+      message: error.message,
+      details: error.details,
+      stack: error.stack,
+    });
+
     return res.status(error.statusCode).json({
       success: false,
       error: {
@@ -68,6 +80,7 @@ export const errorHandler = (
 
   logger.error("Unhandled application error", {
     message: error instanceof Error ? error.message : "Unknown error",
+    stack: error instanceof Error ? error.stack : undefined,
   });
 
   return res.status(500).json({

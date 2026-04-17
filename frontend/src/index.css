@@ -27,7 +27,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 button,
@@ -47,10 +48,4 @@ a {
 
 #root {
   min-height: 100vh;
-}
-
-@media (max-width: 1100px), (max-height: 700px) {
-  body {
-    overflow: auto;
-  }
 }

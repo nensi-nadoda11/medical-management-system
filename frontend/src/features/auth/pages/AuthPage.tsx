@@ -55,12 +55,6 @@ const formatApiError = (error: unknown) => {
   return "Something went wrong. Please try again.";
 };
 
-const formatExpiry = (isoDate: string) =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(isoDate));
-
 interface AuthPageProps {
   initialView: AppView;
 }
@@ -337,43 +331,25 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
     <main className="auth-shell">
       <section className="auth-hero">
         <div className="auth-hero__eyebrow">Medical Management System</div>
-        <h1>
-          Secure access for clinics, staff operations, and financial workflows.
-        </h1>
+        <h1>Professional medical operations, in one clean workspace.</h1>
         <p className="auth-hero__lead">
-          Register the first shop administrator, verify both communication
-          channels, and use the same login architecture that is already ready
-          for admin, staff, and accountant roles.
+          Manage shop setup, staff, medicines, and suppliers with a faster,
+          cleaner admin experience built for day-to-day business use.
         </p>
 
         <div className="hero-grid">
           <article className="hero-metric">
-            <strong>Shared OTP delivery</strong>
-            <span>
-              The same 6-digit OTP is sent to both email and SMS for backup
-              delivery.
-            </span>
+            <strong>Fast onboarding</strong>
+            <span>Create the admin account and get into the dashboard quickly.</span>
           </article>
           <article className="hero-metric">
-            <strong>Role-ready login</strong>
-            <span>
-              Single secure sign-in path for all current and future users.
-            </span>
+            <strong>Business-first design</strong>
+            <span>Focused screens with less clutter and better readability.</span>
           </article>
           <article className="hero-metric">
-            <strong>Protected sessions</strong>
-            <span>
-              Cookie-based auth with backend-managed session validation.
-            </span>
+            <strong>Responsive layout</strong>
+            <span>Comfortable on desktop, tablet, and mobile screens.</span>
           </article>
-        </div>
-
-        <div className="hero-note">
-          <span className="hero-note__label">Flow</span>
-          <p>
-            Register shop admin -&gt; receive one OTP on email and SMS -&gt;
-            sign in with email + password.
-          </p>
         </div>
       </section>
 
@@ -426,8 +402,8 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
             <form className="form-stack" onSubmit={handleRegisterSubmit}>
               <div className="auth-card__header">
                 <div>
-                  <p className="auth-card__tag">Phase 1</p>
-                  <h2>Create a new shop admin account</h2>
+                  <p className="auth-card__tag">Admin Access</p>
+                  <h2>Create your shop admin account</h2>
                 </div>
               </div>
 
@@ -561,8 +537,7 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   type="checkbox"
                 />
                 <span>
-                  I confirm that I accept the platform terms and responsible use
-                  policies.
+                  I confirm that I accept the platform terms and responsible use.
                 </span>
               </label>
               {registrationErrors.termsAccepted ? (
@@ -589,7 +564,7 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   type="submit"
                 >
                   {registerMutation.isPending
-                    ? "Creating secure registration..."
+                    ? "Creating account..."
                     : "Create admin account"}
                 </button>
                 <button
@@ -607,8 +582,8 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
             <form className="form-stack" onSubmit={handleVerifySubmit}>
               <div className="auth-card__header">
                 <div>
-                  <p className="auth-card__tag">Phase 2</p>
-                  <h2>Verify the shared OTP</h2>
+                  <p className="auth-card__tag">Verification</p>
+                  <h2>Verify your account</h2>
                 </div>
               </div>
 
@@ -626,12 +601,6 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                     <span>Mobile</span>
                     <strong>{pendingRegistration.mobileNumber}</strong>
                   </div>
-                  <div>
-                    <span>OTP expiry</span>
-                    <strong>
-                      {formatExpiry(pendingRegistration.expiresAt)}
-                    </strong>
-                  </div>
                 </div>
               ) : (
                 <div className="message-banner message-banner--error">
@@ -641,8 +610,7 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
               )}
 
               <div className="message-banner message-banner--neutral">
-                The same 6-digit OTP is sent to your email and mobile number.
-                You only need to enter it once here.
+                Enter the OTP sent to your registered contact details.
               </div>
 
               <div className="form-grid form-grid--single">
@@ -681,7 +649,7 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
                   type="submit"
                 >
                   {verifyMutation.isPending
-                    ? "Verifying codes..."
+                    ? "Verifying..."
                     : "Verify account"}
                 </button>
                 <button
@@ -700,14 +668,13 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
             <form className="form-stack" onSubmit={handleLoginSubmit}>
               <div className="auth-card__header">
                 <div>
-                  <p className="auth-card__tag">Phase 3</p>
-                  <h2>Sign in to your medical management workspace</h2>
+                  <p className="auth-card__tag">Sign In</p>
+                  <h2>Welcome back</h2>
                 </div>
               </div>
 
               <div className="message-banner message-banner--neutral">
-                One login path serves admin, staff, and accountant accounts. The
-                system detects the role and shop automatically.
+                Sign in with your registered email and password to continue.
               </div>
 
               <div className="form-grid form-grid--single">

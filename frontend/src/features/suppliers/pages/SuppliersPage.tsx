@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { ErrorState } from "../../../components/ui/ErrorState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
@@ -32,13 +33,14 @@ export const SuppliersPage = () => {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortBy, setSortBy] = useState<"supplierName" | "updatedAt">("supplierName");
+  const [sortBy, setSortBy] = useState<"supplierName" | "updatedAt">(
+    "supplierName",
+  );
   const [page, setPage] = useState(1);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [pendingStatusSupplier, setPendingStatusSupplier] = useState<Supplier | null>(
-    null,
-  );
+  const [pendingStatusSupplier, setPendingStatusSupplier] =
+    useState<Supplier | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const supplierParams = {
@@ -54,6 +56,23 @@ export const SuppliersPage = () => {
     queryKey: suppliersQueryKeys.list(supplierParams),
     queryFn: () => listSuppliers(supplierParams),
   });
+
+  const suppliers = suppliersQuery.data?.items ?? [];
+  const pagination = suppliersQuery.data?.pagination;
+
+  const summary = useMemo(
+    () => ({
+      totalSuppliers: suppliersQuery.data?.pagination.total ?? 0,
+      activeOnScreen: suppliers.filter((item) => item.status === "active")
+        .length,
+      withGst: suppliers.filter((item) => item.gstNumber).length,
+      openingBalanceOnScreen: suppliers.reduce(
+        (sum, item) => sum + Number(item.openingBalance),
+        0,
+      ),
+    }),
+    [suppliers, suppliersQuery.data?.pagination.total],
+  );
 
   const saveSupplierMutation = useMutation({
     mutationFn: async (payload: SaveSupplierPayload) => {
@@ -76,8 +95,13 @@ export const SuppliersPage = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ supplierId, status }: { supplierId: string; status: MasterStatus }) =>
-      updateSupplierStatus(supplierId, { status }),
+    mutationFn: ({
+      supplierId,
+      status,
+    }: {
+      supplierId: string;
+      status: MasterStatus;
+    }) => updateSupplierStatus(supplierId, { status }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKeys.all });
       pushToast({
@@ -95,28 +119,13 @@ export const SuppliersPage = () => {
 
   if (suppliersQuery.error) {
     return (
-      <LoadingState
+      <ErrorState
         description={suppliersQuery.error.message}
+        onRetry={() => suppliersQuery.refetch()}
         title="Unable to load suppliers"
       />
     );
   }
-
-  const suppliers = suppliersQuery.data?.items ?? [];
-  const pagination = suppliersQuery.data?.pagination;
-
-  const summary = useMemo(
-    () => ({
-      totalSuppliers: suppliersQuery.data?.pagination.total ?? 0,
-      activeOnScreen: suppliers.filter((item) => item.status === "active").length,
-      withGst: suppliers.filter((item) => item.gstNumber).length,
-      openingBalanceOnScreen: suppliers.reduce(
-        (sum, item) => sum + Number(item.openingBalance),
-        0,
-      ),
-    }),
-    [suppliers, suppliersQuery.data?.pagination.total],
-  );
 
   return (
     <div className="space-y-6">
@@ -143,7 +152,10 @@ export const SuppliersPage = () => {
           ["Suppliers", summary.totalSuppliers],
           ["Active on screen", summary.activeOnScreen],
           ["GST captured", summary.withGst],
-          ["Visible opening balance", formatCurrency(summary.openingBalanceOnScreen)],
+          [
+            "Visible opening balance",
+            formatCurrency(summary.openingBalanceOnScreen),
+          ],
         ].map(([label, value]) => (
           <article
             className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60"
@@ -252,11 +264,15 @@ export const SuppliersPage = () => {
                       ["Email", supplier.email || "Not added"],
                       [
                         "Location",
-                        [supplier.city, supplier.state].filter(Boolean).join(", ") ||
-                          "Not added",
+                        [supplier.city, supplier.state]
+                          .filter(Boolean)
+                          .join(", ") || "Not added",
                       ],
                       ["GST", supplier.gstNumber || "Not added"],
-                      ["Opening balance", formatCurrency(supplier.openingBalance)],
+                      [
+                        "Opening balance",
+                        formatCurrency(supplier.openingBalance),
+                      ],
                       ["Contact person", supplier.contactPerson || "Not added"],
                     ].map(([label, value]) => (
                       <div
@@ -266,7 +282,9 @@ export const SuppliersPage = () => {
                         <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           {label}
                         </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                        <dd className="mt-1 text-sm font-medium text-slate-900">
+                          {value}
+                        </dd>
                       </div>
                     ))}
                   </dl>
@@ -325,8 +343,9 @@ export const SuppliersPage = () => {
                         {supplier.mobileNumber}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">
-                        {[supplier.city, supplier.state].filter(Boolean).join(", ") ||
-                          "Not added"}
+                        {[supplier.city, supplier.state]
+                          .filter(Boolean)
+                          .join(", ") || "Not added"}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {supplier.gstNumber || "Not added"}
@@ -354,7 +373,9 @@ export const SuppliersPage = () => {
                             onClick={() => setPendingStatusSupplier(supplier)}
                             type="button"
                           >
-                            {supplier.status === "active" ? "Deactivate" : "Activate"}
+                            {supplier.status === "active"
+                              ? "Deactivate"
+                              : "Activate"}
                           </button>
                         </div>
                       </td>

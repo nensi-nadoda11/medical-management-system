@@ -1,0 +1,8 @@
+
+> medical-management-backend@1.0.0 dev
+> tsx watch src/server.ts
+
+◇ injected env (29) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+[2026-04-17T08:24:32.191Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T08:24:32.839Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T08:24:33.269Z] [INFO] Backend server started {"port":4000,"environment":"development"}

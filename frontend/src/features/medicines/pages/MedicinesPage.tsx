@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { ErrorState } from "../../../components/ui/ErrorState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
@@ -40,18 +41,17 @@ export const MedicinesPage = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [manufacturerFilter, setManufacturerFilter] = useState("");
-  const [sortBy, setSortBy] = useState<"medicineName" | "genericName" | "updatedAt">(
-    "medicineName",
-  );
+  const [sortBy, setSortBy] = useState<
+    "medicineName" | "genericName" | "updatedAt"
+  >("medicineName");
   const [page, setPage] = useState(1);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
-  const [masterModal, setMasterModal] = useState<"category" | "manufacturer" | null>(
-    null,
-  );
-  const [pendingStatusMedicine, setPendingStatusMedicine] = useState<Medicine | null>(
-    null,
-  );
+  const [masterModal, setMasterModal] = useState<
+    "category" | "manufacturer" | null
+  >(null);
+  const [pendingStatusMedicine, setPendingStatusMedicine] =
+    useState<Medicine | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const medicineParams = {
@@ -109,8 +109,13 @@ export const MedicinesPage = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ medicineId, status }: { medicineId: string; status: MasterStatus }) =>
-      updateMedicineStatus(medicineId, { status }),
+    mutationFn: ({
+      medicineId,
+      status,
+    }: {
+      medicineId: string;
+      status: MasterStatus;
+    }) => updateMedicineStatus(medicineId, { status }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: medicinesQueryKeys.all });
       pushToast({
@@ -138,11 +143,20 @@ export const MedicinesPage = () => {
   const summary = useMemo(
     () => ({
       totalMedicines: medicinesQuery.data?.pagination.total ?? 0,
-      activeCategories: categories.filter((item) => item.status === "active").length,
-      activeManufacturers: manufacturers.filter((item) => item.status === "active").length,
-      prescriptionFlagged: medicines.filter((item) => item.prescriptionRequired).length,
+      activeCategories: categories.filter((item) => item.status === "active")
+        .length,
+      activeManufacturers: manufacturers.filter(
+        (item) => item.status === "active",
+      ).length,
+      prescriptionFlagged: medicines.filter((item) => item.prescriptionRequired)
+        .length,
     }),
-    [categories, manufacturers, medicines, medicinesQuery.data?.pagination.total],
+    [
+      categories,
+      manufacturers,
+      medicines,
+      medicinesQuery.data?.pagination.total,
+    ],
   );
 
   if (isLoading) {
@@ -151,8 +165,13 @@ export const MedicinesPage = () => {
 
   if (activeError) {
     return (
-      <LoadingState
+      <ErrorState
         description={activeError.message}
+        onRetry={() => {
+          medicinesQuery.refetch();
+          categoriesQuery.refetch();
+          manufacturersQuery.refetch();
+        }}
         title="Unable to load medicine catalog"
       />
     );
@@ -292,7 +311,12 @@ export const MedicinesPage = () => {
             <select
               className={inputClassName}
               onChange={(event) => {
-                setSortBy(event.target.value as "medicineName" | "genericName" | "updatedAt");
+                setSortBy(
+                  event.target.value as
+                    | "medicineName"
+                    | "genericName"
+                    | "updatedAt",
+                );
                 setPage(1);
               }}
               value={sortBy}
@@ -325,7 +349,9 @@ export const MedicinesPage = () => {
                         </h3>
                         <StatusBadge label={medicine.status} />
                       </div>
-                      <p className="text-sm text-slate-600">{medicine.genericName}</p>
+                      <p className="text-sm text-slate-600">
+                        {medicine.genericName}
+                      </p>
                     </div>
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
@@ -348,7 +374,9 @@ export const MedicinesPage = () => {
                       ["Reorder", medicine.reorderLevel.toString()],
                       [
                         "Prescription",
-                        medicine.prescriptionRequired ? "Required" : "Not required",
+                        medicine.prescriptionRequired
+                          ? "Required"
+                          : "Not required",
                       ],
                     ].map(([label, value]) => (
                       <div
@@ -358,7 +386,9 @@ export const MedicinesPage = () => {
                         <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           {label}
                         </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                        <dd className="mt-1 text-sm font-medium text-slate-900">
+                          {value}
+                        </dd>
                       </div>
                     ))}
                   </dl>
@@ -427,9 +457,13 @@ export const MedicinesPage = () => {
                       <td className="px-4 py-4">
                         <StatusBadge
                           label={
-                            medicine.prescriptionRequired ? "Required" : "Open sale"
+                            medicine.prescriptionRequired
+                              ? "Required"
+                              : "Open sale"
                           }
-                          tone={medicine.prescriptionRequired ? "pending" : "active"}
+                          tone={
+                            medicine.prescriptionRequired ? "pending" : "active"
+                          }
                         />
                       </td>
                       <td className="px-4 py-4">
@@ -455,7 +489,9 @@ export const MedicinesPage = () => {
                             onClick={() => setPendingStatusMedicine(medicine)}
                             type="button"
                           >
-                            {medicine.status === "active" ? "Deactivate" : "Activate"}
+                            {medicine.status === "active"
+                              ? "Deactivate"
+                              : "Activate"}
                           </button>
                         </div>
                       </td>

@@ -189,7 +189,7 @@ export const MedicineFormModal = ({
       }
       onClose={onClose}
       open={open}
-      panelClassName="max-w-6xl"
+      panelClassName="max-w-5xl"
       title={medicine ? "Edit medicine" : "Add medicine"}
     >
       {!hasLookupData ? (

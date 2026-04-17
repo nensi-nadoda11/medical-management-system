@@ -13,7 +13,7 @@ export class MedicinesController {
     try {
       const result = await this.medicinesService.listMedicines(
         getShopId(req),
-        req.query as never,
+        (req.validatedQuery ?? req.query) as never,
       );
 
       return res.status(200).json({ data: result });
@@ -97,7 +97,7 @@ export class MedicinesController {
     try {
       const result = await this.medicinesService.listCategories(
         getShopId(req),
-        req.query as never,
+        (req.validatedQuery ?? req.query) as never,
       );
 
       return res.status(200).json({ data: result });
@@ -147,7 +147,7 @@ export class MedicinesController {
     try {
       const result = await this.medicinesService.listManufacturers(
         getShopId(req),
-        req.query as never,
+        (req.validatedQuery ?? req.query) as never,
       );
 
       return res.status(200).json({ data: result });
