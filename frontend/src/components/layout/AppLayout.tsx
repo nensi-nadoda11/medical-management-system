@@ -8,15 +8,60 @@ import { cn } from "../../lib/utils";
 import { authService } from "../../services/auth";
 import { authQueryKeys, useSessionQuery } from "../../features/auth/hooks/use-session";
 
-const navigation = [
-  { label: "Overview", to: "/app", adminOnly: false },
-  { label: "Shop Setup", to: "/app/shop-setup", adminOnly: true },
-  { label: "Staff Management", to: "/app/staff-management", adminOnly: true },
-  { label: "Medicines", to: "/app/medicines", adminOnly: true },
-  { label: "Suppliers", to: "/app/suppliers", adminOnly: true },
-  { label: "Purchases", to: "/app/purchases", adminOnly: true },
-  { label: "Inventory", to: "/app/inventory", adminOnly: true },
-] as const;
+type NavigationItem = {
+  label: string;
+  roles: Array<"admin" | "staff" | "accountant">;
+  resolveTo: (role: "admin" | "staff" | "accountant") => string;
+};
+
+const navigation: NavigationItem[] = [
+  {
+    label: "Overview",
+    roles: ["admin", "staff", "accountant"] as const,
+    resolveTo: () => "/app",
+  },
+  {
+    label: "Billing",
+    roles: ["admin", "staff", "accountant"] as const,
+    resolveTo: (role: "admin" | "staff" | "accountant") =>
+      role === "accountant" ? "/app/billing/history" : "/app/billing",
+  },
+  {
+    label: "Reports",
+    roles: ["admin", "staff", "accountant"] as const,
+    resolveTo: () => "/app/reports",
+  },
+  {
+    label: "Shop Setup",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/shop-setup",
+  },
+  {
+    label: "Staff Management",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/staff-management",
+  },
+  {
+    label: "Medicines",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/medicines",
+  },
+  {
+    label: "Suppliers",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/suppliers",
+  },
+  {
+    label: "Purchases",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/purchases",
+  },
+  {
+    label: "Inventory",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/inventory",
+  },
+];
 
 export const AppLayout = () => {
   const navigate = useNavigate();
@@ -76,9 +121,12 @@ export const AppLayout = () => {
   }
 
   const session = sessionQuery.data;
-  const visibleNavigation = navigation.filter(
-    (item) => !item.adminOnly || session.user.role === "admin",
-  );
+  const visibleNavigation = navigation
+    .filter((item) => item.roles.includes(session.user.role))
+    .map((item) => ({
+      label: item.label,
+      to: item.resolveTo(session.user.role),
+    }));
   const profileInitials = session.user.fullName
     .split(" ")
     .filter(Boolean)

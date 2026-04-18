@@ -3,6 +3,7 @@ import type { PaginatedResponse } from "./common";
 export const BATCH_STATUSES = ["active", "exhausted", "expired"] as const;
 export const STOCK_TRANSACTION_TYPES = [
   "purchase_in",
+  "sale_out",
   "adjustment_in",
   "adjustment_out",
 ] as const;
@@ -68,7 +69,7 @@ export interface InventoryTransaction {
   quantityIn: number;
   quantityOut: number;
   balanceAfter: number;
-  referenceType: "purchase_item" | "stock_adjustment";
+  referenceType: "purchase_item" | "sale_item" | "stock_adjustment";
   referenceId: string;
   notes: string | null;
   createdByUserId: string;

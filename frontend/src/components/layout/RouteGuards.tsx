@@ -49,3 +49,25 @@ export const RequireAdmin = () => {
 
   return <Outlet />;
 };
+
+export const RequireRoles = ({
+  roles,
+}: {
+  roles: Array<"admin" | "staff" | "accountant">;
+}) => {
+  const sessionQuery = useSessionQuery();
+
+  if (sessionQuery.isLoading) {
+    return <LoadingState title="Loading workspace access" />;
+  }
+
+  if (!sessionQuery.data) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (!roles.includes(sessionQuery.data.user.role)) {
+    return <Navigate replace to="/app" />;
+  }
+
+  return <Outlet />;
+};

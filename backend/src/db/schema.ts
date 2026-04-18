@@ -71,6 +71,18 @@ export const purchasePaymentStatusEnum = pgEnum("purchase_payment_status", [
   "partial",
   "paid",
 ]);
+export const saleStatusEnum = pgEnum("sale_status", [
+  "held",
+  "completed",
+  "cancelled",
+]);
+export const salePaymentMethodEnum = pgEnum("sale_payment_method", [
+  "cash",
+  "upi",
+  "card",
+  "bank_transfer",
+  "split",
+]);
 export const batchStatusEnum = pgEnum("batch_status", [
   "active",
   "exhausted",
@@ -78,11 +90,13 @@ export const batchStatusEnum = pgEnum("batch_status", [
 ]);
 export const stockTransactionTypeEnum = pgEnum("stock_transaction_type", [
   "purchase_in",
+  "sale_out",
   "adjustment_in",
   "adjustment_out",
 ]);
 export const stockReferenceTypeEnum = pgEnum("stock_reference_type", [
   "purchase_item",
+  "sale_item",
   "stock_adjustment",
 ]);
 export const stockAdjustmentTypeEnum = pgEnum("stock_adjustment_type", [
@@ -561,6 +575,136 @@ export const medicineBatches = pgTable(
   }),
 );
 
+export const sales = pgTable(
+  "sales",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    billSequence: integer("bill_sequence").notNull(),
+    billNumber: varchar("bill_number", { length: 40 }).notNull(),
+    billNumberNormalized: varchar("bill_number_normalized", {
+      length: 40,
+    }).notNull(),
+    customerId: uuid("customer_id"),
+    customerName: varchar("customer_name", { length: 160 }),
+    customerPhone: varchar("customer_phone", { length: 20 }),
+    status: saleStatusEnum("status").notNull().default("held"),
+    paymentStatus: purchasePaymentStatusEnum("payment_status")
+      .notNull()
+      .default("unpaid"),
+    paymentMethod: salePaymentMethodEnum("payment_method")
+      .notNull()
+      .default("cash"),
+    subtotal: numeric("subtotal", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    discountAmount: numeric("discount_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    taxAmount: numeric("tax_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    roundOffAmount: numeric("round_off_amount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    grandTotal: numeric("grand_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    paidAmount: numeric("paid_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    dueAmount: numeric("due_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    updatedByUserId: uuid("updated_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("sales_shop_id_idx").on(table.shopId),
+    statusIdx: index("sales_status_idx").on(table.status),
+    paymentStatusIdx: index("sales_payment_status_idx").on(table.paymentStatus),
+    completedAtIdx: index("sales_completed_at_idx").on(table.completedAt),
+    createdByIdx: index("sales_created_by_user_id_idx").on(table.createdByUserId),
+    billSequenceIdx: uniqueIndex("sales_shop_bill_sequence_unique_idx").on(
+      table.shopId,
+      table.billSequence,
+    ),
+    billNumberIdx: uniqueIndex("sales_shop_bill_number_unique_idx").on(
+      table.shopId,
+      table.billNumberNormalized,
+    ),
+  }),
+);
+
+export const saleItems = pgTable(
+  "sale_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id, { onDelete: "cascade" }),
+    medicineId: uuid("medicine_id")
+      .notNull()
+      .references(() => medicines.id, { onDelete: "restrict" }),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => medicineBatches.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+    rate: numeric("rate", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    mrp: numeric("mrp", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    gstPercent: integer("gst_percent").notNull().default(0),
+    discountPercent: numeric("discount_percent", { precision: 7, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    discountAmount: numeric("discount_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    lineSubtotal: numeric("line_subtotal", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    lineTaxAmount: numeric("line_tax_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    lineTotal: numeric("line_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("sale_items_shop_id_idx").on(table.shopId),
+    saleIdIdx: index("sale_items_sale_id_idx").on(table.saleId),
+    medicineIdIdx: index("sale_items_medicine_id_idx").on(table.medicineId),
+    batchIdIdx: index("sale_items_batch_id_idx").on(table.batchId),
+  }),
+);
+
 export const purchaseItems = pgTable(
   "purchase_items",
   {
@@ -752,6 +896,8 @@ export type Supplier = typeof suppliers.$inferSelect;
 export type Purchase = typeof purchases.$inferSelect;
 export type PurchaseItem = typeof purchaseItems.$inferSelect;
 export type MedicineBatch = typeof medicineBatches.$inferSelect;
+export type Sale = typeof sales.$inferSelect;
+export type SaleItem = typeof saleItems.$inferSelect;
 export type StockTransaction = typeof stockTransactions.$inferSelect;
 export type StockAdjustment = typeof stockAdjustments.$inferSelect;
 export type LowStockAlertState = typeof lowStockAlertStates.$inferSelect;

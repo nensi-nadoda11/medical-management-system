@@ -24,8 +24,11 @@ const toneMap: Record<string, string> = {
   next_60_days: "bg-amber-50 text-amber-700 ring-amber-200",
   next_90_days: "bg-amber-50 text-amber-700 ring-amber-200",
   purchase_in: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  sale_out: "bg-rose-50 text-rose-700 ring-rose-200",
   adjustment_in: "bg-sky-50 text-sky-700 ring-sky-200",
   adjustment_out: "bg-amber-50 text-amber-700 ring-amber-200",
+  held: "bg-amber-50 text-amber-700 ring-amber-200",
+  completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 };
 
 interface StatusBadgeProps {

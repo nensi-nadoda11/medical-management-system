@@ -14,6 +14,8 @@ import { medicinesRoutes } from "./modules/medicines/medicines.routes";
 import { suppliersRoutes } from "./modules/suppliers/suppliers.routes";
 import { purchasesRoutes } from "./modules/purchases/purchases.routes";
 import { inventoryRoutes } from "./modules/inventory/inventory.routes";
+import { billingRoutes } from "./modules/billing/billing.routes";
+import { reportsRoutes } from "./modules/reports/reports.routes";
 
 export const app = express();
 
@@ -60,6 +62,8 @@ app.use("/api/v1/medicines", medicinesRoutes);
 app.use("/api/v1/suppliers", suppliersRoutes);
 app.use("/api/v1/purchases", purchasesRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
+app.use("/api/v1/billing", billingRoutes);
+app.use("/api/v1/reports", reportsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

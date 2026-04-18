@@ -219,4 +219,105 @@ export class InventoryStockService {
       lowStockEvent,
     };
   }
+
+  async depleteSaleStock(
+    input: {
+      shopId: string;
+      saleId: string;
+      createdByUserId: string;
+      items: Array<{
+        id: string;
+        medicineId: string;
+        batchId: string;
+        quantity: number;
+      }>;
+    },
+    executor: DbExecutor,
+  ) {
+    const lowStockEvents: LowStockAlertEvent[] = [];
+    const touchedMedicineIds = new Set<string>();
+
+    for (const item of input.items) {
+      const batch = await this.inventoryRepository.findBatchById(
+        input.shopId,
+        item.batchId,
+        executor,
+      );
+
+      if (!batch || batch.medicineId !== item.medicineId) {
+        throw buildAppError(404, "BATCH_NOT_FOUND", "Batch not found.");
+      }
+
+      if (batch.expiryDate < new Date()) {
+        throw buildAppError(
+          400,
+          "BATCH_EXPIRED",
+          `Batch ${batch.batchNumber} is expired and cannot be sold.`,
+        );
+      }
+
+      const nextAvailableQuantity = batch.quantityAvailable - item.quantity;
+
+      if (nextAvailableQuantity < 0) {
+        throw buildAppError(
+          400,
+          "INSUFFICIENT_BATCH_STOCK",
+          `Insufficient stock for batch ${batch.batchNumber}.`,
+        );
+      }
+
+      const updatedBatch = await this.inventoryRepository.changeBatchQuantity(
+        {
+          batchId: item.batchId,
+          shopId: input.shopId,
+          quantityDelta: -item.quantity,
+          nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
+        },
+        executor,
+      );
+
+      if (!updatedBatch) {
+        throw buildAppError(
+          409,
+          "SALE_STOCK_CONFLICT",
+          "Stock changed while completing the bill. Please retry.",
+        );
+      }
+
+      await this.inventoryRepository.createStockTransaction(
+        {
+          shopId: input.shopId,
+          medicineId: item.medicineId,
+          batchId: item.batchId,
+          transactionType: "sale_out",
+          quantityIn: 0,
+          quantityOut: item.quantity,
+          balanceAfter: updatedBatch.quantityAvailable,
+          referenceType: "sale_item",
+          referenceId: item.id,
+          notes: `Stock deducted for sale ${input.saleId}`,
+          createdByUserId: input.createdByUserId,
+        },
+        executor,
+      );
+
+      touchedMedicineIds.add(item.medicineId);
+    }
+
+    for (const medicineId of touchedMedicineIds) {
+      const event = await this.alertsService.evaluateLowStockTransition(
+        input.shopId,
+        medicineId,
+        executor,
+      );
+
+      if (event) {
+        lowStockEvents.push(event);
+      }
+    }
+
+    return {
+      lowStockEvents,
+    };
+  }
 }
