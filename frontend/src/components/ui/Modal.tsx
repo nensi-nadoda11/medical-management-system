@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 
 interface ModalProps extends PropsWithChildren {
@@ -20,6 +21,23 @@ export const Modal = ({
   bodyClassName,
   children,
 }: ModalProps) => {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
@@ -27,7 +45,7 @@ export const Modal = ({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center overflow-hidden bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
       <div
-        className={`flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/15 ${panelClassName ?? ""}`}
+        className={`flex max-h-[calc(100vh-2.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/15 ${panelClassName ?? ""}`}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div className="space-y-1">

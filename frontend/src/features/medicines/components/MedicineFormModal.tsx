@@ -17,7 +17,7 @@ import {
 } from "../../../types/medicine";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const medicineFormSchema = z.object({
   medicineName: z.string().trim().min(2, "Medicine name is required.").max(180),
@@ -189,7 +189,7 @@ export const MedicineFormModal = ({
       }
       onClose={onClose}
       open={open}
-      panelClassName="max-w-5xl"
+      panelClassName="h-[min(820px,calc(100vh-2.5rem))] max-w-[1040px]"
       title={medicine ? "Edit medicine" : "Add medicine"}
     >
       {!hasLookupData ? (
@@ -200,18 +200,18 @@ export const MedicineFormModal = ({
       ) : null}
 
       <form
-        className="grid gap-6"
+        className="grid gap-5"
         id="medicine-form"
         onSubmit={handleSubmit(async (values) => {
           await onSubmit(toPayload(values));
         })}
       >
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-5 xl:grid-cols-2">
           <FormSection
             description="These fields define how the medicine appears across catalog and future transactional workflows."
             title="Core details"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3.5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Medicine name
                 <input className={inputClassName} {...register("medicineName")} />
@@ -286,7 +286,7 @@ export const MedicineFormModal = ({
             description="Link the medicine to the right category and manufacturer for clean reporting and downstream operations."
             title="Classification"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3.5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Category
                 <select className={inputClassName} {...register("categoryId")}>
@@ -359,12 +359,12 @@ export const MedicineFormModal = ({
           </FormSection>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-5 xl:grid-cols-2">
           <FormSection
             description="Reference attributes help with barcode lookup, tax mapping, and compliance workflows."
             title="Reference fields"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3.5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 HSN code
                 <input className={inputClassName} {...register("hsnCode")} />

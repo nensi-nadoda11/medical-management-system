@@ -1,0 +1,120 @@
+import type { PaginatedResponse } from "./common";
+
+export const PURCHASE_STATUSES = ["draft", "finalized", "cancelled"] as const;
+export const PURCHASE_PAYMENT_STATUSES = ["unpaid", "partial", "paid"] as const;
+
+export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
+export type PurchasePaymentStatus = (typeof PURCHASE_PAYMENT_STATUSES)[number];
+
+export interface PurchaseSupplierSummary {
+  id: string;
+  supplierName: string;
+  companyName: string | null;
+  contactPerson?: string | null;
+  mobileNumber: string;
+  email?: string | null;
+  status: "active" | "inactive";
+}
+
+export interface PurchaseListItem {
+  id: string;
+  purchaseNumber: string;
+  supplierInvoiceNumber: string | null;
+  supplierInvoiceDate: string | null;
+  purchaseDate: string;
+  status: PurchaseStatus;
+  paymentStatus: PurchasePaymentStatus;
+  subtotal: string;
+  discountAmount: string;
+  taxAmount: string;
+  roundOffAmount: string;
+  grandTotal: string;
+  paidAmount: string;
+  dueAmount: string;
+  finalizedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  supplier: PurchaseSupplierSummary;
+}
+
+export interface PurchaseDetailItem {
+  id: string;
+  medicineBatchId: string | null;
+  medicine: {
+    id: string;
+    medicineName: string;
+    genericName: string;
+    form: string;
+    unit: string;
+    reorderLevel: number;
+    status: "active" | "inactive";
+  };
+  batchNumber: string;
+  expiryDate: string;
+  quantity: number;
+  freeQuantity: number;
+  purchaseRate: string;
+  saleRate: string;
+  mrp: string;
+  gstPercent: number;
+  discountPercent: string;
+  lineSubtotal: string;
+  lineTaxAmount: string;
+  lineTotal: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseDetail extends PurchaseListItem {
+  shopId: string;
+  supplierId: string;
+  notes: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  supplier: PurchaseSupplierSummary;
+  items: PurchaseDetailItem[];
+}
+
+export interface PurchaseItemInput {
+  medicineId: string;
+  batchNumber: string;
+  expiryDate: string;
+  quantity: number;
+  freeQuantity: number;
+  purchaseRate: number;
+  saleRate: number;
+  mrp: number;
+  gstPercent: 0 | 5 | 12 | 18 | 28;
+  discountPercent: number;
+}
+
+export interface SavePurchasePayload {
+  supplierId: string;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceDate?: string | null;
+  purchaseDate: string;
+  paidAmount: number;
+  roundOffAmount: number;
+  notes?: string | null;
+  items: PurchaseItemInput[];
+}
+
+export interface CancelPurchasePayload {
+  notes?: string | null;
+}
+
+export interface PurchaseListParams {
+  search?: string;
+  supplierId?: string;
+  status?: PurchaseStatus;
+  paymentStatus?: PurchasePaymentStatus;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: "purchaseDate" | "purchaseNumber" | "createdAt" | "grandTotal";
+  sortOrder?: "asc" | "desc";
+}
+
+export type PurchasesResponse = PaginatedResponse<PurchaseListItem>;

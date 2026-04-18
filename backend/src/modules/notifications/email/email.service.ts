@@ -55,6 +55,62 @@ class EmailService {
       text,
     });
   }
+
+  async sendLowStockAlert(input: {
+    to: string;
+    recipientName: string;
+    shopName: string;
+    medicineName: string;
+    currentAvailableQuantity: number;
+    reorderLevel: number;
+    batchSummary?: string[];
+  }) {
+    const subject = `Low stock alert: ${input.medicineName}`;
+    const batchLines = input.batchSummary?.length
+      ? ["", "Batch summary:", ...input.batchSummary]
+      : [];
+    const text = [
+      `Hello ${input.recipientName},`,
+      "",
+      `Stock for ${input.medicineName} is low in ${input.shopName}.`,
+      `Current stock: ${input.currentAvailableQuantity}`,
+      `Reorder level: ${input.reorderLevel}`,
+      "Please review and replenish this medicine.",
+      ...batchLines,
+    ].join("\n");
+
+    const batchHtml = input.batchSummary?.length
+      ? `
+          <p style="margin: 16px 0 8px;"><strong>Batch summary</strong></p>
+          <ul style="margin: 0; padding-left: 18px;">
+            ${input.batchSummary.map((line) => `<li>${line}</li>`).join("")}
+          </ul>
+        `
+      : "";
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <p>Hello ${input.recipientName},</p>
+        <p>
+          Stock for <strong>${input.medicineName}</strong> is low in
+          <strong>${input.shopName}</strong>.
+        </p>
+        <p>
+          Current stock: <strong>${input.currentAvailableQuantity}</strong><br />
+          Reorder level: <strong>${input.reorderLevel}</strong>
+        </p>
+        <p>Please review and replenish this medicine.</p>
+        ${batchHtml}
+      </div>
+    `;
+
+    await this.provider.send({
+      to: input.to,
+      subject,
+      html,
+      text,
+    });
+  }
 }
 
 const emailProvider =

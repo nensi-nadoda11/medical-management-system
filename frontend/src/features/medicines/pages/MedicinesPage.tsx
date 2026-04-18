@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -140,24 +140,15 @@ export const MedicinesPage = () => {
   const manufacturers = manufacturersQuery.data?.items ?? [];
   const pagination = medicinesQuery.data?.pagination;
 
-  const summary = useMemo(
-    () => ({
-      totalMedicines: medicinesQuery.data?.pagination.total ?? 0,
-      activeCategories: categories.filter((item) => item.status === "active")
-        .length,
-      activeManufacturers: manufacturers.filter(
-        (item) => item.status === "active",
-      ).length,
-      prescriptionFlagged: medicines.filter((item) => item.prescriptionRequired)
-        .length,
-    }),
-    [
-      categories,
-      manufacturers,
-      medicines,
-      medicinesQuery.data?.pagination.total,
-    ],
-  );
+  const summary = {
+    totalMedicines: medicinesQuery.data?.pagination.total ?? 0,
+    activeCategories: categories.filter((item) => item.status === "active")
+      .length,
+    activeManufacturers: manufacturers.filter((item) => item.status === "active")
+      .length,
+    prescriptionFlagged: medicines.filter((item) => item.prescriptionRequired)
+      .length,
+  };
 
   if (isLoading) {
     return <LoadingState title="Loading medicine master" />;
@@ -221,13 +212,13 @@ export const MedicinesPage = () => {
           ["Prescription flagged", summary.prescriptionFlagged],
         ].map(([label, value]) => (
           <article
-            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60"
+            className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60"
             key={label}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               {label}
             </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2.5 text-[2rem] font-semibold tracking-tight text-slate-950">
               {value}
             </p>
           </article>

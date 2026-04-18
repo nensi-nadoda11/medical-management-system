@@ -105,24 +105,6 @@ export const MasterDataManagerModal = ({
   });
 
   useEffect(() => {
-    if (!open) {
-      setSearch("");
-      setStatusFilter("all");
-      setPage(1);
-      setEditingRecord(null);
-      form.reset({
-        name: "",
-        description: "",
-        status: "active",
-      });
-    }
-  }, [form, open]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch, statusFilter]);
-
-  useEffect(() => {
     if (!editingRecord) {
       form.reset({
         name: "",
@@ -207,6 +189,18 @@ export const MasterDataManagerModal = ({
     formState: { errors, isDirty },
   } = form;
 
+  const resetModalState = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setPage(1);
+    setEditingRecord(null);
+    form.reset({
+      name: "",
+      description: "",
+      status: "active",
+    });
+  };
+
   return (
     <Modal
       bodyClassName="space-y-6"
@@ -215,14 +209,7 @@ export const MasterDataManagerModal = ({
         <>
           <button
             className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setEditingRecord(null);
-              form.reset({
-                name: "",
-                description: "",
-                status: "active",
-              });
-            }}
+            onClick={resetModalState}
             type="button"
           >
             {editingRecord ? "Clear selection" : "Reset form"}
@@ -241,7 +228,10 @@ export const MasterDataManagerModal = ({
           </button>
         </>
       }
-      onClose={onClose}
+      onClose={() => {
+        resetModalState();
+        onClose();
+      }}
       open={open}
       panelClassName="max-w-5xl"
       title={labels.title}
@@ -315,7 +305,10 @@ export const MasterDataManagerModal = ({
                 Search
                 <input
                   className={inputClassName}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
                   placeholder={`Search ${isCategoryMode ? "categories" : "manufacturers"}`}
                   value={search}
                 />
@@ -324,9 +317,10 @@ export const MasterDataManagerModal = ({
                 Status
                 <select
                   className={inputClassName}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as MasterStatus | "all")
-                  }
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value as MasterStatus | "all");
+                    setPage(1);
+                  }}
                   value={statusFilter}
                 >
                   <option value="all">All</option>

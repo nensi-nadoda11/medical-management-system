@@ -6,3 +6,48 @@
 [2026-04-17T08:24:32.191Z] [INFO] Email provider initialized {"provider":"smtp"}
 [2026-04-17T08:24:32.839Z] [INFO] SMS provider initialized {"provider":"twilio"}
 [2026-04-17T08:24:33.269Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:09:47 PM [tsx] change in ./src\db\schema.ts Restarting...
+c◇ injected env (29) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+[2026-04-17T09:39:50.748Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:39:51.123Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:39:51.555Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:14:07 PM [tsx] change in ./src\modules\notifications\email\email.service.ts Rerunning...
+c◇ injected env (29) from .env // tip: ⌘ override existing { override: true }
+[2026-04-17T09:44:10.922Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:44:11.330Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:44:11.759Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:18:46 PM [tsx] change in ./src\app.ts Rerunning...
+c◇ injected env (29) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+[2026-04-17T09:48:49.617Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:48:50.267Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:48:51.222Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:19:35 PM [tsx] change in ./src\modules\inventory\inventory.repository.ts Restarting...
+c◇ injected env (29) from .env // tip: ⌘ suppress logs { quiet: true }
+[2026-04-17T09:49:38.560Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:49:39.176Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:49:40.024Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:19:45 PM [tsx] change in ./src\modules\inventory\inventory.service.ts Restarting...
+c◇ injected env (29) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+[2026-04-17T09:49:48.092Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:49:48.560Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:49:49.321Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:19:59 PM [tsx] change in ./src\modules\purchases\purchases.validation.ts Restarting...
+c◇ injected env (29) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+[2026-04-17T09:50:02.323Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:50:02.767Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:50:03.585Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:20:45 PM [tsx] change in ./src\modules\inventory\inventory.service.ts Restarting...
+c◇ injected env (29) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+[2026-04-17T09:50:49.055Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:50:49.487Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:50:50.237Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:21:37 PM [tsx] change in ./src\modules\purchases\purchases.repository.ts Restarting...
+c◇ injected env (29) from .env // tip: ⌘ override existing { override: true }
+[2026-04-17T09:51:39.822Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:51:40.225Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:51:41.096Z] [INFO] Backend server started {"port":4000,"environment":"development"}
+3:21:49 PM [tsx] change in ./src\modules\purchases\purchases.service.ts Restarting...
+c◇ injected env (29) from .env // tip: ⌘ suppress logs { quiet: true }
+[2026-04-17T09:51:52.482Z] [INFO] Email provider initialized {"provider":"smtp"}
+[2026-04-17T09:51:52.918Z] [INFO] SMS provider initialized {"provider":"twilio"}
+[2026-04-17T09:51:53.751Z] [INFO] Backend server started {"port":4000,"environment":"development"}

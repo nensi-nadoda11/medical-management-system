@@ -58,7 +58,7 @@ export interface MedicineCategory extends MedicineMasterItem {
   description: string | null;
 }
 
-export interface Manufacturer extends MedicineMasterItem {}
+export type Manufacturer = MedicineMasterItem;
 
 export interface MedicineRelation {
   id: string;

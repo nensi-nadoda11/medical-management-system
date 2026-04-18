@@ -1,4 +1,4 @@
-import { cn } from "../../lib/utils";
+import { cn, humanizeLabel } from "../../lib/utils";
 
 const toneMap: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
@@ -11,6 +11,21 @@ const toneMap: Record<string, string> = {
   staff: "bg-indigo-50 text-indigo-700 ring-indigo-200",
   accountant: "bg-violet-50 text-violet-700 ring-violet-200",
   suspended: "bg-rose-50 text-rose-700 ring-rose-200",
+  draft: "bg-sky-50 text-sky-700 ring-sky-200",
+  finalized: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
+  unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
+  partial: "bg-amber-50 text-amber-700 ring-amber-200",
+  paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  low_stock: "bg-rose-50 text-rose-700 ring-rose-200",
+  safe: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  near_expiry: "bg-amber-50 text-amber-700 ring-amber-200",
+  next_30_days: "bg-amber-50 text-amber-700 ring-amber-200",
+  next_60_days: "bg-amber-50 text-amber-700 ring-amber-200",
+  next_90_days: "bg-amber-50 text-amber-700 ring-amber-200",
+  purchase_in: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  adjustment_in: "bg-sky-50 text-sky-700 ring-sky-200",
+  adjustment_out: "bg-amber-50 text-amber-700 ring-amber-200",
 };
 
 interface StatusBadgeProps {
@@ -21,10 +36,10 @@ interface StatusBadgeProps {
 export const StatusBadge = ({ label, tone = label.toLowerCase() }: StatusBadgeProps) => (
   <span
     className={cn(
-      "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset",
+      "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
       toneMap[tone] ?? "bg-slate-100 text-slate-700 ring-slate-200",
     )}
   >
-    {label}
+    {humanizeLabel(label)}
   </span>
 );

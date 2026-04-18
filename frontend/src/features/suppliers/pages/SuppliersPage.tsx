@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -60,19 +60,15 @@ export const SuppliersPage = () => {
   const suppliers = suppliersQuery.data?.items ?? [];
   const pagination = suppliersQuery.data?.pagination;
 
-  const summary = useMemo(
-    () => ({
-      totalSuppliers: suppliersQuery.data?.pagination.total ?? 0,
-      activeOnScreen: suppliers.filter((item) => item.status === "active")
-        .length,
-      withGst: suppliers.filter((item) => item.gstNumber).length,
-      openingBalanceOnScreen: suppliers.reduce(
-        (sum, item) => sum + Number(item.openingBalance),
-        0,
-      ),
-    }),
-    [suppliers, suppliersQuery.data?.pagination.total],
-  );
+  const summary = {
+    totalSuppliers: suppliersQuery.data?.pagination.total ?? 0,
+    activeOnScreen: suppliers.filter((item) => item.status === "active").length,
+    withGst: suppliers.filter((item) => item.gstNumber).length,
+    openingBalanceOnScreen: suppliers.reduce(
+      (sum, item) => sum + Number(item.openingBalance),
+      0,
+    ),
+  };
 
   const saveSupplierMutation = useMutation({
     mutationFn: async (payload: SaveSupplierPayload) => {
@@ -158,13 +154,13 @@ export const SuppliersPage = () => {
           ],
         ].map(([label, value]) => (
           <article
-            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60"
+            className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60"
             key={label}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               {label}
             </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2.5 text-[2rem] font-semibold tracking-tight text-slate-950">
               {value}
             </p>
           </article>

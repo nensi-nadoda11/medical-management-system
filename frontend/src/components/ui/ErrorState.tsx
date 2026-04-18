@@ -15,7 +15,7 @@ export const ErrorState = ({
   onRetry,
   action,
 }: ErrorStateProps) => (
-  <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-12 text-center shadow-sm shadow-rose-200/60">
+  <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,#fff7f8_0%,#fff2f4_100%)] px-6 py-12 text-center shadow-sm shadow-rose-200/60">
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-700 shadow-sm">
       <span className="text-xl font-semibold">!</span>
     </div>

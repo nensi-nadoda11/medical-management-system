@@ -504,6 +504,7 @@
     height: auto;
     min-height: 100svh;
     overflow: visible;
+    overflow-y: auto;
   }
 
   .auth-hero {
