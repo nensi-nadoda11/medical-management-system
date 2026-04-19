@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import { validateRequest } from "../../shared/http/validate-request";
-import { requireRoles } from "../../shared/http/require_roles";
+import { requirePermission } from "../../shared/http/require_permission";
 import { requireAuth } from "../auth/auth.middleware";
 import { BillingController } from "./billing.controller";
 import {
@@ -21,56 +21,56 @@ const controller = new BillingController();
 router.get(
   "/",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("billing.view"),
   validateRequest(listBillsSchema),
   controller.listBills,
 );
 router.get(
   "/medicines/search",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("billing.view"),
   validateRequest(searchSellableMedicinesSchema),
   controller.searchSellableMedicines,
 );
 router.get(
   "/medicines/:medicineId/options",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("billing.view"),
   validateRequest(getSellableMedicineOptionsSchema),
   controller.getSellableMedicineOptions,
 );
 router.get(
   "/:id",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("billing.view"),
   validateRequest(getBillByIdSchema),
   controller.getBillById,
 );
 router.post(
   "/hold",
   requireAuth,
-  requireRoles("admin", "staff"),
+  requirePermission("billing.create"),
   validateRequest(createHeldBillSchema),
   controller.createHeldBill,
 );
 router.patch(
   "/:id/hold",
   requireAuth,
-  requireRoles("admin", "staff"),
+  requirePermission("billing.create"),
   validateRequest(updateHeldBillSchema),
   controller.updateHeldBill,
 );
 router.post(
   "/complete",
   requireAuth,
-  requireRoles("admin", "staff"),
+  requirePermission("billing.complete"),
   validateRequest(createCompletedBillSchema),
   controller.createCompletedBill,
 );
 router.post(
   "/:id/complete",
   requireAuth,
-  requireRoles("admin", "staff"),
+  requirePermission("billing.complete"),
   validateRequest(completeHeldBillSchema),
   controller.completeHeldBill,
 );

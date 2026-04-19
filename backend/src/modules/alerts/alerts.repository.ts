@@ -1,6 +1,12 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, sql, lte } from "drizzle-orm";
 
-import { lowStockAlertStates, shops, users } from "../../db/schema";
+import {
+  lowStockAlertStates,
+  medicineBatches,
+  medicines,
+  shops,
+  users,
+} from "../../db/schema";
 import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 
 export class AlertsRepository {
@@ -85,5 +91,83 @@ export class AlertsRepository {
         ),
       )
       .orderBy(asc(users.createdAt), asc(users.id));
+  }
+
+  async listCurrentLowStockMedicines(
+    shopId: string,
+    defaultThreshold: number,
+    executor?: DbExecutor,
+  ) {
+    const availableQuantityExpr = sql<number>`
+      coalesce(
+        sum(
+          case
+            when ${medicineBatches.quantityAvailable} > 0
+             and ${medicineBatches.expiryDate} >= now()
+            then ${medicineBatches.quantityAvailable}
+            else 0
+          end
+        ),
+        0
+      )
+    `;
+    const reorderLevelExpr = sql<number>`
+      case
+        when ${medicines.reorderLevel} > 0 then ${medicines.reorderLevel}
+        else ${defaultThreshold}
+      end
+    `;
+
+    return getDbExecutor(executor)
+      .select({
+        medicineId: medicines.id,
+        medicineName: medicines.medicineName,
+        availableQuantity: availableQuantityExpr,
+        reorderLevel: reorderLevelExpr,
+      })
+      .from(medicines)
+      .leftJoin(
+        medicineBatches,
+        and(
+          eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.medicineId, medicines.id),
+        ),
+      )
+      .where(eq(medicines.shopId, shopId))
+      .groupBy(medicines.id)
+      .having(sql`${availableQuantityExpr} <= ${reorderLevelExpr}`)
+      .orderBy(asc(medicines.medicineNameNormalized), asc(medicines.id));
+  }
+
+  async listCurrentExpiryBatches(
+    shopId: string,
+    nearExpiryDays: number,
+    executor?: DbExecutor,
+  ) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const nearExpiryLimit = new Date(todayStart);
+    nearExpiryLimit.setDate(nearExpiryLimit.getDate() + nearExpiryDays);
+
+    return getDbExecutor(executor)
+      .select({
+        batchId: medicineBatches.id,
+        batchNumber: medicineBatches.batchNumber,
+        expiryDate: medicineBatches.expiryDate,
+        quantityAvailable: medicineBatches.quantityAvailable,
+        medicineId: medicines.id,
+        medicineName: medicines.medicineName,
+      })
+      .from(medicineBatches)
+      .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
+      .where(
+        and(
+          eq(medicineBatches.shopId, shopId),
+          gt(medicineBatches.quantityAvailable, 0),
+          lte(medicineBatches.expiryDate, nearExpiryLimit),
+        ),
+      )
+      .orderBy(asc(medicineBatches.expiryDate), asc(medicineBatches.id));
   }
 }

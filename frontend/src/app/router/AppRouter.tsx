@@ -5,15 +5,23 @@ import {
   RequireAdmin,
   RequireAuth,
   RequireGuest,
-  RequireRoles,
+  RequirePermissions,
 } from "../../components/layout/RouteGuards";
 import { LoadingState } from "../../components/ui/LoadingState";
+import { AdminSettingsPage } from "../../features/admin-settings/pages/AdminSettingsPage";
 import { useSessionQuery } from "../../features/auth/hooks/use-session";
+import { CustomerAccountingPage } from "../../features/accounting/pages/CustomerAccountingPage";
+import { CustomerLedgerPage } from "../../features/accounting/pages/CustomerLedgerPage";
+import { SupplierAccountingPage } from "../../features/accounting/pages/SupplierAccountingPage";
+import { SupplierLedgerPage } from "../../features/accounting/pages/SupplierLedgerPage";
 import { AuthPage } from "../../features/auth/pages/AuthPage";
 import { BillingDetailPage } from "../../features/billing/pages/BillingDetailPage";
 import { BillingHistoryPage } from "../../features/billing/pages/BillingHistoryPage";
 import { BillingPage } from "../../features/billing/pages/BillingPage";
 import { HeldBillsPage } from "../../features/billing/pages/HeldBillsPage";
+import { SalesReturnDetailPage } from "../../features/sales-returns/pages/SalesReturnDetailPage";
+import { SalesReturnEditorPage } from "../../features/sales-returns/pages/SalesReturnEditorPage";
+import { SalesReturnsPage } from "../../features/sales-returns/pages/SalesReturnsPage";
 import { DashboardHomePage } from "../../features/dashboard/pages/DashboardHomePage";
 import { SetPasswordPage } from "../../features/invitations/pages/SetPasswordPage";
 import { ExpiryReportPage as InventoryExpiryReportPage } from "../../features/inventory/pages/ExpiryReportPage";
@@ -21,10 +29,16 @@ import { InventoryDetailPage } from "../../features/inventory/pages/InventoryDet
 import { InventorySummaryPage } from "../../features/inventory/pages/InventorySummaryPage";
 import { LowStockPage } from "../../features/inventory/pages/LowStockPage";
 import { MedicinesPage } from "../../features/medicines/pages/MedicinesPage";
+import { CustomerDetailPage } from "../../features/customers/pages/CustomerDetailPage";
+import { CustomersPage } from "../../features/customers/pages/CustomersPage";
 import { PurchaseCreatePage } from "../../features/purchases/pages/PurchaseCreatePage";
 import { PurchaseDetailPage } from "../../features/purchases/pages/PurchaseDetailPage";
 import { PurchaseEditPage } from "../../features/purchases/pages/PurchaseEditPage";
 import { PurchasesPage } from "../../features/purchases/pages/PurchasesPage";
+import { PurchaseReturnDetailPage } from "../../features/purchase-returns/pages/PurchaseReturnDetailPage";
+import { PurchaseReturnEditorPage } from "../../features/purchase-returns/pages/PurchaseReturnEditorPage";
+import { PurchaseReturnsPage } from "../../features/purchase-returns/pages/PurchaseReturnsPage";
+import { NotificationCenterPage } from "../../features/notifications/pages/NotificationCenterPage";
 import { ExpiryReportPage } from "../../features/reports/pages/ExpiryReportPage";
 import { LowStockReportPage } from "../../features/reports/pages/LowStockReportPage";
 import { ProfitReportPage } from "../../features/reports/pages/ProfitReportPage";
@@ -61,37 +75,82 @@ export const AppRouter = () => (
     <Route element={<RequireAuth />}>
       <Route element={<AppLayout />} path="/app">
         <Route element={<DashboardHomePage />} index />
-        <Route element={<RequireRoles roles={["admin", "staff"]} />}>
+        <Route element={<NotificationCenterPage />} path="notifications" />
+        <Route element={<RequirePermissions permissions={["billing.create"]} />}>
           <Route element={<BillingPage />} path="billing" />
         </Route>
-        <Route element={<RequireRoles roles={["admin", "staff", "accountant"]} />}>
+        <Route element={<RequirePermissions permissions={["customers.view"]} />}>
+          <Route element={<CustomersPage />} path="customers" />
+          <Route element={<CustomerDetailPage />} path="customers/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["payments.view"]} />}>
+          <Route element={<Navigate replace to="/app/accounting/customers" />} path="accounting" />
+          <Route element={<CustomerAccountingPage />} path="accounting/customers" />
+          <Route element={<CustomerLedgerPage />} path="accounting/customers/:id" />
+          <Route element={<SupplierAccountingPage />} path="accounting/suppliers" />
+          <Route element={<SupplierLedgerPage />} path="accounting/suppliers/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["billing.view"]} />}>
           <Route element={<HeldBillsPage />} path="billing/held" />
           <Route element={<BillingHistoryPage />} path="billing/history" />
           <Route element={<BillingDetailPage />} path="billing/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["billing.return"]} />}>
+          <Route element={<SalesReturnsPage />} path="billing/returns" />
+          <Route element={<SalesReturnDetailPage />} path="billing/returns/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["reports.view"]} />}>
           <Route element={<Navigate replace to="/app/reports/dashboard" />} path="reports" />
           <Route element={<ReportsDashboardPage />} path="reports/dashboard" />
           <Route element={<SalesReportPage />} path="reports/sales" />
         </Route>
-        <Route element={<RequireRoles roles={["admin", "accountant"]} />}>
+        <Route element={<RequirePermissions permissions={["billing.return"]} />}>
+          <Route element={<SalesReturnEditorPage />} path="billing/returns/new" />
+          <Route element={<SalesReturnEditorPage />} path="billing/returns/:id/edit" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["reports.financial"]} />}>
           <Route element={<ProfitReportPage />} path="reports/profit" />
           <Route element={<StockReportPage />} path="reports/stock" />
           <Route element={<LowStockReportPage />} path="reports/low-stock" />
           <Route element={<ExpiryReportPage />} path="reports/expiry" />
           <Route element={<SupplierReportPage />} path="reports/suppliers" />
         </Route>
-        <Route element={<RequireAdmin />}>
+        <Route element={<RequirePermissions permissions={["shop.view"]} />}>
           <Route element={<ShopSetupPage />} path="shop-setup" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["users.view"]} />}>
           <Route element={<StaffManagementPage />} path="staff-management" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["medicines.view"]} />}>
           <Route element={<MedicinesPage />} path="medicines" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["suppliers.view"]} />}>
           <Route element={<SuppliersPage />} path="suppliers" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["purchases.view"]} />}>
           <Route element={<PurchasesPage />} path="purchases" />
-          <Route element={<PurchaseCreatePage />} path="purchases/new" />
           <Route element={<PurchaseDetailPage />} path="purchases/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["purchases.create"]} />}>
+          <Route element={<PurchaseCreatePage />} path="purchases/new" />
           <Route element={<PurchaseEditPage />} path="purchases/:id/edit" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["purchaseReturns.view"]} />}>
+          <Route element={<PurchaseReturnsPage />} path="purchase-returns" />
+          <Route element={<PurchaseReturnDetailPage />} path="purchase-returns/:id" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["purchaseReturns.create"]} />}>
+          <Route element={<PurchaseReturnEditorPage />} path="purchase-returns/new" />
+          <Route element={<PurchaseReturnEditorPage />} path="purchase-returns/:id/edit" />
+        </Route>
+        <Route element={<RequirePermissions permissions={["inventory.view"]} />}>
           <Route element={<InventorySummaryPage />} path="inventory" />
           <Route element={<LowStockPage />} path="inventory/low-stock" />
           <Route element={<InventoryExpiryReportPage />} path="inventory/expiry" />
           <Route element={<InventoryDetailPage />} path="inventory/:medicineId" />
+        </Route>
+        <Route element={<RequireAdmin />}>
+          <Route element={<AdminSettingsPage />} path="admin-settings" />
         </Route>
       </Route>
     </Route>

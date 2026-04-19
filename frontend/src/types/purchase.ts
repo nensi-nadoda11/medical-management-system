@@ -62,8 +62,24 @@ export interface PurchaseDetailItem {
   lineSubtotal: string;
   lineTaxAmount: string;
   lineTotal: string;
+  alreadyReturnedQuantity: number;
+  remainingReturnableQuantity: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PurchaseReturnHistoryItem {
+  id: string;
+  returnNumber: string;
+  status: "draft" | "completed" | "cancelled";
+  totalReturnAmount: string;
+  createdAt: string;
+  completedAt: string | null;
+  createdBy: {
+    id: string;
+    fullName: string;
+    role: "admin" | "staff" | "accountant";
+  };
 }
 
 export interface PurchaseDetail extends PurchaseListItem {
@@ -74,6 +90,8 @@ export interface PurchaseDetail extends PurchaseListItem {
   updatedByUserId: string;
   supplier: PurchaseSupplierSummary;
   items: PurchaseDetailItem[];
+  returnHistory: PurchaseReturnHistoryItem[];
+  totalCompletedReturnedAmount: string;
 }
 
 export interface PurchaseItemInput {

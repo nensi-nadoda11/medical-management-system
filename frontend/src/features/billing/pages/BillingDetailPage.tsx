@@ -17,6 +17,7 @@ import {
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { billingQueryKeys, getBill } from "../api/billing";
 import { BillingModuleNav } from "../components/BillingModuleNav";
+import { listSalesReturns, salesReturnsQueryKeys } from "../../sales-returns/api/salesReturns";
 
 export const BillingDetailPage = () => {
   const { id = "" } = useParams();
@@ -26,6 +27,24 @@ export const BillingDetailPage = () => {
   const billQuery = useQuery({
     queryKey: billingQueryKeys.detail(id),
     queryFn: () => getBill(id),
+  });
+  const salesReturnsQuery = useQuery({
+    enabled: Boolean(id),
+    queryKey: salesReturnsQueryKeys.list({
+      saleId: id,
+      page: 1,
+      pageSize: 5,
+      sortBy: "createdAt",
+      sortOrder: "desc",
+    }),
+    queryFn: () =>
+      listSalesReturns({
+        saleId: id,
+        page: 1,
+        pageSize: 5,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      }),
   });
 
   if (billQuery.isLoading) {
@@ -43,6 +62,7 @@ export const BillingDetailPage = () => {
   }
 
   const bill = billQuery.data;
+  const relatedReturns = salesReturnsQuery.data?.items ?? [];
 
   if (!bill) {
     return <EmptyState description="The requested bill could not be found." title="Bill not found" />;
@@ -60,6 +80,14 @@ export const BillingDetailPage = () => {
                 to={`/app/billing?heldBillId=${bill.id}`}
               >
                 Open in POS
+              </Link>
+            ) : null}
+            {canCreateBills && bill.status === "completed" ? (
+              <Link
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                to={`/app/billing/returns/new?saleId=${bill.id}`}
+              >
+                Create return
               </Link>
             ) : null}
           </>
@@ -236,6 +264,44 @@ export const BillingDetailPage = () => {
           <EmptyState
             description="This bill does not contain any medicine lines."
             title="No bill items"
+          />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        description="Sales return activity linked to this bill stays visible for audit and customer support."
+        title="Return history"
+      >
+        {relatedReturns.length ? (
+          <div className="space-y-3">
+            {relatedReturns.map((item) => (
+              <div
+                className="flex flex-col gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                key={item.id}
+              >
+                <div className="space-y-1">
+                  <Link
+                    className="text-sm font-semibold text-slate-950 hover:text-teal-700"
+                    to={`/app/billing/returns/${item.id}`}
+                  >
+                    {item.returnNumber}
+                  </Link>
+                  <p className="text-sm text-slate-600">{formatDateTime(item.createdAt)}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge label={item.status} />
+                  <StatusBadge label={item.refundStatus} />
+                  <span className="text-sm font-semibold text-slate-950">
+                    {formatCurrency(item.totalReturnAmount)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            description="No sales returns have been created for this bill yet."
+            title="No return history"
           />
         )}
       </SectionCard>

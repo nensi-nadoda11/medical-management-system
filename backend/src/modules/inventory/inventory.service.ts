@@ -1,6 +1,7 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
 import { AlertsService } from "../alerts/alerts.service";
+import { AdminSettingsService } from "../admin-settings/admin-settings.service";
 import { InventoryRepository } from "./inventory.repository";
 import { InventoryStockService } from "./inventory.stock.service";
 import type {
@@ -39,6 +40,7 @@ export class InventoryService {
     private readonly inventoryRepository = new InventoryRepository(),
     private readonly inventoryStockService = new InventoryStockService(),
     private readonly alertsService = new AlertsService(),
+    private readonly adminSettingsService = new AdminSettingsService(),
   ) {}
 
   async listInventorySummary(shopId: string, query: ListInventorySummaryQuery) {
@@ -189,6 +191,16 @@ export class InventoryService {
     userId: string,
     input: CreateStockAdjustmentInput,
   ) {
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+
+    if (!settings.allowInventoryAdjustment) {
+      throw buildAppError(
+        400,
+        "INVENTORY_ADJUSTMENT_DISABLED",
+        "Inventory adjustments are disabled in admin settings.",
+      );
+    }
+
     const adjustmentResult = await db.transaction((tx) =>
       this.inventoryStockService.applyManualAdjustment(
         {
@@ -205,11 +217,7 @@ export class InventoryService {
       ),
     );
 
-    if (adjustmentResult.lowStockEvent) {
-      await this.alertsService.dispatchLowStockAlert(
-        adjustmentResult.lowStockEvent,
-      );
-    }
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
 
     return {
       adjustment: adjustmentResult.adjustment,

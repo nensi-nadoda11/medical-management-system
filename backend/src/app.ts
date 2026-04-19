@@ -13,9 +13,16 @@ import { usersRoutes } from "./modules/users/users.routes";
 import { medicinesRoutes } from "./modules/medicines/medicines.routes";
 import { suppliersRoutes } from "./modules/suppliers/suppliers.routes";
 import { purchasesRoutes } from "./modules/purchases/purchases.routes";
+import { purchaseReturnsRoutes } from "./modules/purchase-returns/purchase-returns.routes";
 import { inventoryRoutes } from "./modules/inventory/inventory.routes";
 import { billingRoutes } from "./modules/billing/billing.routes";
 import { reportsRoutes } from "./modules/reports/reports.routes";
+import { adminSettingsRoutes } from "./modules/admin-settings/admin-settings.routes";
+import { customersRoutes } from "./modules/customers/customers.routes";
+import { salesReturnsRoutes } from "./modules/sales-returns/sales-returns.routes";
+import { accountingRoutes } from "./modules/accounting/accounting.routes";
+import { notificationsRoutes } from "./modules/notifications/notifications.routes";
+import { auditLogsRoutes } from "./modules/audit-logs/audit-logs.routes";
 
 export const app = express();
 
@@ -60,10 +67,17 @@ app.use("/api/v1/shop", shopRoutes);
 app.use("/api/v1/users", usersRoutes);
 app.use("/api/v1/medicines", medicinesRoutes);
 app.use("/api/v1/suppliers", suppliersRoutes);
+app.use("/api/v1/customers", customersRoutes);
 app.use("/api/v1/purchases", purchasesRoutes);
+app.use("/api/v1/purchase-returns", purchaseReturnsRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
 app.use("/api/v1/billing", billingRoutes);
+app.use("/api/v1/sales-returns", salesReturnsRoutes);
+app.use("/api/v1/accounting", accountingRoutes);
 app.use("/api/v1/reports", reportsRoutes);
+app.use("/api/v1/admin-settings", adminSettingsRoutes);
+app.use("/api/v1/notifications", notificationsRoutes);
+app.use("/api/v1/audit-logs", auditLogsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

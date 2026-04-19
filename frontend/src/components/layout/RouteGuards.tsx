@@ -2,6 +2,8 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { LoadingState } from "../ui/LoadingState";
 import { useSessionQuery } from "../../features/auth/hooks/use-session";
+import { hasPermission } from "../../types/auth";
+import type { AdminPermissionKey } from "../../types/admin-settings";
 
 export const RequireAuth = () => {
   const location = useLocation();
@@ -66,6 +68,36 @@ export const RequireRoles = ({
   }
 
   if (!roles.includes(sessionQuery.data.user.role)) {
+    return <Navigate replace to="/app" />;
+  }
+
+  return <Outlet />;
+};
+
+export const RequirePermissions = ({
+  permissions,
+  mode = "any",
+}: {
+  permissions: AdminPermissionKey[];
+  mode?: "any" | "all";
+}) => {
+  const sessionQuery = useSessionQuery();
+
+  if (sessionQuery.isLoading) {
+    return <LoadingState title="Loading workspace access" />;
+  }
+
+  if (!sessionQuery.data) {
+    return <Navigate replace to="/login" />;
+  }
+
+  const session = sessionQuery.data;
+  const allowed =
+    mode === "all"
+      ? permissions.every((permission) => hasPermission(session.user, permission))
+      : permissions.some((permission) => hasPermission(session.user, permission));
+
+  if (!allowed) {
     return <Navigate replace to="/app" />;
   }
 

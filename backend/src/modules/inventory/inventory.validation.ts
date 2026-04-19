@@ -57,7 +57,13 @@ export const listStockTransactionsSchema = z.object({
     medicineId: z.string().uuid().optional(),
     batchId: z.string().uuid().optional(),
     transactionType: z
-      .enum(["purchase_in", "sale_out", "adjustment_in", "adjustment_out"])
+      .enum([
+        "purchase_in",
+        "sale_out",
+        "sales_return_in",
+        "adjustment_in",
+        "adjustment_out",
+      ])
       .optional(),
     dateFrom: z.coerce.date().optional(),
     dateTo: z.coerce.date().optional(),

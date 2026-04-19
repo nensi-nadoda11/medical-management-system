@@ -23,6 +23,8 @@ import {
   MAX_OTP_ATTEMPTS,
 } from "./auth.constants";
 import { authRepository } from "./auth.repository";
+import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import { DEFAULT_ROLE_PERMISSIONS } from "../admin-settings/admin-settings.permissions";
 import type {
   LoginInput,
   RegisterAdminInput,
@@ -51,7 +53,9 @@ const buildPublicUser = (user: {
   isActive: boolean;
   emailVerifiedAt: Date | null;
   mobileVerifiedAt: Date | null;
-}): PublicUser => ({
+},
+permissions = DEFAULT_ROLE_PERMISSIONS[user.role],
+): PublicUser => ({
   id: user.id,
   shopId: user.shopId,
   role: user.role,
@@ -61,6 +65,7 @@ const buildPublicUser = (user: {
   isActive: user.isActive,
   emailVerified: Boolean(user.emailVerifiedAt),
   mobileVerified: Boolean(user.mobileVerifiedAt),
+  permissions,
 });
 
 const getRequiredMobileNumber = (user: {
@@ -108,6 +113,8 @@ const buildOtpDeliveryResult = (
 });
 
 class AuthService {
+  private readonly adminSettingsService = new AdminSettingsService();
+
   private async generateUniqueShopSlug(shopName: string) {
     const baseSlug = toSlug(shopName) || "shop";
     const existing = await authRepository.listShopSlugsStartingWith(baseSlug);
@@ -304,6 +311,13 @@ class AuthService {
     }
 
     if (!pendingChannels.length) {
+      const permissions =
+        await this.adminSettingsService.resolveEffectivePermissionsForUser({
+          shopId: registration.user.shopId,
+          userId: registration.user.id,
+          role: registration.user.role,
+        });
+
       if (
         !registration.user.isActive ||
         registration.shop.status !== "active"
@@ -322,10 +336,13 @@ class AuthService {
         message: "Registration is already verified.",
         isCompleted: true,
         redirectTo: "/login",
-        user: buildPublicUser({
-          ...registration.user,
-          isActive: true,
-        }),
+        user: buildPublicUser(
+          {
+            ...registration.user,
+            isActive: true,
+          },
+          permissions,
+        ),
         shop: buildPublicShop({
           ...registration.shop,
           status: "active",
@@ -436,22 +453,31 @@ class AuthService {
       }
     });
 
+    const permissions = await this.adminSettingsService.resolveEffectivePermissionsForUser({
+      shopId: registration.user.shopId,
+      userId: registration.user.id,
+      role: registration.user.role,
+    });
+
     return {
       message: isCompleted
         ? "Email and mobile verification completed successfully."
         : "Verification updated successfully.",
       isCompleted,
       redirectTo: isCompleted ? "/login" : null,
-      user: buildPublicUser({
-        ...registration.user,
-        emailVerifiedAt: verifiedEmail
-          ? now
-          : registration.user.emailVerifiedAt,
-        mobileVerifiedAt: verifiedMobile
-          ? now
-          : registration.user.mobileVerifiedAt,
-        isActive: isCompleted,
-      }),
+      user: buildPublicUser(
+        {
+          ...registration.user,
+          emailVerifiedAt: verifiedEmail
+            ? now
+            : registration.user.emailVerifiedAt,
+          mobileVerifiedAt: verifiedMobile
+            ? now
+            : registration.user.mobileVerifiedAt,
+          isActive: isCompleted,
+        },
+        permissions,
+      ),
       shop: buildPublicShop({
         ...registration.shop,
         status: isCompleted ? "active" : registration.shop.status,
@@ -698,13 +724,19 @@ class AuthService {
 
       return authRepository.createSession(sessionInput, tx);
     });
+    const permissions =
+      await this.adminSettingsService.resolveEffectivePermissionsForUser({
+        shopId: registration.user.shopId,
+        userId: registration.user.id,
+        role: registration.user.role,
+      });
 
     return {
       message: "Login successful.",
       sessionToken,
       sessionId: session.id,
       sessionExpiresAt: sessionExpiresAt.toISOString(),
-      user: buildPublicUser(registration.user),
+      user: buildPublicUser(registration.user, permissions),
       shop: buildPublicShop(registration.shop),
     };
   }
@@ -735,10 +767,17 @@ class AuthService {
 
     await authRepository.touchSession(record.session.id);
 
+    const permissions =
+      await this.adminSettingsService.resolveEffectivePermissionsForUser({
+        shopId: record.user.shopId,
+        userId: record.user.id,
+        role: record.user.role,
+      });
+
     return {
       sessionId: record.session.id,
       sessionExpiresAt: record.session.expiresAt.toISOString(),
-      user: buildPublicUser(record.user),
+      user: buildPublicUser(record.user, permissions),
       shop: buildPublicShop(record.shop),
     };
   }

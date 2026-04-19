@@ -21,6 +21,7 @@ export interface PublicUser {
   isActive: boolean;
   emailVerified: boolean;
   mobileVerified: boolean;
+  permissions: string[];
 }
 
 export interface AuthenticatedRequestContext {

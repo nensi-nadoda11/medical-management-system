@@ -27,7 +27,15 @@ import type {
   BillingMedicineSearchItem,
   SaveBillPayload,
 } from "../../../types/billing";
+import type { CustomerDetail, CustomerOption } from "../../../types/customer";
 import { useSessionQuery } from "../../auth/hooks/use-session";
+import {
+  createCustomer,
+  customersQueryKeys,
+  getCustomer,
+  listCustomerOptions,
+} from "../../customers/api/customers";
+import { CustomerQuickAddModal } from "../../customers/components/CustomerQuickAddModal";
 import {
   billingQueryKeys,
   completeHeldBill,
@@ -62,6 +70,16 @@ interface BillingEditorItem {
 }
 
 interface BillingDraftState {
+  selectedCustomer: {
+    id: string;
+    customerCode: string | null;
+    fullName: string;
+    mobileNumber: string;
+    city?: string | null;
+    totalDueAmount?: string;
+    lastPurchaseDate?: string | null;
+    status?: string;
+  } | null;
   customerName: string;
   customerPhone: string;
   paymentMethod: BillPaymentMethod;
@@ -72,6 +90,7 @@ interface BillingDraftState {
 }
 
 const emptyDraft = (): BillingDraftState => ({
+  selectedCustomer: null,
   customerName: "",
   customerPhone: "",
   paymentMethod: "cash",
@@ -108,8 +127,13 @@ const toPayload = (
   draft: BillingDraftState,
   items: BillingEditorItem[],
 ): SaveBillPayload => ({
-  customerName: draft.customerName.trim() || undefined,
-  customerPhone: draft.customerPhone.trim() || undefined,
+  customerId: draft.selectedCustomer?.id,
+  customerName: draft.selectedCustomer
+    ? undefined
+    : draft.customerName.trim() || undefined,
+  customerPhone: draft.selectedCustomer
+    ? undefined
+    : draft.customerPhone.trim() || undefined,
   paymentMethod: draft.paymentMethod,
   paidAmount: Number(draft.paidAmount || 0),
   roundOffAmount: Number(draft.roundOffAmount || 0),
@@ -125,7 +149,9 @@ const toPayload = (
 const loadHeldBillIntoDraft = (
   bill: BillDetail,
   optionMap: Map<string, BillingMedicineOptions>,
+  selectedCustomer: BillingDraftState["selectedCustomer"],
 ) => ({
+  selectedCustomer,
   customerName: bill.customerName ?? "",
   customerPhone: bill.customerPhone ?? "",
   paymentMethod: bill.paymentMethod,
@@ -174,6 +200,18 @@ const loadHeldBillIntoDraft = (
   }),
 });
 
+const toSelectedCustomerSummary = (customer: CustomerDetail | CustomerOption) => ({
+  id: customer.id,
+  customerCode: customer.customerCode ?? null,
+  fullName: customer.fullName,
+  mobileNumber: customer.mobileNumber,
+  city: customer.city ?? null,
+  totalDueAmount: "summary" in customer ? customer.summary.totalDueAmount : customer.totalDueAmount,
+  lastPurchaseDate:
+    "summary" in customer ? customer.summary.lastPurchaseDate : customer.lastPurchaseDate,
+  status: customer.status,
+});
+
 export const BillingPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -187,10 +225,13 @@ export const BillingPage = () => {
 
   const [draft, setDraft] = useState(emptyDraft);
   const [medicineSearch, setMedicineSearch] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
   const [loadedHeldBillId, setLoadedHeldBillId] = useState<string | null>(null);
+  const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
 
   const canCreateBills = sessionQuery.data?.user.role !== "accountant";
   const deferredSearch = useDeferredValue(medicineSearch);
+  const deferredCustomerSearch = useDeferredValue(customerSearch);
 
   const heldBillsQuery = useQuery({
     queryKey: billingQueryKeys.list({
@@ -236,6 +277,13 @@ export const BillingPage = () => {
     enabled: Boolean(deferredHeldBillId),
   });
 
+  const customerOptionsQuery = useQuery({
+    queryKey: customersQueryKeys.options(deferredCustomerSearch || undefined),
+    queryFn: () => listCustomerOptions(deferredCustomerSearch || undefined),
+    enabled: Boolean(deferredCustomerSearch.trim().length >= 2),
+    staleTime: 15_000,
+  });
+
   const createHeldMutation = useMutation({
     mutationFn: (payload: SaveBillPayload) => createHeldBill(payload),
   });
@@ -248,6 +296,12 @@ export const BillingPage = () => {
   });
   const completeHeldMutation = useMutation({
     mutationFn: (id: string) => completeHeldBill(id),
+  });
+  const createCustomerMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof createCustomer>[0]) => createCustomer(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: customersQueryKeys.all });
+    },
   });
 
   useEffect(() => {
@@ -287,7 +341,31 @@ export const BillingPage = () => {
       );
 
       const optionMap = new Map<string, BillingMedicineOptions>(optionEntries);
-      setDraft(loadHeldBillIntoDraft(heldBillQuery.data, optionMap));
+      const selectedCustomer = heldBillQuery.data.customerId
+        ? await queryClient
+            .fetchQuery({
+              queryKey: customersQueryKeys.detail(heldBillQuery.data.customerId),
+              queryFn: () => getCustomer(heldBillQuery.data.customerId!),
+              staleTime: 30_000,
+            })
+            .then(toSelectedCustomerSummary)
+            .catch(() =>
+              heldBillQuery.data.customerName && heldBillQuery.data.customerPhone
+                ? {
+                    id: heldBillQuery.data.customerId!,
+                    customerCode: null,
+                    fullName: heldBillQuery.data.customerName,
+                    mobileNumber: heldBillQuery.data.customerPhone,
+                    city: null,
+                    totalDueAmount: "0.00",
+                    lastPurchaseDate: null,
+                    status: "active",
+                  }
+                : null,
+            )
+        : null;
+
+      setDraft(loadHeldBillIntoDraft(heldBillQuery.data, optionMap, selectedCustomer));
       setLoadedHeldBillId(heldBillId);
     })().catch((error: Error) => {
       pushToast({
@@ -347,6 +425,7 @@ export const BillingPage = () => {
   const resetDraft = () => {
     setSearchParams({});
     setLoadedHeldBillId(null);
+    setCustomerSearch("");
     setDraft(emptyDraft());
   };
 
@@ -564,7 +643,7 @@ export const BillingPage = () => {
         </SectionCard>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1.1fr_1.4fr_0.95fr]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(280px,1.02fr)_minmax(420px,1.42fr)_minmax(340px,1.12fr)]">
         <SectionCard
           description="Search by medicine, generic name, or barcode and add sellable stock in one click."
           title="Medicine search"
@@ -662,7 +741,7 @@ export const BillingPage = () => {
                     className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
                     key={item.id}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold text-slate-950">
                           {item.medicineName}
@@ -798,35 +877,175 @@ export const BillingPage = () => {
         >
           <div className="space-y-4">
             <div className="grid gap-3">
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Customer name
-                <input
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      customerName: event.target.value,
-                    }))
-                  }
-                  placeholder="Walk-in customer"
-                  value={draft.customerName}
-                />
-              </label>
+              <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Customer selection
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Select a saved customer or continue with a walk-in bill.
+                    </p>
+                  </div>
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    onClick={() => setIsQuickCustomerOpen(true)}
+                    type="button"
+                  >
+                    Quick add
+                  </button>
+                </div>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Customer phone
-                <input
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      customerPhone: event.target.value,
-                    }))
-                  }
-                  placeholder="Optional mobile number"
-                  value={draft.customerPhone}
-                />
-              </label>
+                {draft.selectedCustomer ? (
+                  <div className="mt-4 rounded-[20px] border border-teal-200 bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">
+                            {draft.selectedCustomer.fullName}
+                          </h3>
+                          {draft.selectedCustomer.customerCode ? (
+                            <StatusBadge label={draft.selectedCustomer.customerCode} tone="default" />
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {draft.selectedCustomer.mobileNumber}
+                          {draft.selectedCustomer.city
+                            ? ` • ${draft.selectedCustomer.city}`
+                            : ""}
+                        </p>
+                      </div>
+                      <button
+                        className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            selectedCustomer: null,
+                            customerName: "",
+                            customerPhone: "",
+                          }))
+                        }
+                        type="button"
+                      >
+                        Use walk-in instead
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 2xl:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Outstanding due
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-amber-700">
+                          {formatCurrency(draft.selectedCustomer.totalDueAmount ?? "0.00")}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Last purchase
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">
+                          {formatDate(draft.selectedCustomer.lastPurchaseDate)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      Search customer
+                      <input
+                        className={inputClassName}
+                        onChange={(event) => setCustomerSearch(event.target.value)}
+                        placeholder="Search by name, code, or mobile"
+                        value={customerSearch}
+                      />
+                    </label>
+
+                    {customerOptionsQuery.data?.items.length ? (
+                      <div className="grid gap-2">
+                        {customerOptionsQuery.data.items.map((customer) => (
+                          <button
+                            className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40"
+                            key={customer.id}
+                            onClick={() => {
+                              setDraft((current) => ({
+                                ...current,
+                                selectedCustomer: toSelectedCustomerSummary(customer),
+                                customerName: customer.fullName,
+                                customerPhone: customer.mobileNumber,
+                              }));
+                              setCustomerSearch("");
+                            }}
+                            type="button"
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-950">
+                                  {customer.fullName}
+                                </p>
+                                <p className="mt-1 text-sm text-slate-600">
+                                  {customer.customerCode} • {customer.mobileNumber}
+                                </p>
+                              </div>
+                              <div className="text-xs text-slate-500 sm:text-right">
+                                <p>Due {formatCurrency(customer.totalDueAmount)}</p>
+                                <p>{formatDate(customer.lastPurchaseDate)}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {customerSearch.trim().length >= 2 &&
+                    !customerOptionsQuery.isFetching &&
+                    !customerOptionsQuery.data?.items.length ? (
+                      <p className="text-sm text-slate-500">
+                        No saved customer matched this search.
+                      </p>
+                    ) : null}
+
+                    {customerOptionsQuery.error ? (
+                      <p className="text-sm text-rose-600">
+                        {customerOptionsQuery.error.message}
+                      </p>
+                    ) : null}
+
+                    <div className="grid gap-3">
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        Walk-in customer name
+                        <input
+                          className={inputClassName}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              customerName: event.target.value,
+                            }))
+                          }
+                          placeholder="Optional walk-in customer"
+                          value={draft.customerName}
+                        />
+                      </label>
+
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        Walk-in customer phone
+                        <input
+                          className={inputClassName}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              customerPhone: event.target.value,
+                            }))
+                          }
+                          placeholder="Optional mobile number"
+                          value={draft.customerPhone}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Payment method
@@ -848,7 +1067,7 @@ export const BillingPage = () => {
                 </select>
               </label>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 2xl:grid-cols-2">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   Paid amount
                   <input
@@ -1014,6 +1233,29 @@ export const BillingPage = () => {
           />
         )}
       </SectionCard>
+
+      <CustomerQuickAddModal
+        errorMessage={createCustomerMutation.error?.message}
+        isSubmitting={createCustomerMutation.isPending}
+        onClose={() => setIsQuickCustomerOpen(false)}
+        onCreated={(customer) => {
+          setDraft((current) => ({
+            ...current,
+            selectedCustomer: toSelectedCustomerSummary(customer),
+            customerName: customer.fullName,
+            customerPhone: customer.mobileNumber,
+          }));
+          setCustomerSearch("");
+          setIsQuickCustomerOpen(false);
+          pushToast({
+            title: "Customer created",
+            description: `${customer.fullName} is ready to use in this bill.`,
+            variant: "success",
+          });
+        }}
+        onSubmit={(payload) => createCustomerMutation.mutateAsync(payload)}
+        open={isQuickCustomerOpen}
+      />
     </div>
   );
 };

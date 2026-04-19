@@ -111,6 +111,61 @@ class EmailService {
       text,
     });
   }
+
+  async sendInventoryAttentionAlert(input: {
+    to: string;
+    recipientName: string;
+    shopName: string;
+    title: string;
+    message: string;
+    medicineName: string;
+    batchNumber?: string;
+    expiryDate?: string;
+    quantityAvailable?: number;
+    tone: "near_expiry" | "expired";
+  }) {
+    const subject = `${input.tone === "expired" ? "Expired stock" : "Near expiry"} alert: ${input.medicineName}`;
+    const extraLines = [
+      input.batchNumber ? `Batch: ${input.batchNumber}` : undefined,
+      input.expiryDate ? `Expiry date: ${input.expiryDate.slice(0, 10)}` : undefined,
+      input.quantityAvailable !== undefined
+        ? `Quantity available: ${input.quantityAvailable}`
+        : undefined,
+    ].filter(Boolean);
+
+    const text = [
+      `Hello ${input.recipientName},`,
+      "",
+      `${input.title} in ${input.shopName}.`,
+      input.message,
+      ...extraLines,
+      "",
+      "Please review the stock position in the system.",
+    ].join("\n");
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <p>Hello ${input.recipientName},</p>
+        <p><strong>${input.title}</strong> in <strong>${input.shopName}</strong>.</p>
+        <p>${input.message}</p>
+        ${
+          extraLines.length
+            ? `<ul style="margin: 0; padding-left: 18px;">${extraLines
+                .map((line) => `<li>${line}</li>`)
+                .join("")}</ul>`
+            : ""
+        }
+        <p style="margin-top: 16px;">Please review the stock position in the system.</p>
+      </div>
+    `;
+
+    await this.provider.send({
+      to: input.to,
+      subject,
+      html,
+      text,
+    });
+  }
 }
 
 const emailProvider =

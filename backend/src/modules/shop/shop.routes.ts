@@ -1,12 +1,17 @@
 import { Router } from "express";
 import { ShopController } from "./shop.controller";
-import { requireAdmin } from "../../shared/http/require_admin";
 import { requireAuth } from "../auth/auth.middleware";
+import { requirePermission } from "../../shared/http/require_permission";
 
 const router = Router();
 const controller = new ShopController();
 
-router.get("/profile", requireAuth, requireAdmin, controller.getProfile);
-router.patch("/profile", requireAuth, requireAdmin, controller.updateProfile);
+router.get("/profile", requireAuth, requirePermission("shop.view"), controller.getProfile);
+router.patch(
+  "/profile",
+  requireAuth,
+  requirePermission("shop.manage"),
+  controller.updateProfile,
+);
 
 export const shopRoutes = router;

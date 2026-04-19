@@ -1,16 +1,24 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useToast } from "../../hooks/use-toast";
 import { AUTH_EXPIRED_EVENT } from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { authService } from "../../services/auth";
 import { authQueryKeys, useSessionQuery } from "../../features/auth/hooks/use-session";
+import {
+  bulkMarkNotificationsRead,
+  getNotificationSummary,
+  notificationsQueryKeys,
+} from "../../features/notifications/api/notifications";
+import { hasPermission } from "../../types/auth";
+import type { AdminPermissionKey } from "../../types/admin-settings";
 
 type NavigationItem = {
   label: string;
   roles: Array<"admin" | "staff" | "accountant">;
+  permissions?: AdminPermissionKey[];
   resolveTo: (role: "admin" | "staff" | "accountant") => string;
 };
 
@@ -21,45 +29,88 @@ const navigation: NavigationItem[] = [
     resolveTo: () => "/app",
   },
   {
+    label: "Notifications",
+    roles: ["admin", "staff", "accountant"] as const,
+    resolveTo: () => "/app/notifications",
+  },
+  {
     label: "Billing",
     roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["billing.view"],
     resolveTo: (role: "admin" | "staff" | "accountant") =>
       role === "accountant" ? "/app/billing/history" : "/app/billing",
   },
   {
+    label: "Sales Returns",
+    roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["billing.return"],
+    resolveTo: () => "/app/billing/returns",
+  },
+  {
+    label: "Customers",
+    roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["customers.view"],
+    resolveTo: () => "/app/customers",
+  },
+  {
+    label: "Accounting",
+    roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["payments.view"],
+    resolveTo: () => "/app/accounting/customers",
+  },
+  {
     label: "Reports",
     roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["reports.view"],
     resolveTo: () => "/app/reports",
   },
   {
     label: "Shop Setup",
     roles: ["admin"] as const,
+    permissions: ["shop.view"],
     resolveTo: () => "/app/shop-setup",
   },
   {
     label: "Staff Management",
     roles: ["admin"] as const,
+    permissions: ["users.view"],
     resolveTo: () => "/app/staff-management",
   },
   {
     label: "Medicines",
     roles: ["admin"] as const,
+    permissions: ["medicines.view"],
     resolveTo: () => "/app/medicines",
   },
   {
     label: "Suppliers",
     roles: ["admin"] as const,
+    permissions: ["suppliers.view"],
     resolveTo: () => "/app/suppliers",
   },
   {
     label: "Purchases",
     roles: ["admin"] as const,
+    permissions: ["purchases.view"],
     resolveTo: () => "/app/purchases",
+  },
+  {
+    label: "Purchase Returns",
+    roles: ["admin", "staff", "accountant"] as const,
+    permissions: ["purchaseReturns.view"],
+    resolveTo: () => "/app/purchase-returns",
   },
   {
     label: "Inventory",
     roles: ["admin"] as const,
+    permissions: ["inventory.view"],
     resolveTo: () => "/app/inventory",
+  },
+  {
+    label: "Admin Settings",
+    roles: ["admin"] as const,
+    permissions: ["settings.view"],
+    resolveTo: () => "/app/admin-settings",
   },
 ];
 
@@ -69,7 +120,16 @@ export const AppLayout = () => {
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+
+  const notificationsSummaryQuery = useQuery({
+    queryKey: notificationsQueryKeys.summary,
+    queryFn: getNotificationSummary,
+    enabled: Boolean(sessionQuery.data),
+    refetchInterval: 60_000,
+  });
 
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
@@ -81,6 +141,25 @@ export const AppLayout = () => {
         variant: "info",
       });
       navigate("/login");
+    },
+  });
+
+  const bulkReadMutation = useMutation({
+    mutationFn: () => bulkMarkNotificationsRead(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.all });
+      pushToast({
+        title: "Notifications updated",
+        description: "All visible unread notifications were marked as read.",
+        variant: "success",
+      });
+    },
+    onError: (error: Error) => {
+      pushToast({
+        title: "Unable to update notifications",
+        description: error.message,
+        variant: "error",
+      });
     },
   });
 
@@ -107,6 +186,10 @@ export const AppLayout = () => {
       if (!profileMenuRef.current?.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
+
+      if (!notificationMenuRef.current?.contains(event.target as Node)) {
+        setIsNotificationMenuOpen(false);
+      }
     };
 
     window.addEventListener("mousedown", handlePointerDown);
@@ -122,7 +205,13 @@ export const AppLayout = () => {
 
   const session = sessionQuery.data;
   const visibleNavigation = navigation
-    .filter((item) => item.roles.includes(session.user.role))
+    .filter(
+      (item) =>
+        item.roles.includes(session.user.role) &&
+        (item.permissions ?? []).every((permission) =>
+          hasPermission(session.user, permission),
+        ),
+    )
     .map((item) => ({
       label: item.label,
       to: item.resolveTo(session.user.role),
@@ -133,6 +222,7 @@ export const AppLayout = () => {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+  const unreadCount = notificationsSummaryQuery.data?.unreadCount ?? 0;
 
   return (
     <div className="h-screen overflow-hidden bg-[linear-gradient(180deg,#f7fbfb_0%,#eef3f5_100%)] text-slate-900">
@@ -186,35 +276,156 @@ export const AppLayout = () => {
 
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex h-full min-h-0 flex-col rounded-[28px] border border-white/70 bg-white/55 shadow-sm shadow-slate-200/60 backdrop-blur">
-            <div className="flex shrink-0 justify-end border-b border-slate-200/80 px-4 py-2.5 lg:px-4">
-              <div className="relative" ref={profileMenuRef}>
-                <button
-                  aria-expanded={isProfileMenuOpen}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                  onClick={() => setIsProfileMenuOpen((current) => !current)}
-                  type="button"
-                >
-                  {profileInitials || "U"}
-                </button>
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 px-4 py-2.5 lg:px-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Operations
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Stay on top of active stock and finance attention points.
+                </p>
+              </div>
 
-                {isProfileMenuOpen ? (
-                  <div className="absolute right-0 top-14 z-10 w-72 rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-slate-950">
-                        {session.user.fullName}
-                      </p>
-                      <p className="text-sm text-slate-600">{session.user.email}</p>
-                    </div>
-                    <button
-                      className="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={logoutMutation.isPending}
-                      onClick={() => logoutMutation.mutate()}
-                      type="button"
+              <div className="flex items-center gap-2.5">
+                <div className="relative" ref={notificationMenuRef}>
+                  <button
+                    aria-expanded={isNotificationMenuOpen}
+                    className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                    onClick={() =>
+                      setIsNotificationMenuOpen((current) => !current)
+                    }
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
                     >
-                      {logoutMutation.isPending ? "Signing out..." : "Log out"}
-                    </button>
-                  </div>
-                ) : null}
+                      <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                      <path d="M10 20a2 2 0 0 0 4 0" />
+                    </svg>
+                    {unreadCount ? (
+                      <span className="absolute -right-1 -top-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {isNotificationMenuOpen ? (
+                    <div className="absolute right-0 top-14 z-10 w-[360px] rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-950">
+                            Notifications
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {unreadCount} unread item(s) in your queue.
+                          </p>
+                        </div>
+                        <Link
+                          className="rounded-2xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                          onClick={() => setIsNotificationMenuOpen(false)}
+                          to="/app/notifications"
+                        >
+                          View all
+                        </Link>
+                      </div>
+
+                      <div className="mt-4">
+                        {notificationsSummaryQuery.isLoading ? (
+                          <p className="text-sm text-slate-500">Loading notifications...</p>
+                        ) : notificationsSummaryQuery.error ? (
+                          <p className="text-sm text-rose-600">
+                            {notificationsSummaryQuery.error.message}
+                          </p>
+                        ) : notificationsSummaryQuery.data?.latest.length ? (
+                          <div className="space-y-2.5">
+                            {notificationsSummaryQuery.data.latest.map((item) => (
+                              <Link
+                                className={cn(
+                                  "block rounded-[20px] border px-3.5 py-3 transition hover:border-slate-300 hover:bg-slate-50",
+                                  item.isRead
+                                    ? "border-slate-200 bg-white"
+                                    : "border-teal-200 bg-teal-50/50",
+                                )}
+                                key={item.id}
+                                onClick={() => setIsNotificationMenuOpen(false)}
+                                to={item.actionPath ?? "/app/notifications"}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full",
+                                      item.severity === "critical"
+                                        ? "bg-rose-500"
+                                        : item.severity === "warning"
+                                          ? "bg-amber-500"
+                                          : "bg-slate-400",
+                                    )}
+                                  />
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {item.title}
+                                  </p>
+                                </div>
+                                <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-slate-600">
+                                  {item.message}
+                                </p>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-500">
+                            Your notification queue is clear.
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        className="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!unreadCount || bulkReadMutation.isPending}
+                        onClick={() => bulkReadMutation.mutate()}
+                        type="button"
+                      >
+                        {bulkReadMutation.isPending ? "Updating..." : "Mark all read"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="relative" ref={profileMenuRef}>
+                  <button
+                    aria-expanded={isProfileMenuOpen}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                    onClick={() => setIsProfileMenuOpen((current) => !current)}
+                    type="button"
+                  >
+                    {profileInitials || "U"}
+                  </button>
+
+                  {isProfileMenuOpen ? (
+                    <div className="absolute right-0 top-14 z-10 w-72 rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-950">
+                          {session.user.fullName}
+                        </p>
+                        <p className="text-sm text-slate-600">{session.user.email}</p>
+                      </div>
+                      <button
+                        className="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={logoutMutation.isPending}
+                        onClick={() => logoutMutation.mutate()}
+                        type="button"
+                      >
+                        {logoutMutation.isPending ? "Signing out..." : "Log out"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 

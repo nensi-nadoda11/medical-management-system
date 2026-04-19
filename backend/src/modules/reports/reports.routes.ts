@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import { validateRequest } from "../../shared/http/validate-request";
-import { requireRoles } from "../../shared/http/require_roles";
+import { requirePermission } from "../../shared/http/require_permission";
 import { requireAuth } from "../auth/auth.middleware";
 import { ReportsController } from "./reports.controller";
 import {
@@ -26,91 +26,91 @@ const controller = new ReportsController();
 router.get(
   "/dashboard/summary",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("reports.view"),
   validateRequest(getDashboardSummarySchema),
   controller.getDashboardSummary,
 );
 router.get(
   "/sales",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("reports.view"),
   validateRequest(listSalesReportSchema),
   controller.getSalesReport,
 );
 router.get(
   "/sales/export",
   requireAuth,
-  requireRoles("admin", "staff", "accountant"),
+  requirePermission("reports.view"),
   validateRequest(exportSalesReportSchema),
   controller.exportSalesReport,
 );
 router.get(
   "/profit",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(listProfitReportSchema),
   controller.getProfitReport,
 );
 router.get(
   "/profit/export",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(exportProfitReportSchema),
   controller.exportProfitReport,
 );
 router.get(
   "/stock",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(listStockReportSchema),
   controller.getStockReport,
 );
 router.get(
   "/stock/export",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(exportStockReportSchema),
   controller.exportStockReport,
 );
 router.get(
   "/low-stock",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(listLowStockReportSchema),
   controller.getLowStockReport,
 );
 router.get(
   "/low-stock/export",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(exportLowStockReportSchema),
   controller.exportLowStockReport,
 );
 router.get(
   "/expiry",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(listExpiryReportSchema),
   controller.getExpiryReport,
 );
 router.get(
   "/expiry/export",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(exportExpiryReportSchema),
   controller.exportExpiryReport,
 );
 router.get(
   "/suppliers",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(listSupplierReportSchema),
   controller.getSupplierReport,
 );
 router.get(
   "/suppliers/export",
   requireAuth,
-  requireRoles("admin", "accountant"),
+  requirePermission("reports.financial"),
   validateRequest(exportSupplierReportSchema),
   controller.exportSupplierReport,
 );

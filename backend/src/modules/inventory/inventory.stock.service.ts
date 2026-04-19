@@ -1,6 +1,6 @@
 import { AppError } from "../../shared/errors/app-error";
 import { InventoryRepository } from "./inventory.repository";
-import { AlertsService, type LowStockAlertEvent } from "../alerts/alerts.service";
+import { AlertsService } from "../alerts/alerts.service";
 import type { DbExecutor } from "../../shared/db/executor";
 
 const buildAppError = (statusCode: number, code: string, message: string) =>
@@ -52,7 +52,6 @@ export class InventoryStockService {
     },
     executor: DbExecutor,
   ) {
-    const lowStockEvents: LowStockAlertEvent[] = [];
     const touchedMedicineIds = new Set<string>();
     const postedBatches: Array<{ purchaseItemId: string; batchId: string }> = [];
 
@@ -101,19 +100,11 @@ export class InventoryStockService {
     }
 
     for (const medicineId of touchedMedicineIds) {
-      const event = await this.alertsService.evaluateLowStockTransition(
-        input.shopId,
-        medicineId,
-        executor,
-      );
-
-      if (event) {
-        lowStockEvents.push(event);
-      }
+      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
     }
 
     return {
-      lowStockEvents,
+      lowStockEvents: [],
       postedBatches,
     };
   }
@@ -207,7 +198,7 @@ export class InventoryStockService {
       executor,
     );
 
-    const lowStockEvent = await this.alertsService.evaluateLowStockTransition(
+    await this.alertsService.syncMedicineAlerts(
       input.shopId,
       input.medicineId,
       executor,
@@ -216,7 +207,7 @@ export class InventoryStockService {
     return {
       adjustment,
       batch: updatedBatch,
-      lowStockEvent,
+      lowStockEvent: null,
     };
   }
 
@@ -234,7 +225,6 @@ export class InventoryStockService {
     },
     executor: DbExecutor,
   ) {
-    const lowStockEvents: LowStockAlertEvent[] = [];
     const touchedMedicineIds = new Set<string>();
 
     for (const item of input.items) {
@@ -305,19 +295,170 @@ export class InventoryStockService {
     }
 
     for (const medicineId of touchedMedicineIds) {
-      const event = await this.alertsService.evaluateLowStockTransition(
-        input.shopId,
-        medicineId,
-        executor,
-      );
-
-      if (event) {
-        lowStockEvents.push(event);
-      }
+      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
     }
 
     return {
-      lowStockEvents,
+      lowStockEvents: [],
+    };
+  }
+
+  async depletePurchaseReturnStock(
+    input: {
+      shopId: string;
+      purchaseReturnId: string;
+      createdByUserId: string;
+      items: Array<{
+        id: string;
+        medicineId: string;
+        batchId: string;
+        quantity: number;
+      }>;
+    },
+    executor: DbExecutor,
+  ) {
+    const touchedMedicineIds = new Set<string>();
+
+    for (const item of input.items) {
+      const batch = await this.inventoryRepository.findBatchById(
+        input.shopId,
+        item.batchId,
+        executor,
+      );
+
+      if (!batch || batch.medicineId !== item.medicineId) {
+        throw buildAppError(404, "BATCH_NOT_FOUND", "Batch not found.");
+      }
+
+      const nextAvailableQuantity = batch.quantityAvailable - item.quantity;
+
+      if (nextAvailableQuantity < 0) {
+        throw buildAppError(
+          400,
+          "INSUFFICIENT_BATCH_STOCK",
+          `Insufficient stock for batch ${batch.batchNumber}.`,
+        );
+      }
+
+      const updatedBatch = await this.inventoryRepository.changeBatchQuantity(
+        {
+          batchId: item.batchId,
+          shopId: input.shopId,
+          quantityDelta: -item.quantity,
+          nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
+        },
+        executor,
+      );
+
+      if (!updatedBatch) {
+        throw buildAppError(
+          409,
+          "PURCHASE_RETURN_STOCK_CONFLICT",
+          "Stock changed while completing the purchase return. Please retry.",
+        );
+      }
+
+      await this.inventoryRepository.createStockTransaction(
+        {
+          shopId: input.shopId,
+          medicineId: item.medicineId,
+          batchId: item.batchId,
+          transactionType: "purchase_return_out",
+          quantityIn: 0,
+          quantityOut: item.quantity,
+          balanceAfter: updatedBatch.quantityAvailable,
+          referenceType: "purchase_return_item",
+          referenceId: item.id,
+          notes: `Stock deducted for purchase return ${input.purchaseReturnId}`,
+          createdByUserId: input.createdByUserId,
+        },
+        executor,
+      );
+
+      touchedMedicineIds.add(item.medicineId);
+    }
+
+    for (const medicineId of touchedMedicineIds) {
+      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+    }
+
+    return {
+      lowStockEvents: [],
+    };
+  }
+
+  async restoreSaleReturnStock(
+    input: {
+      shopId: string;
+      saleReturnId: string;
+      createdByUserId: string;
+      items: Array<{
+        id: string;
+        medicineId: string;
+        batchId: string;
+        quantity: number;
+      }>;
+    },
+    executor: DbExecutor,
+  ) {
+    const touchedMedicineIds = new Set<string>();
+
+    for (const item of input.items) {
+      const batch = await this.inventoryRepository.findBatchById(
+        input.shopId,
+        item.batchId,
+        executor,
+      );
+
+      if (!batch || batch.medicineId !== item.medicineId) {
+        throw buildAppError(404, "BATCH_NOT_FOUND", "Batch not found.");
+      }
+
+      const nextAvailableQuantity = batch.quantityAvailable + item.quantity;
+      const updatedBatch = await this.inventoryRepository.changeBatchQuantity(
+        {
+          batchId: item.batchId,
+          shopId: input.shopId,
+          quantityDelta: item.quantity,
+          nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
+        },
+        executor,
+      );
+
+      if (!updatedBatch) {
+        throw buildAppError(
+          409,
+          "SALE_RETURN_STOCK_CONFLICT",
+          "Stock changed while completing the return. Please retry.",
+        );
+      }
+
+      await this.inventoryRepository.createStockTransaction(
+        {
+          shopId: input.shopId,
+          medicineId: item.medicineId,
+          batchId: item.batchId,
+          transactionType: "sales_return_in",
+          quantityIn: item.quantity,
+          quantityOut: 0,
+          balanceAfter: updatedBatch.quantityAvailable,
+          referenceType: "sale_return_item",
+          referenceId: item.id,
+          notes: `Stock restored for sales return ${input.saleReturnId}`,
+          createdByUserId: input.createdByUserId,
+        },
+        executor,
+      );
+
+      touchedMedicineIds.add(item.medicineId);
+    }
+
+    for (const medicineId of touchedMedicineIds) {
+      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+    }
+
+    return {
+      lowStockEvents: [],
     };
   }
 }

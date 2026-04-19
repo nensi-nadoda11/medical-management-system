@@ -26,6 +26,11 @@ const navItems: Array<{
     to: "/app/billing/history",
     roles: ["admin", "staff", "accountant"],
   },
+  {
+    label: "Returns",
+    to: "/app/billing/returns",
+    roles: ["admin", "staff", "accountant"],
+  },
 ];
 
 export const BillingModuleNav = ({ canCreateBills }: BillingModuleNavProps) => (

@@ -1,8 +1,8 @@
 import { Router } from "express";
 
 import { validateRequest } from "../../shared/http/validate-request";
-import { requireAdmin } from "../../shared/http/require_admin";
 import { requireAuth } from "../auth/auth.middleware";
+import { requirePermission } from "../../shared/http/require_permission";
 import { MedicinesController } from "./medicines.controller";
 import {
   createCategorySchema,
@@ -23,21 +23,21 @@ const controller = new MedicinesController();
 router.get(
   "/categories",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.view"),
   validateRequest(listMasterDataSchema),
   controller.listCategories,
 );
 router.post(
   "/categories",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.create"),
   validateRequest(createCategorySchema),
   controller.createCategory,
 );
 router.patch(
   "/categories/:id",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.edit"),
   validateRequest(updateCategorySchema),
   controller.updateCategory,
 );
@@ -45,21 +45,21 @@ router.patch(
 router.get(
   "/manufacturers",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.view"),
   validateRequest(listMasterDataSchema),
   controller.listManufacturers,
 );
 router.post(
   "/manufacturers",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.create"),
   validateRequest(createManufacturerSchema),
   controller.createManufacturer,
 );
 router.patch(
   "/manufacturers/:id",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.edit"),
   validateRequest(updateManufacturerSchema),
   controller.updateManufacturer,
 );
@@ -67,35 +67,35 @@ router.patch(
 router.get(
   "/",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.view"),
   validateRequest(listMedicinesSchema),
   controller.listMedicines,
 );
 router.get(
   "/:id",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.view"),
   validateRequest(getMedicineByIdSchema),
   controller.getMedicineById,
 );
 router.post(
   "/",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.create"),
   validateRequest(createMedicineSchema),
   controller.createMedicine,
 );
 router.patch(
   "/:id",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.edit"),
   validateRequest(updateMedicineSchema),
   controller.updateMedicine,
 );
 router.patch(
   "/:id/status",
   requireAuth,
-  requireAdmin,
+  requirePermission("medicines.edit"),
   validateRequest(updateMedicineStatusSchema),
   controller.updateMedicineStatus,
 );

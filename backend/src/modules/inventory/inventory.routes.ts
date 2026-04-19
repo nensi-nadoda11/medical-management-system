@@ -1,8 +1,8 @@
 import { Router } from "express";
 
 import { validateRequest } from "../../shared/http/validate-request";
-import { requireAdmin } from "../../shared/http/require_admin";
 import { requireAuth } from "../auth/auth.middleware";
+import { requirePermission } from "../../shared/http/require_permission";
 import { InventoryController } from "./inventory.controller";
 import {
   createStockAdjustmentSchema,
@@ -19,42 +19,42 @@ const controller = new InventoryController();
 router.get(
   "/summary",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.view"),
   validateRequest(listInventorySummarySchema),
   controller.listInventorySummary,
 );
 router.get(
   "/medicines/:medicineId",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.view"),
   validateRequest(getInventoryMedicineDetailSchema),
   controller.getInventoryMedicineDetail,
 );
 router.get(
   "/transactions",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.view"),
   validateRequest(listStockTransactionsSchema),
   controller.listStockTransactions,
 );
 router.get(
   "/low-stock",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.view"),
   validateRequest(listLowStockSchema),
   controller.listLowStock,
 );
 router.get(
   "/expiry-report",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.view"),
   validateRequest(listExpiryReportSchema),
   controller.listExpiryReport,
 );
 router.post(
   "/adjustments",
   requireAuth,
-  requireAdmin,
+  requirePermission("inventory.adjust"),
   validateRequest(createStockAdjustmentSchema),
   controller.createStockAdjustment,
 );

@@ -564,7 +564,7 @@ export class ReportsRepository {
       .select({
         medicineId: medicines.id,
         reorderLevel: medicines.reorderLevel,
-        availableQuantity: availableQuantityExpr,
+        availableQuantity: availableQuantityExpr.as("available_quantity"),
       })
       .from(medicines)
       .leftJoin(
@@ -582,7 +582,8 @@ export class ReportsRepository {
     const [result] = await getDbExecutor()
       .select({
         totalMedicines: sql<number>`count(*)`,
-        totalShortage: sql<number>`coalesce(sum(greatest(${grouped.reorderLevel} - ${grouped.availableQuantity}, 0)), 0)`,
+        totalShortage:
+          sql<number>`coalesce(sum(greatest(${grouped.reorderLevel} - ${grouped.availableQuantity}, 0)), 0)`,
       })
       .from(grouped);
 

@@ -1,3 +1,5 @@
+import type { AdminPermissionKey } from "./admin-settings";
+
 export interface PublicUser {
   id: string;
   shopId: string;
@@ -8,6 +10,7 @@ export interface PublicUser {
   isActive: boolean;
   emailVerified: boolean;
   mobileVerified: boolean;
+  permissions: AdminPermissionKey[];
 }
 
 export interface PublicShop {
@@ -78,3 +81,8 @@ export interface PendingRegistration {
   emailVerified: boolean;
   mobileVerified: boolean;
 }
+
+export const hasPermission = (
+  user: { permissions?: string[] } | null | undefined,
+  permission: AdminPermissionKey,
+) => Boolean(user?.permissions?.includes(permission));

@@ -8,8 +8,11 @@ import {
 } from "../../shared/utils/money";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
+import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import { CustomersRepository } from "../customers/customers.repository";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
+import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
 import { BillingRepository } from "./billing.repository";
 import type {
   ListBillsQuery,
@@ -214,9 +217,12 @@ type PreparedSaleDraft = {
 export class BillingService {
   constructor(
     private readonly billingRepository = new BillingRepository(),
+    private readonly customersRepository = new CustomersRepository(),
     private readonly inventoryRepository = new InventoryRepository(),
     private readonly inventoryStockService = new InventoryStockService(),
     private readonly alertsService = new AlertsService(),
+    private readonly accountingLedgerService = new AccountingLedgerService(),
+    private readonly adminSettingsService = new AdminSettingsService(),
   ) {}
 
   async listBills(shopId: string, query: ListBillsQuery) {
@@ -249,8 +255,23 @@ export class BillingService {
   }
 
   async createHeldBill(shopId: string, userId: string, input: SaveBillInput) {
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+
+    if (!settings.allowHeldBills) {
+      throw buildAppError(
+        400,
+        "HELD_BILLS_DISABLED",
+        "Held bills are disabled in admin settings.",
+      );
+    }
+
     const saleId = await db.transaction(async (tx) => {
-      const preparedDraft = await this.prepareSaleDraft(shopId, input, tx);
+      const preparedDraft = await this.prepareSaleDraft(
+        shopId,
+        input,
+        settings,
+        tx,
+      );
       const billMeta = await this.buildBillMeta(shopId, tx);
       const created = await this.billingRepository.createSale(
         {
@@ -274,6 +295,9 @@ export class BillingService {
           ),
           grandTotal: moneyMinorUnitsToString(
             preparedDraft.totals.grandTotalMinorUnits,
+          ),
+          initialPaidAmount: moneyMinorUnitsToString(
+            preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
             preparedDraft.totals.paidAmountMinorUnits,
@@ -311,6 +335,16 @@ export class BillingService {
     userId: string,
     input: SaveBillInput,
   ) {
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+
+    if (!settings.allowHeldBills) {
+      throw buildAppError(
+        400,
+        "HELD_BILLS_DISABLED",
+        "Held bills are disabled in admin settings.",
+      );
+    }
+
     const existingSale = await this.billingRepository.findSaleById(shopId, saleId);
 
     if (!existingSale) {
@@ -326,7 +360,12 @@ export class BillingService {
     }
 
     await db.transaction(async (tx) => {
-      const preparedDraft = await this.prepareSaleDraft(shopId, input, tx);
+      const preparedDraft = await this.prepareSaleDraft(
+        shopId,
+        input,
+        settings,
+        tx,
+      );
 
       await this.billingRepository.updateSale(
         saleId,
@@ -346,6 +385,9 @@ export class BillingService {
           ),
           grandTotal: moneyMinorUnitsToString(
             preparedDraft.totals.grandTotalMinorUnits,
+          ),
+          initialPaidAmount: moneyMinorUnitsToString(
+            preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
             preparedDraft.totals.paidAmountMinorUnits,
@@ -381,12 +423,16 @@ export class BillingService {
   }
 
   async createCompletedBill(shopId: string, userId: string, input: SaveBillInput) {
-    let lowStockEvents: Awaited<
-      ReturnType<InventoryStockService["depleteSaleStock"]>
-    >["lowStockEvents"] = [];
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+    let customerId: string | null = null;
 
     const saleId = await db.transaction(async (tx) => {
-      const preparedDraft = await this.prepareSaleDraft(shopId, input, tx);
+      const preparedDraft = await this.prepareSaleDraft(
+        shopId,
+        input,
+        settings,
+        tx,
+      );
       const billMeta = await this.buildBillMeta(shopId, tx);
       const created = await this.billingRepository.createSale(
         {
@@ -410,6 +456,9 @@ export class BillingService {
           ),
           grandTotal: moneyMinorUnitsToString(
             preparedDraft.totals.grandTotalMinorUnits,
+          ),
+          initialPaidAmount: moneyMinorUnitsToString(
+            preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
             preparedDraft.totals.paidAmountMinorUnits,
@@ -435,7 +484,7 @@ export class BillingService {
         tx,
       );
 
-      const stockResult = await this.inventoryStockService.depleteSaleStock(
+      await this.inventoryStockService.depleteSaleStock(
         {
           shopId,
           saleId: created.sale.id,
@@ -449,8 +498,7 @@ export class BillingService {
         },
         tx,
       );
-
-      lowStockEvents = stockResult.lowStockEvents;
+      customerId = created.sale.customerId;
 
       await this.billingRepository.updateSale(
         created.sale.id,
@@ -462,20 +510,30 @@ export class BillingService {
         tx,
       );
 
+      if (created.sale.customerId) {
+        await this.accountingLedgerService.syncCustomerSaleFinancials(
+          shopId,
+          created.sale.id,
+          userId,
+          tx,
+        );
+      }
+
       return created.sale.id;
     });
 
-    await Promise.all(
-      lowStockEvents.map((event) => this.alertsService.dispatchLowStockAlert(event)),
-    );
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+
+    if (customerId) {
+      await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+    }
 
     return this.getBillById(shopId, saleId);
   }
 
   async completeHeldBill(shopId: string, saleId: string, userId: string) {
-    let lowStockEvents: Awaited<
-      ReturnType<InventoryStockService["depleteSaleStock"]>
-    >["lowStockEvents"] = [];
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+    let customerId: string | null = null;
 
     await db.transaction(async (tx) => {
       await this.inventoryRepository.syncBatchStatuses(shopId, tx);
@@ -494,6 +552,14 @@ export class BillingService {
         );
       }
 
+      if (!settings.allowPartialPayments && Number(sale.dueAmount) > 0) {
+        throw buildAppError(
+          400,
+          "PARTIAL_PAYMENTS_DISABLED",
+          "Partial payments are disabled in admin settings.",
+        );
+      }
+
       const items = await this.billingRepository.listSaleItemsBySaleId(saleId, tx);
 
       if (!items.length) {
@@ -504,7 +570,7 @@ export class BillingService {
         );
       }
 
-      const stockResult = await this.inventoryStockService.depleteSaleStock(
+      await this.inventoryStockService.depleteSaleStock(
         {
           shopId,
           saleId,
@@ -518,8 +584,7 @@ export class BillingService {
         },
         tx,
       );
-
-      lowStockEvents = stockResult.lowStockEvents;
+      customerId = sale.customerId;
 
       await this.billingRepository.updateSale(
         saleId,
@@ -530,11 +595,22 @@ export class BillingService {
         },
         tx,
       );
+
+      if (sale.customerId) {
+        await this.accountingLedgerService.syncCustomerSaleFinancials(
+          shopId,
+          saleId,
+          userId,
+          tx,
+        );
+      }
     });
 
-    await Promise.all(
-      lowStockEvents.map((event) => this.alertsService.dispatchLowStockAlert(event)),
-    );
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+
+    if (customerId) {
+      await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+    }
 
     return this.getBillById(shopId, saleId);
   }
@@ -580,6 +656,7 @@ export class BillingService {
 
   async getSellableMedicineOptions(shopId: string, medicineId: string) {
     await this.inventoryRepository.syncBatchStatuses(shopId);
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
 
     const medicines = await this.billingRepository.findMedicinesByIds(shopId, [
       medicineId,
@@ -618,7 +695,7 @@ export class BillingService {
         (total, batch) => total + batch.quantityAvailable,
         0,
       ),
-      defaultBatchId: batches[0]?.id ?? null,
+      defaultBatchId: settings.preferFefo ? (batches[0]?.id ?? null) : null,
       batches: batches.map((batch) => {
         const daysUntilExpiry = getDaysUntil(batch.expiryDate);
 
@@ -632,7 +709,7 @@ export class BillingService {
           quantityAvailable: batch.quantityAvailable,
           status: batch.status,
           daysUntilExpiry,
-          isNearExpiry: daysUntilExpiry <= 30,
+          isNearExpiry: daysUntilExpiry <= settings.nearExpiryAlertDays,
         };
       }),
     };
@@ -658,6 +735,7 @@ export class BillingService {
   private async prepareSaleDraft(
     shopId: string,
     input: SaveBillInput,
+    settings: Awaited<ReturnType<AdminSettingsService["getResolvedShopSettings"]>>,
     executor?: DbExecutor,
   ): Promise<PreparedSaleDraft> {
     await this.inventoryRepository.syncBatchStatuses(shopId, executor);
@@ -801,6 +879,48 @@ export class BillingService {
 
     const dueAmountMinorUnits = grandTotalMinorUnits - paidAmountMinorUnits;
 
+    if (!settings.allowPartialPayments && dueAmountMinorUnits > 0) {
+      throw buildAppError(
+        400,
+        "PARTIAL_PAYMENTS_DISABLED",
+        "Partial payments are disabled in admin settings.",
+      );
+    }
+
+    let customerDetails:
+      | {
+          customerId: string;
+          customerName: string;
+          customerPhone: string;
+        }
+      | undefined;
+
+    if (input.customerId) {
+      const customer = await this.customersRepository.findCustomerById(
+        shopId,
+        input.customerId,
+        executor,
+      );
+
+      if (!customer) {
+        throw buildAppError(404, "CUSTOMER_NOT_FOUND", "Customer not found.");
+      }
+
+      if (customer.status !== "active") {
+        throw buildAppError(
+          400,
+          "CUSTOMER_INACTIVE",
+          "Only active customers can be selected for billing.",
+        );
+      }
+
+      customerDetails = {
+        customerId: customer.id,
+        customerName: customer.fullName,
+        customerPhone: customer.mobileNumber,
+      };
+    }
+
     return {
       items: preparedItems,
       totals: {
@@ -817,9 +937,17 @@ export class BillingService {
         ),
       },
       paymentMethod: input.paymentMethod,
-      ...(input.customerId ? { customerId: input.customerId } : {}),
-      ...(input.customerName ? { customerName: input.customerName } : {}),
-      ...(input.customerPhone ? { customerPhone: input.customerPhone } : {}),
+      ...(customerDetails ?? {}),
+      ...(customerDetails
+        ? {}
+        : input.customerName
+          ? { customerName: input.customerName }
+          : {}),
+      ...(customerDetails
+        ? {}
+        : input.customerPhone
+          ? { customerPhone: input.customerPhone }
+          : {}),
       ...(input.notes ? { notes: input.notes } : {}),
     };
   }

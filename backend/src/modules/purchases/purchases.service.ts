@@ -8,7 +8,10 @@ import {
 } from "../../shared/utils/money";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
+import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
+import { AdminSettingsService } from "../admin-settings/admin-settings.service";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
+import { PurchaseReturnsRepository } from "../purchase-returns/purchase-returns.repository";
 import { PurchasesRepository } from "./purchases.repository";
 import type {
   CancelPurchaseInput,
@@ -100,6 +103,22 @@ const toPurchaseListResponse = (record: Awaited<
 
 const toPurchaseDetailResponse = (
   record: NonNullable<Awaited<ReturnType<PurchasesRepository["findPurchaseDetailById"]>>>,
+  input: {
+    completedReturnedQuantityByItemId: Map<string, number>;
+    returnHistory: Array<{
+      id: string;
+      returnNumber: string;
+      status: "draft" | "completed" | "cancelled";
+      totalReturnAmount: string;
+      createdAt: Date;
+      completedAt: Date | null;
+      createdBy: {
+        id: string;
+        fullName: string;
+        role: "admin" | "staff" | "accountant";
+      };
+    }>;
+  },
 ) => ({
   id: record.purchase.id,
   shopId: record.purchase.shopId,
@@ -149,9 +168,20 @@ const toPurchaseDetailResponse = (
     lineSubtotal: item.lineSubtotal,
     lineTaxAmount: item.lineTaxAmount,
     lineTotal: item.lineTotal,
+    alreadyReturnedQuantity:
+      input.completedReturnedQuantityByItemId.get(item.id) ?? 0,
+    remainingReturnableQuantity: Math.max(
+      item.quantity - (input.completedReturnedQuantityByItemId.get(item.id) ?? 0),
+      0,
+    ),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   })),
+  returnHistory: input.returnHistory,
+  totalCompletedReturnedAmount: input.returnHistory
+    .filter((entry) => entry.status === "completed")
+    .reduce((sum, entry) => sum + Number(entry.totalReturnAmount), 0)
+    .toFixed(2),
 });
 
 class PurchaseTotalsBuilder {
@@ -292,6 +322,9 @@ export class PurchasesService {
     private readonly inventoryStockService = new InventoryStockService(),
     private readonly alertsService = new AlertsService(),
     private readonly totalsBuilder = new PurchaseTotalsBuilder(),
+    private readonly accountingLedgerService = new AccountingLedgerService(),
+    private readonly adminSettingsService = new AdminSettingsService(),
+    private readonly purchaseReturnsRepository = new PurchaseReturnsRepository(),
   ) {}
 
   async listPurchases(shopId: string, query: ListPurchasesQuery) {
@@ -323,10 +356,47 @@ export class PurchasesService {
       throw buildAppError(404, "PURCHASE_NOT_FOUND", "Purchase not found.");
     }
 
-    return toPurchaseDetailResponse(purchase);
+    const [completedReturnedQuantities, returnHistory] = await Promise.all([
+      this.purchaseReturnsRepository.getCompletedReturnedQuantitiesByPurchaseItemIds(
+        shopId,
+        purchase.items.map(({ item }) => item.id),
+      ),
+      this.purchaseReturnsRepository.listPurchaseReturnHistoryByPurchaseId(
+        shopId,
+        purchaseId,
+      ),
+    ]);
+
+    return toPurchaseDetailResponse(purchase, {
+      completedReturnedQuantityByItemId: new Map(
+        completedReturnedQuantities.map((entry) => [
+          entry.purchaseItemId,
+          Number(entry.quantity),
+        ]),
+      ),
+      returnHistory: returnHistory.map((entry) => ({
+        id: entry.purchaseReturn.id,
+        returnNumber: entry.purchaseReturn.returnNumber,
+        status: entry.purchaseReturn.status,
+        totalReturnAmount: entry.purchaseReturn.totalReturnAmount,
+        createdAt: entry.purchaseReturn.createdAt,
+        completedAt: entry.purchaseReturn.completedAt,
+        createdBy: entry.createdBy,
+      })),
+    });
   }
 
   async createPurchase(shopId: string, userId: string, input: CreatePurchaseInput) {
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+
+    if (!settings.allowDraftPurchases) {
+      throw buildAppError(
+        400,
+        "DRAFT_PURCHASES_DISABLED",
+        "Draft purchases are disabled in admin settings.",
+      );
+    }
+
     const supplier = await this.purchasesRepository.findSupplierById(
       shopId,
       input.supplierId,
@@ -412,6 +482,9 @@ export class PurchasesService {
           grandTotal: moneyMinorUnitsToString(
             calculated.totals.grandTotalMinorUnits,
           ),
+          initialPaidAmount: moneyMinorUnitsToString(
+            calculated.totals.paidAmountMinorUnits,
+          ),
           paidAmount: moneyMinorUnitsToString(
             calculated.totals.paidAmountMinorUnits,
           ),
@@ -451,6 +524,16 @@ export class PurchasesService {
     userId: string,
     input: UpdateDraftPurchaseInput,
   ) {
+    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+
+    if (!settings.allowDraftPurchases) {
+      throw buildAppError(
+        400,
+        "DRAFT_PURCHASES_DISABLED",
+        "Draft purchases are disabled in admin settings.",
+      );
+    }
+
     const existingPurchase = await this.purchasesRepository.findPurchaseById(
       shopId,
       purchaseId,
@@ -550,6 +633,9 @@ export class PurchasesService {
           grandTotal: moneyMinorUnitsToString(
             calculated.totals.grandTotalMinorUnits,
           ),
+          initialPaidAmount: moneyMinorUnitsToString(
+            calculated.totals.paidAmountMinorUnits,
+          ),
           paidAmount: moneyMinorUnitsToString(
             calculated.totals.paidAmountMinorUnits,
           ),
@@ -587,9 +673,7 @@ export class PurchasesService {
   }
 
   async finalizePurchase(shopId: string, purchaseId: string, userId: string) {
-    let lowStockEvents: Awaited<
-      ReturnType<InventoryStockService["postPurchaseStock"]>
-    >["lowStockEvents"] = [];
+    let supplierId: string | null = null;
 
     await db.transaction(async (tx) => {
       const purchase = await this.purchasesRepository.findPurchaseById(
@@ -652,8 +736,7 @@ export class PurchasesService {
           tx,
         );
       }
-
-      lowStockEvents = stockPostingResult.lowStockEvents;
+      supplierId = purchase.supplierId;
 
       await this.purchasesRepository.updatePurchase(
         purchaseId,
@@ -664,11 +747,20 @@ export class PurchasesService {
         },
         tx,
       );
+
+      await this.accountingLedgerService.syncSupplierPurchaseFinancials(
+        shopId,
+        purchaseId,
+        userId,
+        tx,
+      );
     });
 
-    await Promise.all(
-      lowStockEvents.map((event) => this.alertsService.dispatchLowStockAlert(event)),
-    );
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+
+    if (supplierId) {
+      await this.alertsService.syncSupplierPayableNotification(shopId, supplierId);
+    }
 
     return this.getPurchaseById(shopId, purchaseId);
   }

@@ -16,7 +16,9 @@ import {
   formatDateTime,
   formatNumber,
 } from "../../../lib/utils";
+import { useSessionQuery } from "../../auth/hooks/use-session";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
+import { hasPermission } from "../../../types/auth";
 import {
   cancelPurchase,
   finalizePurchase,
@@ -28,6 +30,11 @@ export const PurchaseDetailPage = () => {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const sessionQuery = useSessionQuery();
+  const canCreatePurchaseReturn = hasPermission(
+    sessionQuery.data?.user,
+    "purchaseReturns.create",
+  );
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [cancelNotes, setCancelNotes] = useState("");
@@ -104,6 +111,9 @@ export const PurchaseDetailPage = () => {
 
   const purchase = purchaseQuery.data;
   const isDraft = purchase.status === "draft";
+  const hasReturnableItems = purchase.items.some(
+    (item) => item.remainingReturnableQuantity > 0,
+  );
 
   return (
     <div className="space-y-6">
@@ -142,6 +152,14 @@ export const PurchaseDetailPage = () => {
                 Finalize purchase
               </button>
             ) : null}
+            {!isDraft && canCreatePurchaseReturn && hasReturnableItems ? (
+              <Link
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                to={`/app/purchase-returns/new?purchaseId=${purchase.id}`}
+              >
+                Create return
+              </Link>
+            ) : null}
           </>
         }
         description="Review supplier, batch, financial, and posting information in one clean purchase detail view."
@@ -149,7 +167,7 @@ export const PurchaseDetailPage = () => {
         title={purchase.purchaseNumber}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           hint={`Status: ${purchase.status}`}
           label="Grand total"
@@ -166,6 +184,11 @@ export const PurchaseDetailPage = () => {
           label="Due amount"
           tone={Number(purchase.dueAmount) > 0 ? "warning" : "accent"}
           value={formatCurrency(purchase.dueAmount)}
+        />
+        <SummaryCard
+          hint="Completed purchase returns against this purchase"
+          label="Returned amount"
+          value={formatCurrency(purchase.totalCompletedReturnedAmount)}
         />
         <SummaryCard
           hint="Total line items in this purchase"
@@ -250,6 +273,8 @@ export const PurchaseDetailPage = () => {
                         ["Expiry", formatDate(item.expiryDate)],
                         ["Quantity", formatNumber(item.quantity)],
                         ["Free quantity", formatNumber(item.freeQuantity)],
+                        ["Returned", formatNumber(item.alreadyReturnedQuantity)],
+                        ["Returnable", formatNumber(item.remainingReturnableQuantity)],
                         ["Purchase rate", formatCurrency(item.purchaseRate)],
                         ["Sale rate", formatCurrency(item.saleRate)],
                         ["MRP", formatCurrency(item.mrp)],
@@ -283,6 +308,8 @@ export const PurchaseDetailPage = () => {
                       <th className="px-4">Expiry</th>
                       <th className="px-4">Qty</th>
                       <th className="px-4">Free</th>
+                      <th className="px-4">Returned</th>
+                      <th className="px-4">Returnable</th>
                       <th className="px-4">Purchase</th>
                       <th className="px-4">Sale</th>
                       <th className="px-4">MRP</th>
@@ -313,6 +340,12 @@ export const PurchaseDetailPage = () => {
                         <td className="px-4 py-4 text-sm text-slate-700">{item.quantity}</td>
                         <td className="px-4 py-4 text-sm text-slate-700">
                           {item.freeQuantity}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-700">
+                          {item.alreadyReturnedQuantity}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-700">
+                          {item.remainingReturnableQuantity}
                         </td>
                         <td className="px-4 py-4 text-sm text-slate-700">
                           {formatCurrency(item.purchaseRate)}
@@ -394,6 +427,44 @@ export const PurchaseDetailPage = () => {
                 </div>
               ))}
             </div>
+          </SectionCard>
+
+          <SectionCard
+            description="Return history tied to this finalized purchase."
+            title="Return history"
+          >
+            {purchase.returnHistory.length ? (
+              <div className="space-y-3">
+                {purchase.returnHistory.map((entry) => (
+                  <Link
+                    className="block rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 transition hover:border-slate-300 hover:bg-white"
+                    key={entry.id}
+                    to={`/app/purchase-returns/${entry.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">
+                          {entry.returnNumber}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {entry.createdBy.fullName} · {formatDateTime(entry.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <StatusBadge label={entry.status} />
+                        <p className="mt-2 text-sm font-semibold text-slate-950">
+                          {formatCurrency(entry.totalReturnAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-slate-600">
+                No purchase returns have been created for this purchase yet.
+              </p>
+            )}
           </SectionCard>
 
           <SectionCard

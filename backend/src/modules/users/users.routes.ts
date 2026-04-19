@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { requireAdmin } from "../../shared/http/require_admin";
 import { requireAuth } from "../auth/auth.middleware";
 import { UsersController } from "./users.controller";
+import { requirePermission } from "../../shared/http/require_permission";
 
 const router = Router();
 const controller = new UsersController();
@@ -9,32 +9,37 @@ const controller = new UsersController();
 router.get(
   "/invitations/list",
   requireAuth,
-  requireAdmin,
+  requirePermission("users.view"),
   controller.listInvitations,
 );
-router.post("/invitations", requireAuth, requireAdmin, controller.inviteUser);
+router.post(
+  "/invitations",
+  requireAuth,
+  requirePermission("users.manage"),
+  controller.inviteUser,
+);
 router.post(
   "/invitations/:id/resend",
   requireAuth,
-  requireAdmin,
+  requirePermission("users.manage"),
   controller.resendInvitation,
 );
 router.post(
   "/invitations/:id/revoke",
   requireAuth,
-  requireAdmin,
+  requirePermission("users.manage"),
   controller.revokeInvitation,
 );
 
 router.get("/invitation/accept/:token", controller.getInvitationByToken);
 router.post("/invitation/accept", controller.acceptInvitation);
 
-router.get("/", requireAuth, requireAdmin, controller.listUsers);
-router.patch("/:id", requireAuth, requireAdmin, controller.updateUser);
+router.get("/", requireAuth, requirePermission("users.view"), controller.listUsers);
+router.patch("/:id", requireAuth, requirePermission("users.manage"), controller.updateUser);
 router.patch(
   "/:id/status",
   requireAuth,
-  requireAdmin,
+  requirePermission("users.manage"),
   controller.updateUserStatus,
 );
 
