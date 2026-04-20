@@ -31,6 +31,11 @@ export interface ReportDateFilters {
   dateTo?: string;
 }
 
+export interface ReportBranchFilters {
+  branchId?: string;
+  combineBranches?: boolean;
+}
+
 export interface SalesReportRow {
   id: string;
   billNumber: string;
@@ -235,7 +240,7 @@ export interface SupplierReport {
   rows: PaginatedResponse<SupplierReportRow>;
 }
 
-export interface SalesReportParams extends ReportDateFilters {
+export interface SalesReportParams extends ReportDateFilters, ReportBranchFilters {
   search?: string;
   groupBy?: "day" | "month";
   paymentMethod?: "cash" | "upi" | "card" | "bank_transfer" | "split";
@@ -245,7 +250,7 @@ export interface SalesReportParams extends ReportDateFilters {
   sortOrder?: "asc" | "desc";
 }
 
-export interface ProfitReportParams extends ReportDateFilters {
+export interface ProfitReportParams extends ReportDateFilters, ReportBranchFilters {
   search?: string;
   groupBy?: "day" | "month";
   page?: number;
@@ -254,7 +259,7 @@ export interface ProfitReportParams extends ReportDateFilters {
   sortOrder?: "asc" | "desc";
 }
 
-export interface StockReportParams {
+export interface StockReportParams extends ReportBranchFilters {
   search?: string;
   categoryId?: string;
   manufacturerId?: string;
@@ -265,7 +270,7 @@ export interface StockReportParams {
   sortOrder?: "asc" | "desc";
 }
 
-export interface LowStockReportParams {
+export interface LowStockReportParams extends ReportBranchFilters {
   search?: string;
   categoryId?: string;
   manufacturerId?: string;
@@ -275,7 +280,7 @@ export interface LowStockReportParams {
   sortOrder?: "asc" | "desc";
 }
 
-export interface ExpiryReportParams {
+export interface ExpiryReportParams extends ReportBranchFilters {
   search?: string;
   medicineId?: string;
   expiryWindow?: "expired" | "30" | "60" | "90";
@@ -285,7 +290,7 @@ export interface ExpiryReportParams {
   sortOrder?: "asc" | "desc";
 }
 
-export interface SupplierReportParams extends ReportDateFilters {
+export interface SupplierReportParams extends ReportDateFilters, ReportBranchFilters {
   search?: string;
   supplierId?: string;
   page?: number;
@@ -293,3 +298,5 @@ export interface SupplierReportParams extends ReportDateFilters {
   sortBy?: "supplierName" | "totalPurchase" | "totalDue" | "purchaseCount";
   sortOrder?: "asc" | "desc";
 }
+
+export interface DashboardSummaryParams extends ReportDateFilters, ReportBranchFilters {}

@@ -165,6 +165,8 @@ export const stockTransactionTypeEnum = pgEnum("stock_transaction_type", [
   "sales_return_in",
   "adjustment_in",
   "adjustment_out",
+  "transfer_out",
+  "transfer_in",
 ]);
 export const stockReferenceTypeEnum = pgEnum("stock_reference_type", [
   "purchase_item",
@@ -172,6 +174,7 @@ export const stockReferenceTypeEnum = pgEnum("stock_reference_type", [
   "sale_item",
   "sale_return_item",
   "stock_adjustment",
+  "stock_transfer_item",
 ]);
 export const stockAdjustmentTypeEnum = pgEnum("stock_adjustment_type", [
   "in",
@@ -217,6 +220,44 @@ export const auditLogSeverityEnum = pgEnum("audit_log_severity", [
   "important",
   "critical",
 ]);
+export const importJobStatusEnum = pgEnum("import_job_status", [
+  "validated",
+  "processing",
+  "completed",
+  "failed",
+]);
+export const importTypeEnum = pgEnum("import_type", [
+  "medicines",
+  "suppliers",
+  "customers",
+]);
+export const importDuplicateModeEnum = pgEnum("import_duplicate_mode", [
+  "skip_duplicates",
+  "update_existing",
+  "fail_duplicates",
+  "upsert",
+]);
+export const importRowStatusEnum = pgEnum("import_row_status", [
+  "valid",
+  "invalid",
+  "duplicate",
+  "skipped",
+  "imported",
+  "failed",
+]);
+export const backupRecordStatusEnum = pgEnum("backup_record_status", [
+  "ready",
+  "restored",
+  "failed",
+]);
+export const backupRecordTypeEnum = pgEnum("backup_record_type", [
+  "shop_snapshot",
+]);
+export const stockTransferStatusEnum = pgEnum("stock_transfer_status", [
+  "draft",
+  "completed",
+  "cancelled",
+]);
 
 export const shops = pgTable("shops", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -244,6 +285,41 @@ export const shops = pgTable("shops", {
     .notNull()
     .defaultNow(),
 });
+
+export const branches = pgTable(
+  "branches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    code: varchar("code", { length: 40 }).notNull(),
+    address: text("address"),
+    contactNumber: varchar("contact_number", { length: 20 }),
+    status: masterStatusEnum("status").notNull().default("active"),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("branches_shop_id_idx").on(table.shopId),
+    statusIdx: index("branches_status_idx").on(table.status),
+    defaultIdx: index("branches_is_default_idx").on(table.shopId, table.isDefault),
+    nameUniqueIdx: uniqueIndex("branches_shop_name_unique_idx").on(
+      table.shopId,
+      table.name,
+    ),
+    codeUniqueIdx: uniqueIndex("branches_shop_code_unique_idx").on(
+      table.shopId,
+      table.code,
+    ),
+  }),
+);
 
 export const users = pgTable(
   "users",
@@ -274,6 +350,34 @@ export const users = pgTable(
     shopIdIdx: index("users_shop_id_idx").on(table.shopId),
     roleIdx: index("users_role_idx").on(table.role),
     activeIdx: index("users_is_active_idx").on(table.isActive),
+  }),
+);
+
+export const userBranches = pgTable(
+  "user_branches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    uniqueAssignmentIdx: uniqueIndex("user_branches_user_branch_unique_idx").on(
+      table.userId,
+      table.branchId,
+    ),
+    shopIdIdx: index("user_branches_shop_id_idx").on(table.shopId),
+    userIdIdx: index("user_branches_user_id_idx").on(table.userId),
+    branchIdIdx: index("user_branches_branch_id_idx").on(table.branchId),
   }),
 );
 
@@ -397,6 +501,25 @@ export const shopSettings = pgTable("shop_settings", {
     .defaultNow(),
 });
 
+export const branchSettings = pgTable("branch_settings", {
+  branchId: uuid("branch_id")
+    .primaryKey()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  lowStockThreshold: integer("low_stock_threshold"),
+  lowStockAlertsEnabled: boolean("low_stock_alerts_enabled"),
+  lowStockEmailAlertsEnabled: boolean("low_stock_email_alerts_enabled"),
+  nearExpiryAlertDays: integer("near_expiry_alert_days"),
+  expiryAlertsEnabled: boolean("expiry_alerts_enabled"),
+  expiryEmailAlertsEnabled: boolean("expiry_email_alerts_enabled"),
+  invoicePrefix: varchar("invoice_prefix", { length: 20 }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const adminAuditLogs = pgTable(
   "admin_audit_logs",
   {
@@ -404,6 +527,9 @@ export const adminAuditLogs = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "set null",
+    }),
     actorUserId: uuid("actor_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -418,6 +544,7 @@ export const adminAuditLogs = pgTable(
   },
   (table) => ({
     shopIdIdx: index("admin_audit_logs_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("admin_audit_logs_branch_id_idx").on(table.branchId),
     actorUserIdIdx: index("admin_audit_logs_actor_user_id_idx").on(
       table.actorUserId,
     ),
@@ -433,6 +560,9 @@ export const notifications = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "set null",
+    }),
     type: notificationTypeEnum("type").notNull(),
     title: varchar("title", { length: 180 }).notNull(),
     message: text("message").notNull(),
@@ -464,6 +594,7 @@ export const notifications = pgTable(
   },
   (table) => ({
     shopIdIdx: index("notifications_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("notifications_branch_id_idx").on(table.branchId),
     typeIdx: index("notifications_type_idx").on(table.type),
     severityIdx: index("notifications_severity_idx").on(table.severity),
     entityIdx: index("notifications_entity_idx").on(table.entityType, table.entityId),
@@ -485,6 +616,9 @@ export const auditLogs = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "set null",
+    }),
     actorUserId: uuid("actor_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -505,12 +639,132 @@ export const auditLogs = pgTable(
   },
   (table) => ({
     shopIdIdx: index("audit_logs_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("audit_logs_branch_id_idx").on(table.branchId),
     actorUserIdIdx: index("audit_logs_actor_user_id_idx").on(table.actorUserId),
     moduleIdx: index("audit_logs_module_idx").on(table.module),
     actionIdx: index("audit_logs_action_idx").on(table.action),
     entityIdx: index("audit_logs_entity_idx").on(table.entityType, table.entityId),
     severityIdx: index("audit_logs_severity_idx").on(table.severity),
     createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+  }),
+);
+
+export const importJobs = pgTable(
+  "import_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    importType: importTypeEnum("import_type").notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileFormat: varchar("file_format", { length: 10 }).notNull(),
+    status: importJobStatusEnum("status").notNull().default("validated"),
+    duplicateMode: importDuplicateModeEnum("duplicate_mode")
+      .notNull()
+      .default("skip_duplicates"),
+    totalRows: integer("total_rows").notNull().default(0),
+    validRows: integer("valid_rows").notNull().default(0),
+    invalidRows: integer("invalid_rows").notNull().default(0),
+    duplicateRows: integer("duplicate_rows").notNull().default(0),
+    warningRows: integer("warning_rows").notNull().default(0),
+    successRows: integer("success_rows").notNull().default(0),
+    failedRows: integer("failed_rows").notNull().default(0),
+    summary: jsonb("summary").$type<Record<string, unknown> | null>(),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("import_jobs_shop_id_idx").on(table.shopId),
+    importTypeIdx: index("import_jobs_import_type_idx").on(table.importType),
+    statusIdx: index("import_jobs_status_idx").on(table.status),
+    createdByIdx: index("import_jobs_created_by_user_id_idx").on(
+      table.createdByUserId,
+    ),
+    createdAtIdx: index("import_jobs_created_at_idx").on(table.createdAt),
+  }),
+);
+
+export const importJobRows = pgTable(
+  "import_job_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => importJobs.id, { onDelete: "cascade" }),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    rowNumber: integer("row_number").notNull(),
+    status: importRowStatusEnum("status").notNull(),
+    action: varchar("action", { length: 40 }),
+    identifier: varchar("identifier", { length: 255 }),
+    rawData: jsonb("raw_data").$type<Record<string, unknown>>().notNull(),
+    normalizedData: jsonb("normalized_data").$type<Record<string, unknown> | null>(),
+    errors: jsonb("errors").$type<string[]>().notNull().default([]),
+    warnings: jsonb("warnings").$type<string[]>().notNull().default([]),
+    targetEntityId: varchar("target_entity_id", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    jobIdIdx: index("import_job_rows_job_id_idx").on(table.jobId),
+    shopIdIdx: index("import_job_rows_shop_id_idx").on(table.shopId),
+    statusIdx: index("import_job_rows_status_idx").on(table.status),
+    rowNumberIdx: uniqueIndex("import_job_rows_job_row_number_unique_idx").on(
+      table.jobId,
+      table.rowNumber,
+    ),
+  }),
+);
+
+export const backupRecords = pgTable(
+  "backup_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    type: backupRecordTypeEnum("type").notNull().default("shop_snapshot"),
+    status: backupRecordStatusEnum("status").notNull().default("ready"),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    storagePath: text("storage_path").notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull().default(0),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    restoredAt: timestamp("restored_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("backup_records_shop_id_idx").on(table.shopId),
+    statusIdx: index("backup_records_status_idx").on(table.status),
+    createdByIdx: index("backup_records_created_by_user_id_idx").on(
+      table.createdByUserId,
+    ),
+    createdAtIdx: index("backup_records_created_at_idx").on(table.createdAt),
   }),
 );
 
@@ -869,6 +1123,9 @@ export const purchases = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     supplierId: uuid("supplier_id")
       .notNull()
       .references(() => suppliers.id, { onDelete: "restrict" }),
@@ -931,6 +1188,7 @@ export const purchases = pgTable(
   },
   (table) => ({
     shopIdIdx: index("purchases_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("purchases_branch_id_idx").on(table.shopId, table.branchId),
     supplierIdIdx: index("purchases_supplier_id_idx").on(table.supplierId),
     purchaseDateIdx: index("purchases_purchase_date_idx").on(table.purchaseDate),
     statusIdx: index("purchases_status_idx").on(table.status),
@@ -954,6 +1212,9 @@ export const medicineBatches = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     medicineId: uuid("medicine_id")
       .notNull()
       .references(() => medicines.id, { onDelete: "restrict" }),
@@ -984,11 +1245,16 @@ export const medicineBatches = pgTable(
   },
   (table) => ({
     shopIdIdx: index("medicine_batches_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("medicine_batches_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     medicineIdIdx: index("medicine_batches_medicine_id_idx").on(table.medicineId),
     expiryDateIdx: index("medicine_batches_expiry_date_idx").on(table.expiryDate),
     statusIdx: index("medicine_batches_status_idx").on(table.status),
     uniqueBatchIdx: uniqueIndex("medicine_batches_shop_batch_unique_idx").on(
       table.shopId,
+      table.branchId,
       table.medicineId,
       table.batchNumberNormalized,
       table.expiryDate,
@@ -1003,6 +1269,9 @@ export const sales = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     billSequence: integer("bill_sequence").notNull(),
     billNumber: varchar("bill_number", { length: 40 }).notNull(),
     billNumberNormalized: varchar("bill_number_normalized", {
@@ -1060,6 +1329,7 @@ export const sales = pgTable(
   },
   (table) => ({
     shopIdIdx: index("sales_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("sales_branch_id_idx").on(table.shopId, table.branchId),
     customerIdIdx: index("sales_customer_id_idx").on(table.customerId),
     statusIdx: index("sales_status_idx").on(table.status),
     paymentStatusIdx: index("sales_payment_status_idx").on(table.paymentStatus),
@@ -1083,6 +1353,9 @@ export const customerPayments = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     customerId: uuid("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "restrict" }),
@@ -1109,6 +1382,10 @@ export const customerPayments = pgTable(
   },
   (table) => ({
     shopIdIdx: index("customer_payments_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("customer_payments_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     customerIdIdx: index("customer_payments_customer_id_idx").on(table.customerId),
     saleIdIdx: index("customer_payments_sale_id_idx").on(table.saleId),
     statusIdx: index("customer_payments_status_idx").on(table.status),
@@ -1128,6 +1405,9 @@ export const customerPaymentAllocations = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     customerPaymentId: uuid("customer_payment_id")
       .notNull()
       .references(() => customerPayments.id, { onDelete: "cascade" }),
@@ -1146,6 +1426,10 @@ export const customerPaymentAllocations = pgTable(
   },
   (table) => ({
     shopIdIdx: index("customer_payment_allocations_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("customer_payment_allocations_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     paymentIdIdx: index("customer_payment_allocations_payment_id_idx").on(
       table.customerPaymentId,
     ),
@@ -1166,6 +1450,9 @@ export const supplierPayments = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     supplierId: uuid("supplier_id")
       .notNull()
       .references(() => suppliers.id, { onDelete: "restrict" }),
@@ -1192,6 +1479,10 @@ export const supplierPayments = pgTable(
   },
   (table) => ({
     shopIdIdx: index("supplier_payments_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("supplier_payments_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     supplierIdIdx: index("supplier_payments_supplier_id_idx").on(table.supplierId),
     purchaseIdIdx: index("supplier_payments_purchase_id_idx").on(table.purchaseId),
     statusIdx: index("supplier_payments_status_idx").on(table.status),
@@ -1207,6 +1498,9 @@ export const supplierPaymentAllocations = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     supplierPaymentId: uuid("supplier_payment_id")
       .notNull()
       .references(() => supplierPayments.id, { onDelete: "cascade" }),
@@ -1225,6 +1519,10 @@ export const supplierPaymentAllocations = pgTable(
   },
   (table) => ({
     shopIdIdx: index("supplier_payment_allocations_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("supplier_payment_allocations_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     paymentIdIdx: index("supplier_payment_allocations_payment_id_idx").on(
       table.supplierPaymentId,
     ),
@@ -1247,6 +1545,9 @@ export const ledgerEntries = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     entityType: ledgerEntityTypeEnum("entity_type").notNull(),
     entityId: uuid("entity_id").notNull(),
     transactionType: ledgerTransactionTypeEnum("transaction_type").notNull(),
@@ -1272,6 +1573,10 @@ export const ledgerEntries = pgTable(
   },
   (table) => ({
     shopIdIdx: index("ledger_entries_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("ledger_entries_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     entityIdx: index("ledger_entries_entity_idx").on(
       table.shopId,
       table.entityType,
@@ -1295,6 +1600,9 @@ export const saleItems = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     saleId: uuid("sale_id")
       .notNull()
       .references(() => sales.id, { onDelete: "cascade" }),
@@ -1336,6 +1644,7 @@ export const saleItems = pgTable(
   },
   (table) => ({
     shopIdIdx: index("sale_items_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("sale_items_branch_id_idx").on(table.shopId, table.branchId),
     saleIdIdx: index("sale_items_sale_id_idx").on(table.saleId),
     medicineIdIdx: index("sale_items_medicine_id_idx").on(table.medicineId),
     batchIdIdx: index("sale_items_batch_id_idx").on(table.batchId),
@@ -1349,6 +1658,9 @@ export const saleReturns = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     saleId: uuid("sale_id")
       .notNull()
       .references(() => sales.id, { onDelete: "restrict" }),
@@ -1386,6 +1698,10 @@ export const saleReturns = pgTable(
   },
   (table) => ({
     shopIdIdx: index("sale_returns_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("sale_returns_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     saleIdIdx: index("sale_returns_sale_id_idx").on(table.saleId),
     statusIdx: index("sale_returns_status_idx").on(table.status),
     refundStatusIdx: index("sale_returns_refund_status_idx").on(table.refundStatus),
@@ -1415,6 +1731,9 @@ export const saleReturnItems = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     returnId: uuid("return_id")
       .notNull()
       .references(() => saleReturns.id, { onDelete: "cascade" }),
@@ -1449,6 +1768,10 @@ export const saleReturnItems = pgTable(
   },
   (table) => ({
     shopIdIdx: index("sale_return_items_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("sale_return_items_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     returnIdIdx: index("sale_return_items_return_id_idx").on(table.returnId),
     saleItemIdIdx: index("sale_return_items_sale_item_id_idx").on(table.saleItemId),
     medicineIdIdx: index("sale_return_items_medicine_id_idx").on(table.medicineId),
@@ -1463,6 +1786,9 @@ export const purchaseItems = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     purchaseId: uuid("purchase_id")
       .notNull()
       .references(() => purchases.id, { onDelete: "cascade" }),
@@ -1510,6 +1836,10 @@ export const purchaseItems = pgTable(
   },
   (table) => ({
     shopIdIdx: index("purchase_items_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("purchase_items_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     purchaseIdIdx: index("purchase_items_purchase_id_idx").on(table.purchaseId),
     medicineIdIdx: index("purchase_items_medicine_id_idx").on(table.medicineId),
     batchIdIdx: index("purchase_items_medicine_batch_id_idx").on(
@@ -1531,6 +1861,9 @@ export const purchaseReturns = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     purchaseId: uuid("purchase_id")
       .notNull()
       .references(() => purchases.id, { onDelete: "restrict" }),
@@ -1564,6 +1897,10 @@ export const purchaseReturns = pgTable(
   },
   (table) => ({
     shopIdIdx: index("purchase_returns_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("purchase_returns_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     purchaseIdIdx: index("purchase_returns_purchase_id_idx").on(table.purchaseId),
     supplierIdIdx: index("purchase_returns_supplier_id_idx").on(table.supplierId),
     statusIdx: index("purchase_returns_status_idx").on(table.status),
@@ -1592,6 +1929,9 @@ export const purchaseReturnItems = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     returnId: uuid("return_id")
       .notNull()
       .references(() => purchaseReturns.id, { onDelete: "cascade" }),
@@ -1626,6 +1966,10 @@ export const purchaseReturnItems = pgTable(
   },
   (table) => ({
     shopIdIdx: index("purchase_return_items_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("purchase_return_items_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     returnIdIdx: index("purchase_return_items_return_id_idx").on(table.returnId),
     purchaseItemIdIdx: index("purchase_return_items_purchase_item_id_idx").on(
       table.purchaseItemId,
@@ -1644,6 +1988,9 @@ export const stockAdjustments = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     medicineId: uuid("medicine_id")
       .notNull()
       .references(() => medicines.id, { onDelete: "restrict" }),
@@ -1663,6 +2010,10 @@ export const stockAdjustments = pgTable(
   },
   (table) => ({
     shopIdIdx: index("stock_adjustments_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("stock_adjustments_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     medicineIdIdx: index("stock_adjustments_medicine_id_idx").on(table.medicineId),
     batchIdIdx: index("stock_adjustments_batch_id_idx").on(table.batchId),
     createdAtIdx: index("stock_adjustments_created_at_idx").on(table.createdAt),
@@ -1676,6 +2027,9 @@ export const stockTransactions = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     medicineId: uuid("medicine_id")
       .notNull()
       .references(() => medicines.id, { onDelete: "restrict" }),
@@ -1698,6 +2052,10 @@ export const stockTransactions = pgTable(
   },
   (table) => ({
     shopIdIdx: index("stock_transactions_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("stock_transactions_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     medicineIdIdx: index("stock_transactions_medicine_id_idx").on(table.medicineId),
     batchIdIdx: index("stock_transactions_batch_id_idx").on(table.batchId),
     typeIdx: index("stock_transactions_type_idx").on(table.transactionType),
@@ -1709,6 +2067,76 @@ export const stockTransactions = pgTable(
   }),
 );
 
+export const stockTransfers = pgTable(
+  "stock_transfers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    fromBranchId: uuid("from_branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
+    toBranchId: uuid("to_branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
+    status: stockTransferStatusEnum("status").notNull().default("draft"),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    shopIdIdx: index("stock_transfers_shop_id_idx").on(table.shopId),
+    fromBranchIdx: index("stock_transfers_from_branch_id_idx").on(table.fromBranchId),
+    toBranchIdx: index("stock_transfers_to_branch_id_idx").on(table.toBranchId),
+    statusIdx: index("stock_transfers_status_idx").on(table.status),
+    createdAtIdx: index("stock_transfers_created_at_idx").on(table.createdAt),
+  }),
+);
+
+export const stockTransferItems = pgTable(
+  "stock_transfer_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    transferId: uuid("transfer_id")
+      .notNull()
+      .references(() => stockTransfers.id, { onDelete: "cascade" }),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    medicineId: uuid("medicine_id")
+      .notNull()
+      .references(() => medicines.id, { onDelete: "restrict" }),
+    sourceBatchId: uuid("source_batch_id")
+      .notNull()
+      .references(() => medicineBatches.id, { onDelete: "restrict" }),
+    destinationBatchId: uuid("destination_batch_id").references(() => medicineBatches.id, {
+      onDelete: "set null",
+    }),
+    quantity: integer("quantity").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    transferIdIdx: index("stock_transfer_items_transfer_id_idx").on(table.transferId),
+    shopIdIdx: index("stock_transfer_items_shop_id_idx").on(table.shopId),
+    medicineIdIdx: index("stock_transfer_items_medicine_id_idx").on(table.medicineId),
+    sourceBatchIdx: index("stock_transfer_items_source_batch_id_idx").on(
+      table.sourceBatchId,
+    ),
+  }),
+);
+
 export const lowStockAlertStates = pgTable(
   "low_stock_alert_states",
   {
@@ -1716,6 +2144,9 @@ export const lowStockAlertStates = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
     medicineId: uuid("medicine_id")
       .notNull()
       .references(() => medicines.id, { onDelete: "cascade" }),
@@ -1738,9 +2169,13 @@ export const lowStockAlertStates = pgTable(
   },
   (table) => ({
     shopMedicineUniqueIdx: uniqueIndex(
-      "low_stock_alert_states_shop_medicine_unique_idx",
-    ).on(table.shopId, table.medicineId),
+      "low_stock_alert_states_shop_branch_medicine_unique_idx",
+    ).on(table.shopId, table.branchId, table.medicineId),
     shopIdIdx: index("low_stock_alert_states_shop_id_idx").on(table.shopId),
+    branchIdIdx: index("low_stock_alert_states_branch_id_idx").on(
+      table.shopId,
+      table.branchId,
+    ),
     medicineIdIdx: index("low_stock_alert_states_medicine_id_idx").on(
       table.medicineId,
     ),
@@ -1750,15 +2185,21 @@ export const lowStockAlertStates = pgTable(
   }),
 );
 export type Shop = typeof shops.$inferSelect;
+export type Branch = typeof branches.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type UserBranch = typeof userBranches.$inferSelect;
 export type ShopRolePermissionConfig =
   typeof shopRolePermissionConfigs.$inferSelect;
 export type ShopRolePermission = typeof shopRolePermissions.$inferSelect;
 export type UserPermissionOverride = typeof userPermissionOverrides.$inferSelect;
 export type ShopSettings = typeof shopSettings.$inferSelect;
+export type BranchSettings = typeof branchSettings.$inferSelect;
 export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type ImportJob = typeof importJobs.$inferSelect;
+export type ImportJobRow = typeof importJobRows.$inferSelect;
+export type BackupRecord = typeof backupRecords.$inferSelect;
 export type VerificationOtp = typeof verificationOtps.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
 export type MedicineCategory = typeof medicineCategories.$inferSelect;
@@ -1785,4 +2226,6 @@ export type SupplierPaymentAllocation =
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 export type StockTransaction = typeof stockTransactions.$inferSelect;
 export type StockAdjustment = typeof stockAdjustments.$inferSelect;
+export type StockTransfer = typeof stockTransfers.$inferSelect;
+export type StockTransferItem = typeof stockTransferItems.$inferSelect;
 export type LowStockAlertState = typeof lowStockAlertStates.$inferSelect;

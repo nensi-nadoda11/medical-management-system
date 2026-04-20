@@ -6,6 +6,7 @@ const getShopId = (req: Request) =>
   (req.authenticatedUser ?? req.authSession!.user).shopId;
 const getUserId = (req: Request) =>
   (req.authenticatedUser ?? req.authSession!.user).id;
+const getBranchId = (req: Request) => req.authBranch!.id;
 
 export class InventoryController {
   constructor(private readonly inventoryService = new InventoryService()) {}
@@ -18,6 +19,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.listInventorySummary(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -35,6 +37,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.getInventoryMedicineDetail(
         getShopId(req),
+        getBranchId(req),
         req.params.medicineId as string,
         (req.validatedQuery ?? req.query) as never,
       );
@@ -53,6 +56,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.listStockTransactions(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -66,6 +70,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.listLowStock(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -83,6 +88,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.listExpiryReport(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -100,6 +106,7 @@ export class InventoryController {
     try {
       const result = await this.inventoryService.createStockAdjustment(
         getShopId(req),
+        getBranchId(req),
         getUserId(req),
         req.body,
       );

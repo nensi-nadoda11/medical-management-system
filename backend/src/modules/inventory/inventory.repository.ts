@@ -56,7 +56,11 @@ const activeBatchCountExpr = sql<number>`
   )
 `;
 
-const inventoryBaseFilters = (shopId: string, query: ListInventorySummaryQuery) => {
+const inventoryBaseFilters = (
+  shopId: string,
+  branchId: string,
+  query: ListInventorySummaryQuery,
+) => {
   const filters = [eq(medicines.shopId, shopId)];
 
   if (query.search) {
@@ -85,6 +89,7 @@ const inventoryBaseFilters = (shopId: string, query: ListInventorySummaryQuery) 
       query.batchStatus === "expired"
         ? and(
             eq(medicineBatches.shopId, shopId),
+            eq(medicineBatches.branchId, branchId),
             eq(medicineBatches.medicineId, medicines.id),
             ne(medicineBatches.quantityAvailable, 0),
             lte(medicineBatches.expiryDate, new Date()),
@@ -92,11 +97,13 @@ const inventoryBaseFilters = (shopId: string, query: ListInventorySummaryQuery) 
         : query.batchStatus === "exhausted"
           ? and(
               eq(medicineBatches.shopId, shopId),
+              eq(medicineBatches.branchId, branchId),
               eq(medicineBatches.medicineId, medicines.id),
               eq(medicineBatches.quantityAvailable, 0),
             )
           : and(
               eq(medicineBatches.shopId, shopId),
+              eq(medicineBatches.branchId, branchId),
               eq(medicineBatches.medicineId, medicines.id),
               gte(medicineBatches.expiryDate, new Date()),
               sql`${medicineBatches.quantityAvailable} > 0`,
@@ -116,8 +123,16 @@ const inventoryBaseFilters = (shopId: string, query: ListInventorySummaryQuery) 
 };
 
 export class InventoryRepository {
-  async syncBatchStatuses(shopId: string, executor?: DbExecutor) {
-    const database = getDbExecutor(executor);
+  async syncBatchStatuses(
+    shopId: string,
+    branchIdOrExecutor?: string | DbExecutor,
+    executor?: DbExecutor,
+  ) {
+    const branchId =
+      typeof branchIdOrExecutor === "string" ? branchIdOrExecutor : undefined;
+    const database = getDbExecutor(
+      typeof branchIdOrExecutor === "string" ? executor : branchIdOrExecutor,
+    );
     const now = new Date();
 
     await database
@@ -129,6 +144,7 @@ export class InventoryRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          ...(branchId ? [eq(medicineBatches.branchId, branchId)] : []),
           sql`${medicineBatches.quantityAvailable} > 0`,
           lte(medicineBatches.expiryDate, now),
           ne(medicineBatches.status, "expired"),
@@ -144,6 +160,7 @@ export class InventoryRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          ...(branchId ? [eq(medicineBatches.branchId, branchId)] : []),
           eq(medicineBatches.quantityAvailable, 0),
           ne(medicineBatches.status, "exhausted"),
         ),
@@ -158,6 +175,7 @@ export class InventoryRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          ...(branchId ? [eq(medicineBatches.branchId, branchId)] : []),
           sql`${medicineBatches.quantityAvailable} > 0`,
           gte(medicineBatches.expiryDate, now),
           ne(medicineBatches.status, "active"),
@@ -168,6 +186,7 @@ export class InventoryRepository {
   async upsertPurchaseBatch(
     input: {
       shopId: string;
+      branchId: string;
       medicineId: string;
       batchNumber: string;
       batchNumberNormalized: string;
@@ -194,6 +213,7 @@ export class InventoryRepository {
       .onConflictDoUpdate({
         target: [
           medicineBatches.shopId,
+          medicineBatches.branchId,
           medicineBatches.medicineId,
           medicineBatches.batchNumberNormalized,
           medicineBatches.expiryDate,
@@ -219,11 +239,22 @@ export class InventoryRepository {
     return batch;
   }
 
-  async findBatchById(shopId: string, batchId: string, executor?: DbExecutor) {
+  async findBatchById(
+    shopId: string,
+    branchId: string | undefined,
+    batchId: string,
+    executor?: DbExecutor,
+  ) {
     const [batch] = await getDbExecutor(executor)
       .select()
       .from(medicineBatches)
-      .where(and(eq(medicineBatches.id, batchId), eq(medicineBatches.shopId, shopId)))
+      .where(
+        and(
+          eq(medicineBatches.id, batchId),
+          eq(medicineBatches.shopId, shopId),
+          ...(branchId ? [eq(medicineBatches.branchId, branchId)] : []),
+        ),
+      )
       .limit(1);
 
     return batch ?? null;
@@ -233,6 +264,7 @@ export class InventoryRepository {
     input: {
       batchId: string;
       shopId: string;
+      branchId?: string;
       quantityDelta: number;
       nextStatus: "active" | "exhausted" | "expired";
     },
@@ -242,6 +274,7 @@ export class InventoryRepository {
     const filters = [
       eq(medicineBatches.id, input.batchId),
       eq(medicineBatches.shopId, input.shopId),
+      ...(input.branchId ? [eq(medicineBatches.branchId, input.branchId)] : []),
     ];
 
     if (input.quantityDelta < 0) {
@@ -287,6 +320,7 @@ export class InventoryRepository {
 
   async getMedicineStockSnapshot(
     shopId: string,
+    branchId: string,
     medicineId: string,
     executor?: DbExecutor,
   ) {
@@ -301,6 +335,7 @@ export class InventoryRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
@@ -310,7 +345,11 @@ export class InventoryRepository {
     return snapshot ?? null;
   }
 
-  async listInventorySummary(shopId: string, query: ListInventorySummaryQuery) {
+  async listInventorySummary(
+    shopId: string,
+    branchId: string,
+    query: ListInventorySummaryQuery,
+  ) {
     const orderBy =
       query.sortBy === "availableQuantity"
         ? query.sortOrder === "asc"
@@ -349,10 +388,11 @@ export class InventoryRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(inventoryBaseFilters(shopId, query))
+      .where(inventoryBaseFilters(shopId, branchId, query))
       .groupBy(medicines.id, medicineCategories.id, manufacturers.id);
 
     if (query.lowStockOnly) {
@@ -369,7 +409,11 @@ export class InventoryRepository {
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countInventorySummary(shopId: string, query: ListInventorySummaryQuery) {
+  async countInventorySummary(
+    shopId: string,
+    branchId: string,
+    query: ListInventorySummaryQuery,
+  ) {
     const groupedQuery = getDbExecutor()
       .select({ medicineId: medicines.id })
       .from(medicines)
@@ -377,10 +421,11 @@ export class InventoryRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(inventoryBaseFilters(shopId, query))
+      .where(inventoryBaseFilters(shopId, branchId, query))
       .groupBy(medicines.id, medicines.reorderLevel);
 
     const groupedSubquery = (query.lowStockOnly
@@ -396,6 +441,7 @@ export class InventoryRepository {
 
   async getInventoryMedicineDetail(
     shopId: string,
+    branchId: string,
     medicineId: string,
     executor?: DbExecutor,
   ) {
@@ -421,6 +467,7 @@ export class InventoryRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
@@ -438,6 +485,7 @@ export class InventoryRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicineId),
         ),
       )
@@ -449,8 +497,15 @@ export class InventoryRepository {
     };
   }
 
-  async listStockTransactions(shopId: string, query: ListStockTransactionsQuery) {
-    const filters = [eq(stockTransactions.shopId, shopId)];
+  async listStockTransactions(
+    shopId: string,
+    branchId: string,
+    query: ListStockTransactionsQuery,
+  ) {
+    const filters = [
+      eq(stockTransactions.shopId, shopId),
+      eq(stockTransactions.branchId, branchId),
+    ];
 
     if (query.medicineId) {
       filters.push(eq(stockTransactions.medicineId, query.medicineId));
@@ -501,8 +556,15 @@ export class InventoryRepository {
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countStockTransactions(shopId: string, query: ListStockTransactionsQuery) {
-    const filters = [eq(stockTransactions.shopId, shopId)];
+  async countStockTransactions(
+    shopId: string,
+    branchId: string,
+    query: ListStockTransactionsQuery,
+  ) {
+    const filters = [
+      eq(stockTransactions.shopId, shopId),
+      eq(stockTransactions.branchId, branchId),
+    ];
 
     if (query.medicineId) {
       filters.push(eq(stockTransactions.medicineId, query.medicineId));
@@ -532,8 +594,15 @@ export class InventoryRepository {
     return result?.total ?? 0;
   }
 
-  async listExpiryReport(shopId: string, query: ListExpiryReportQuery) {
-    const filters = [eq(medicineBatches.shopId, shopId)];
+  async listExpiryReport(
+    shopId: string,
+    branchId: string,
+    query: ListExpiryReportQuery,
+  ) {
+    const filters = [
+      eq(medicineBatches.shopId, shopId),
+      eq(medicineBatches.branchId, branchId),
+    ];
 
     if (query.medicineId) {
       filters.push(eq(medicineBatches.medicineId, query.medicineId));
@@ -584,8 +653,15 @@ export class InventoryRepository {
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countExpiryReport(shopId: string, query: ListExpiryReportQuery) {
-    const filters = [eq(medicineBatches.shopId, shopId)];
+  async countExpiryReport(
+    shopId: string,
+    branchId: string,
+    query: ListExpiryReportQuery,
+  ) {
+    const filters = [
+      eq(medicineBatches.shopId, shopId),
+      eq(medicineBatches.branchId, branchId),
+    ];
 
     if (query.medicineId) {
       filters.push(eq(medicineBatches.medicineId, query.medicineId));

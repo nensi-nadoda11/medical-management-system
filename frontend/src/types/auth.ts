@@ -1,5 +1,22 @@
 import type { AdminPermissionKey } from "./admin-settings";
 
+export interface BranchSummary {
+  id: string;
+  shopId: string;
+  name: string;
+  code: string;
+  address: string | null;
+  contactNumber: string | null;
+  status: "active" | "inactive";
+  isDefault: boolean;
+}
+
+export interface BranchContext {
+  currentBranch: BranchSummary;
+  defaultBranch: BranchSummary;
+  accessibleBranches: BranchSummary[];
+}
+
 export interface PublicUser {
   id: string;
   shopId: string;
@@ -25,6 +42,7 @@ export interface AuthSession {
   sessionExpiresAt: string;
   user: PublicUser;
   shop: PublicShop;
+  branchContext?: BranchContext;
 }
 
 export interface RegistrationResponse {
@@ -69,6 +87,7 @@ export interface LoginResponse {
   sessionExpiresAt: string;
   user: PublicUser;
   shop: PublicShop;
+  branchContext?: BranchContext;
 }
 
 export interface PendingRegistration {
@@ -82,7 +101,44 @@ export interface PendingRegistration {
   mobileVerified: boolean;
 }
 
+type PermissionAwareUser = Pick<PublicUser, "role" | "permissions"> | null | undefined;
+
 export const hasPermission = (
-  user: { permissions?: string[] } | null | undefined,
+  user: PermissionAwareUser,
   permission: AdminPermissionKey,
 ) => Boolean(user?.permissions?.includes(permission));
+
+export const hasAnyPermission = (
+  user: PermissionAwareUser,
+  permissions: AdminPermissionKey[],
+) => permissions.some((permission) => hasPermission(user, permission));
+
+export const hasAllPermissions = (
+  user: PermissionAwareUser,
+  permissions: AdminPermissionKey[],
+) => permissions.every((permission) => hasPermission(user, permission));
+
+export const canAccessModule = (
+  user: PermissionAwareUser,
+  input: {
+    roles?: PublicUser["role"][];
+    permissions?: AdminPermissionKey[];
+    permissionMode?: "any" | "all";
+  },
+) => {
+  if (!user) {
+    return false;
+  }
+
+  if (input.roles?.length && !input.roles.includes(user.role)) {
+    return false;
+  }
+
+  if (!input.permissions?.length) {
+    return true;
+  }
+
+  return input.permissionMode === "all"
+    ? hasAllPermissions(user, input.permissions)
+    : hasAnyPermission(user, input.permissions);
+};

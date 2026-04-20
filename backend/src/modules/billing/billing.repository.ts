@@ -32,8 +32,8 @@ const todayStart = () => {
   return value;
 };
 
-const buildSaleFilters = (shopId: string, query: ListBillsQuery) => {
-  const filters = [eq(sales.shopId, shopId)];
+const buildSaleFilters = (shopId: string, branchId: string, query: ListBillsQuery) => {
+  const filters = [eq(sales.shopId, shopId), eq(sales.branchId, branchId)];
 
   if (query.search) {
     filters.push(
@@ -70,6 +70,7 @@ const buildSaleFilters = (shopId: string, query: ListBillsQuery) => {
 
 const buildSellableMedicineFilters = (
   shopId: string,
+  branchId: string,
   query: SearchSellableMedicinesQuery,
 ) => {
   const filters = [
@@ -79,6 +80,7 @@ const buildSellableMedicineFilters = (
       select 1
       from ${medicineBatches}
       where ${medicineBatches.shopId} = ${shopId}
+        and ${medicineBatches.branchId} = ${branchId}
         and ${medicineBatches.medicineId} = ${medicines.id}
         and ${medicineBatches.quantityAvailable} > 0
         and ${medicineBatches.expiryDate} >= ${todayStart()}
@@ -159,28 +161,40 @@ export class BillingRepository {
     );
   }
 
-  async getNextBillSequence(shopId: string, executor: DbExecutor) {
+  async getNextBillSequence(shopId: string, branchId: string, executor: DbExecutor) {
     const [result] = await getDbExecutor(executor)
       .select({
         nextSequence: sql<number>`coalesce(max(${sales.billSequence}), 0) + 1`,
       })
       .from(sales)
-      .where(eq(sales.shopId, shopId));
+      .where(and(eq(sales.shopId, shopId), eq(sales.branchId, branchId)));
 
     return Number(result?.nextSequence ?? 1);
   }
 
-  async findSaleById(shopId: string, saleId: string, executor?: DbExecutor) {
+  async findSaleById(
+    shopId: string,
+    branchId: string,
+    saleId: string,
+    executor?: DbExecutor,
+  ) {
     const [sale] = await getDbExecutor(executor)
       .select()
       .from(sales)
-      .where(and(eq(sales.id, saleId), eq(sales.shopId, shopId)))
+      .where(
+        and(eq(sales.id, saleId), eq(sales.shopId, shopId), eq(sales.branchId, branchId))
+      )
       .limit(1);
 
     return sale ?? null;
   }
 
-  async findSaleDetailById(shopId: string, saleId: string, executor?: DbExecutor) {
+  async findSaleDetailById(
+    shopId: string,
+    branchId: string,
+    saleId: string,
+    executor?: DbExecutor,
+  ) {
     const database = getDbExecutor(executor);
 
     const [saleRecord] = await database
@@ -194,7 +208,9 @@ export class BillingRepository {
       })
       .from(sales)
       .innerJoin(users, eq(sales.createdByUserId, users.id))
-      .where(and(eq(sales.id, saleId), eq(sales.shopId, shopId)))
+      .where(
+        and(eq(sales.id, saleId), eq(sales.shopId, shopId), eq(sales.branchId, branchId))
+      )
       .limit(1);
 
     if (!saleRecord) {
@@ -234,7 +250,7 @@ export class BillingRepository {
       .from(saleItems)
       .innerJoin(medicines, eq(saleItems.medicineId, medicines.id))
       .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
-      .where(eq(saleItems.saleId, saleId))
+      .where(and(eq(saleItems.saleId, saleId), eq(saleItems.branchId, branchId)))
       .orderBy(asc(saleItems.createdAt), asc(saleItems.id));
 
     return {
@@ -244,7 +260,7 @@ export class BillingRepository {
     };
   }
 
-  async listSales(shopId: string, query: ListBillsQuery) {
+  async listSales(shopId: string, branchId: string, query: ListBillsQuery) {
     const orderBy =
       query.sortBy === "billNumber"
         ? [
@@ -285,24 +301,24 @@ export class BillingRepository {
       })
       .from(sales)
       .innerJoin(users, eq(sales.createdByUserId, users.id))
-      .where(buildSaleFilters(shopId, query))
+      .where(buildSaleFilters(shopId, branchId, query))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countSales(shopId: string, query: ListBillsQuery) {
+  async countSales(shopId: string, branchId: string, query: ListBillsQuery) {
     const [result] = await getDbExecutor()
       .select({ total: count() })
       .from(sales)
-      .where(buildSaleFilters(shopId, query));
+      .where(buildSaleFilters(shopId, branchId, query));
 
     return result?.total ?? 0;
   }
 
   async createSale(
     payload: typeof sales.$inferInsert,
-    items: Array<Omit<typeof saleItems.$inferInsert, "saleId" | "shopId">>,
+    items: Array<Omit<typeof saleItems.$inferInsert, "saleId" | "shopId" | "branchId">>,
     executor: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
@@ -320,6 +336,7 @@ export class BillingRepository {
               ...item,
               saleId: sale.id,
               shopId: payload.shopId,
+              branchId: payload.branchId,
             })),
           )
           .returning()
@@ -351,7 +368,8 @@ export class BillingRepository {
   async replaceSaleItems(
     saleId: string,
     shopId: string,
-    items: Array<Omit<typeof saleItems.$inferInsert, "saleId" | "shopId">>,
+    branchId: string,
+    items: Array<Omit<typeof saleItems.$inferInsert, "saleId" | "shopId" | "branchId">>,
     executor: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
@@ -365,19 +383,20 @@ export class BillingRepository {
       .insert(saleItems)
       .values(
         items.map((item) => ({
-          ...item,
-          saleId,
-          shopId,
-        })),
+            ...item,
+            saleId,
+            shopId,
+            branchId,
+          })),
       )
       .returning();
   }
 
-  async listSaleItemsBySaleId(saleId: string, executor?: DbExecutor) {
+  async listSaleItemsBySaleId(saleId: string, branchId: string, executor?: DbExecutor) {
     return getDbExecutor(executor)
       .select()
       .from(saleItems)
-      .where(eq(saleItems.saleId, saleId))
+      .where(and(eq(saleItems.saleId, saleId), eq(saleItems.branchId, branchId)))
       .orderBy(asc(saleItems.createdAt), asc(saleItems.id));
   }
 
@@ -392,7 +411,12 @@ export class BillingRepository {
       .where(and(eq(medicines.shopId, shopId), inArray(medicines.id, medicineIds)));
   }
 
-  async findBatchesByIds(shopId: string, batchIds: string[], executor?: DbExecutor) {
+  async findBatchesByIds(
+    shopId: string,
+    branchId: string,
+    batchIds: string[],
+    executor?: DbExecutor,
+  ) {
     if (!batchIds.length) {
       return [];
     }
@@ -403,6 +427,7 @@ export class BillingRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           inArray(medicineBatches.id, batchIds),
         ),
       );
@@ -410,6 +435,7 @@ export class BillingRepository {
 
   async listSellableBatchesByMedicineIds(
     shopId: string,
+    branchId: string,
     medicineIds: string[],
     executor?: DbExecutor,
   ) {
@@ -423,6 +449,7 @@ export class BillingRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           inArray(medicineBatches.medicineId, medicineIds),
           gte(medicineBatches.expiryDate, todayStart()),
           sql`${medicineBatches.quantityAvailable} > 0`,
@@ -436,7 +463,11 @@ export class BillingRepository {
       );
   }
 
-  async listSellableMedicines(shopId: string, query: SearchSellableMedicinesQuery) {
+  async listSellableMedicines(
+    shopId: string,
+    branchId: string,
+    query: SearchSellableMedicinesQuery,
+  ) {
     const orderBy =
       query.sortBy === "availableQuantity"
         ? query.sortOrder === "asc"
@@ -462,17 +493,22 @@ export class BillingRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(buildSellableMedicineFilters(shopId, query))
+      .where(buildSellableMedicineFilters(shopId, branchId, query))
       .groupBy(medicines.id)
       .orderBy(orderBy, asc(medicines.id))
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countSellableMedicines(shopId: string, query: SearchSellableMedicinesQuery) {
+  async countSellableMedicines(
+    shopId: string,
+    branchId: string,
+    query: SearchSellableMedicinesQuery,
+  ) {
     const grouped = getDbExecutor()
       .select({ medicineId: medicines.id })
       .from(medicines)
@@ -480,10 +516,11 @@ export class BillingRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(buildSellableMedicineFilters(shopId, query))
+      .where(buildSellableMedicineFilters(shopId, branchId, query))
       .groupBy(medicines.id)
       .as("sellable_medicines");
 

@@ -6,6 +6,7 @@ const getShopId = (req: Request) =>
   (req.authenticatedUser ?? req.authSession!.user).shopId;
 const getUserId = (req: Request) =>
   (req.authenticatedUser ?? req.authSession!.user).id;
+const getBranchId = (req: Request) => req.authBranch!.id;
 const getRouteId = (req: Request) => req.params.id as string;
 
 export class PurchasesController {
@@ -15,6 +16,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.listPurchases(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -32,6 +34,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.getPurchaseById(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
       );
 
@@ -45,6 +48,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.createPurchase(
         getShopId(req),
+        getBranchId(req),
         getUserId(req),
         req.body,
       );
@@ -66,6 +70,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.updateDraftPurchase(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
         getUserId(req),
         req.body,
@@ -88,6 +93,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.finalizePurchase(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
         getUserId(req),
       );
@@ -105,6 +111,7 @@ export class PurchasesController {
     try {
       const result = await this.purchasesService.cancelPurchase(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
         getUserId(req),
         req.body,

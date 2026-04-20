@@ -16,6 +16,7 @@ import {
   getProfitReport,
   reportsQueryKeys,
 } from "../api/reports";
+import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
@@ -35,6 +36,8 @@ export const ProfitReportPage = () => {
   const [dateFrom, setDateFrom] = useState(defaultDateFrom);
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
   const [groupBy, setGroupBy] = useState<"day" | "month">("day");
+  const [branchId, setBranchId] = useState("");
+  const [combineBranches, setCombineBranches] = useState(false);
   const [sortBy, setSortBy] = useState<"completedAt" | "revenue" | "profit">(
     "completedAt",
   );
@@ -49,12 +52,14 @@ export const ProfitReportPage = () => {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       groupBy,
+      branchId: branchId || undefined,
+      combineBranches: combineBranches || undefined,
       sortBy,
       sortOrder,
       page,
       pageSize: 10,
     }),
-    [dateFrom, dateTo, deferredSearch, groupBy, page, sortBy, sortOrder],
+    [branchId, combineBranches, dateFrom, dateTo, deferredSearch, groupBy, page, sortBy, sortOrder],
   );
 
   const profitQuery = useQuery({
@@ -184,6 +189,18 @@ export const ProfitReportPage = () => {
               <option value="month">Month</option>
             </select>
           </label>
+          <BranchScopeControl
+            branchId={branchId}
+            combineBranches={combineBranches}
+            onBranchIdChange={(value) => {
+              setBranchId(value);
+              setPage(1);
+            }}
+            onCombineBranchesChange={(value) => {
+              setCombineBranches(value);
+              setPage(1);
+            }}
+          />
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select

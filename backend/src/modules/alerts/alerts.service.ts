@@ -4,6 +4,7 @@ import type { DbExecutor } from "../../shared/db/executor";
 import { logger } from "../../shared/logger";
 import { AccountingRepository } from "../accounting/accounting.repository";
 import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import { BranchesService } from "../branches/branches.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { NotificationsRepository } from "../notifications/notifications.repository";
 import { emailService } from "../notifications/email/email.service";
@@ -69,19 +70,23 @@ export class AlertsService {
     private readonly inventoryRepository = new InventoryRepository(),
     private readonly accountingRepository = new AccountingRepository(),
     private readonly adminSettingsService = new AdminSettingsService(),
+    private readonly branchesService = new BranchesService(),
   ) {}
 
   async syncMedicineAlerts(
     shopId: string,
+    branchId: string,
     medicineId: string,
     executor?: DbExecutor,
   ) {
-    const settings = await this.adminSettingsService.getResolvedShopSettings(
+    const settings = await this.branchesService.getResolvedBranchSettings(
       shopId,
+      branchId,
       executor,
     );
     const detail = await this.inventoryRepository.getInventoryMedicineDetail(
       shopId,
+      branchId,
       medicineId,
       executor,
     );
@@ -99,6 +104,7 @@ export class AlertsService {
     const now = new Date();
     const existingState = await this.alertsRepository.findLowStockAlertState(
       shopId,
+      branchId,
       medicineId,
       executor,
     );
@@ -107,6 +113,7 @@ export class AlertsService {
     await this.alertsRepository.upsertLowStockAlertState(
       {
         shopId,
+        branchId,
         medicineId,
         isLowStock,
         currentAvailableQuantity,
@@ -126,8 +133,9 @@ export class AlertsService {
     if (settings.lowStockAlertsEnabled && isLowStock) {
       await this.ensureActiveNotification(
         {
-          shopId,
-          conditionKey: `low_stock:${medicineId}`,
+            shopId,
+            branchId,
+            conditionKey: `low_stock:${medicineId}`,
           type: "low_stock",
           severity: currentAvailableQuantity === 0 ? "critical" : "warning",
           entityType: "medicine",
@@ -150,7 +158,7 @@ export class AlertsService {
         executor,
       );
     } else {
-      await this.resolveCondition(shopId, `low_stock:${medicineId}`, executor);
+        await this.resolveCondition(shopId, `low_stock:${medicineId}`, executor);
     }
 
     const todayStart = startOfToday();
@@ -326,8 +334,11 @@ export class AlertsService {
     });
   }
 
-  async syncShopAlerts(shopId: string) {
-    const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
+  async syncShopAlerts(shopId: string, branchId: string) {
+    const settings = await this.branchesService.getResolvedBranchSettings(
+      shopId,
+      branchId,
+    );
     const activeStockNotifications =
       await this.notificationsRepository.listActiveByTypes(
         shopId,
@@ -338,6 +349,7 @@ export class AlertsService {
     if (settings.lowStockAlertsEnabled) {
       const lowStockRows = await this.alertsRepository.listCurrentLowStockMedicines(
         shopId,
+        branchId,
         settings.defaultLowStockThreshold,
       );
 
@@ -347,6 +359,7 @@ export class AlertsService {
 
         await this.ensureActiveNotification({
           shopId,
+          branchId,
           conditionKey,
           type: "low_stock",
           severity: Number(row.availableQuantity) === 0 ? "critical" : "warning",
@@ -374,6 +387,7 @@ export class AlertsService {
       const todayStart = startOfToday();
       const expiryRows = await this.alertsRepository.listCurrentExpiryBatches(
         shopId,
+        branchId,
         settings.nearExpiryAlertDays,
       );
 
@@ -384,6 +398,7 @@ export class AlertsService {
 
         await this.ensureActiveNotification({
           shopId,
+          branchId,
           conditionKey,
           type: isExpired ? "expired_stock" : "near_expiry",
           severity: isExpired ? "critical" : "warning",
@@ -523,7 +538,7 @@ export class AlertsService {
     );
   }
 
-  async dispatchPendingInventoryAlertEmails(shopId: string) {
+  async dispatchPendingInventoryAlertEmails(shopId: string, _branchId?: string) {
     const [pendingNotifications, recipients] = await Promise.all([
       this.notificationsRepository.listPendingInventoryEmailNotifications(shopId),
       this.alertsRepository.listAdminEmailRecipients(shopId),
@@ -574,14 +589,15 @@ export class AlertsService {
     }
   }
 
-  async dispatchLowStockAlert(event: LowStockAlertEvent) {
-    await this.syncMedicineAlerts(event.shopId, event.medicineId);
-    await this.dispatchPendingInventoryAlertEmails(event.shopId);
+  async dispatchLowStockAlert(event: LowStockAlertEvent & { branchId: string }) {
+    await this.syncMedicineAlerts(event.shopId, event.branchId, event.medicineId);
+    await this.dispatchPendingInventoryAlertEmails(event.shopId, event.branchId);
   }
 
   private async ensureActiveNotification(
     input: {
       shopId: string;
+      branchId?: string;
       conditionKey: string;
       type: "low_stock" | "near_expiry" | "expired_stock" | "customer_due" | "supplier_payable";
       severity: "info" | "warning" | "critical";
@@ -634,6 +650,7 @@ export class AlertsService {
       return this.notificationsRepository.createNotification(
         {
           shopId: input.shopId,
+          ...(input.branchId ? { branchId: input.branchId } : {}),
           type: input.type,
           title: input.title,
           message: input.message,

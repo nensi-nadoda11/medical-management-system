@@ -10,6 +10,7 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import {
   formatCurrency,
   formatDate,
@@ -126,6 +127,9 @@ export const PurchaseDetailPage = () => {
             >
               Back to purchases
             </Link>
+            {purchase.status === "finalized" ? (
+              <DocumentActionGroup id={purchase.id} kind="purchase" />
+            ) : null}
             {isDraft ? (
               <Link
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"

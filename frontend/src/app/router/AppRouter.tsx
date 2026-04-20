@@ -18,11 +18,14 @@ import { AuthPage } from "../../features/auth/pages/AuthPage";
 import { BillingDetailPage } from "../../features/billing/pages/BillingDetailPage";
 import { BillingHistoryPage } from "../../features/billing/pages/BillingHistoryPage";
 import { BillingPage } from "../../features/billing/pages/BillingPage";
+import { BranchesPage } from "../../features/branches/pages/BranchesPage";
+import { DocumentPreviewPage } from "../../features/documents/pages/DocumentPreviewPage";
 import { HeldBillsPage } from "../../features/billing/pages/HeldBillsPage";
 import { SalesReturnDetailPage } from "../../features/sales-returns/pages/SalesReturnDetailPage";
 import { SalesReturnEditorPage } from "../../features/sales-returns/pages/SalesReturnEditorPage";
 import { SalesReturnsPage } from "../../features/sales-returns/pages/SalesReturnsPage";
 import { DashboardHomePage } from "../../features/dashboard/pages/DashboardHomePage";
+import { DataManagementPage } from "../../features/data-management/pages/DataManagementPage";
 import { SetPasswordPage } from "../../features/invitations/pages/SetPasswordPage";
 import { ExpiryReportPage as InventoryExpiryReportPage } from "../../features/inventory/pages/ExpiryReportPage";
 import { InventoryDetailPage } from "../../features/inventory/pages/InventoryDetailPage";
@@ -48,6 +51,7 @@ import { StockReportPage } from "../../features/reports/pages/StockReportPage";
 import { SupplierReportPage } from "../../features/reports/pages/SupplierReportPage";
 import { ShopSetupPage } from "../../features/shop/pages/ShopSetupPage";
 import { StaffManagementPage } from "../../features/staff/pages/StaffManagementPage";
+import { StockTransfersPage } from "../../features/stock-transfers/pages/StockTransfersPage";
 import { SuppliersPage } from "../../features/suppliers/pages/SuppliersPage";
 
 const RootRedirect = () => {
@@ -73,6 +77,7 @@ export const AppRouter = () => (
     <Route element={<SetPasswordPage />} path="/set-password" />
 
     <Route element={<RequireAuth />}>
+      <Route element={<DocumentPreviewPage />} path="/documents/:kind/:id" />
       <Route element={<AppLayout />} path="/app">
         <Route element={<DashboardHomePage />} index />
         <Route element={<NotificationCenterPage />} path="notifications" />
@@ -150,6 +155,11 @@ export const AppRouter = () => (
           <Route element={<InventoryDetailPage />} path="inventory/:medicineId" />
         </Route>
         <Route element={<RequireAdmin />}>
+          <Route element={<StockTransfersPage />} path="inventory/transfers" />
+          <Route element={<BranchesPage />} path="branches" />
+        </Route>
+        <Route element={<RequireAdmin />}>
+          <Route element={<DataManagementPage />} path="data-management" />
           <Route element={<AdminSettingsPage />} path="admin-settings" />
         </Route>
       </Route>

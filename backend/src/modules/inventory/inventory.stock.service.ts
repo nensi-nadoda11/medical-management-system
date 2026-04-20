@@ -25,6 +25,9 @@ const getBatchStatus = (expiryDate: Date, quantityAvailable: number) => {
   return "active" as const;
 };
 
+const resolveBranchId = (batchBranchId: string | null, fallbackBranchId?: string) =>
+  batchBranchId ?? fallbackBranchId;
+
 export class InventoryStockService {
   constructor(
     private readonly inventoryRepository = new InventoryRepository(),
@@ -34,6 +37,7 @@ export class InventoryStockService {
   async postPurchaseStock(
     input: {
       shopId: string;
+      branchId?: string;
       purchaseId: string;
       createdByUserId: string;
       items: Array<{
@@ -52,6 +56,15 @@ export class InventoryStockService {
     },
     executor: DbExecutor,
   ) {
+    if (!input.branchId) {
+      throw buildAppError(
+        500,
+        "BRANCH_CONTEXT_MISSING",
+        "Branch context is required to post purchase stock.",
+      );
+    }
+
+    const branchId = input.branchId;
     const touchedMedicineIds = new Set<string>();
     const postedBatches: Array<{ purchaseItemId: string; batchId: string }> = [];
 
@@ -60,6 +73,7 @@ export class InventoryStockService {
       const batch = await this.inventoryRepository.upsertPurchaseBatch(
         {
           shopId: input.shopId,
+          branchId,
           medicineId: item.medicineId,
           batchNumber: item.batchNumber,
           batchNumberNormalized: item.batchNumberNormalized,
@@ -78,6 +92,7 @@ export class InventoryStockService {
       await this.inventoryRepository.createStockTransaction(
         {
           shopId: input.shopId,
+          branchId,
           medicineId: item.medicineId,
           batchId: batch.id,
           transactionType: "purchase_in",
@@ -100,7 +115,12 @@ export class InventoryStockService {
     }
 
     for (const medicineId of touchedMedicineIds) {
-      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+      await this.alertsService.syncMedicineAlerts(
+        input.shopId,
+        branchId,
+        medicineId,
+        executor,
+      );
     }
 
     return {
@@ -112,6 +132,7 @@ export class InventoryStockService {
   async applyManualAdjustment(
     input: {
       shopId: string;
+      branchId?: string;
       medicineId: string;
       batchId: string;
       adjustmentType: "in" | "out";
@@ -124,6 +145,7 @@ export class InventoryStockService {
   ) {
     const batch = await this.inventoryRepository.findBatchById(
       input.shopId,
+      input.branchId,
       input.batchId,
       executor,
     );
@@ -144,10 +166,17 @@ export class InventoryStockService {
       );
     }
 
+    const batchBranchId = resolveBranchId(batch.branchId, input.branchId);
+
+    if (!batchBranchId) {
+      throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Batch branch is missing.");
+    }
+
     const updatedBatch = await this.inventoryRepository.changeBatchQuantity(
       {
         batchId: input.batchId,
         shopId: input.shopId,
+        branchId: batchBranchId,
         quantityDelta,
         nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
       },
@@ -165,6 +194,7 @@ export class InventoryStockService {
     const adjustment = await this.inventoryRepository.createStockAdjustment(
       {
         shopId: input.shopId,
+        branchId: batchBranchId,
         medicineId: input.medicineId,
         batchId: input.batchId,
         adjustmentType: input.adjustmentType,
@@ -183,6 +213,7 @@ export class InventoryStockService {
     await this.inventoryRepository.createStockTransaction(
       {
         shopId: input.shopId,
+        branchId: batchBranchId,
         medicineId: input.medicineId,
         batchId: input.batchId,
         transactionType:
@@ -200,6 +231,7 @@ export class InventoryStockService {
 
     await this.alertsService.syncMedicineAlerts(
       input.shopId,
+      batchBranchId,
       input.medicineId,
       executor,
     );
@@ -214,6 +246,7 @@ export class InventoryStockService {
   async depleteSaleStock(
     input: {
       shopId: string;
+      branchId?: string;
       saleId: string;
       createdByUserId: string;
       items: Array<{
@@ -226,10 +259,12 @@ export class InventoryStockService {
     executor: DbExecutor,
   ) {
     const touchedMedicineIds = new Set<string>();
+    const touchedMedicineBranchIds = new Map<string, string>();
 
     for (const item of input.items) {
       const batch = await this.inventoryRepository.findBatchById(
         input.shopId,
+        input.branchId,
         item.batchId,
         executor,
       );
@@ -247,6 +282,11 @@ export class InventoryStockService {
       }
 
       const nextAvailableQuantity = batch.quantityAvailable - item.quantity;
+      const batchBranchId = resolveBranchId(batch.branchId, input.branchId);
+
+      if (!batchBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Batch branch is missing.");
+      }
 
       if (nextAvailableQuantity < 0) {
         throw buildAppError(
@@ -260,6 +300,7 @@ export class InventoryStockService {
         {
           batchId: item.batchId,
           shopId: input.shopId,
+          branchId: batchBranchId,
           quantityDelta: -item.quantity,
           nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
         },
@@ -277,6 +318,7 @@ export class InventoryStockService {
       await this.inventoryRepository.createStockTransaction(
         {
           shopId: input.shopId,
+          branchId: batchBranchId,
           medicineId: item.medicineId,
           batchId: item.batchId,
           transactionType: "sale_out",
@@ -292,10 +334,22 @@ export class InventoryStockService {
       );
 
       touchedMedicineIds.add(item.medicineId);
+      touchedMedicineBranchIds.set(item.medicineId, batchBranchId);
     }
 
     for (const medicineId of touchedMedicineIds) {
-      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+      const alertBranchId = input.branchId ?? touchedMedicineBranchIds.get(medicineId);
+
+      if (!alertBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Alert branch is missing.");
+      }
+
+      await this.alertsService.syncMedicineAlerts(
+        input.shopId,
+        alertBranchId,
+        medicineId,
+        executor,
+      );
     }
 
     return {
@@ -306,6 +360,7 @@ export class InventoryStockService {
   async depletePurchaseReturnStock(
     input: {
       shopId: string;
+      branchId?: string;
       purchaseReturnId: string;
       createdByUserId: string;
       items: Array<{
@@ -318,10 +373,12 @@ export class InventoryStockService {
     executor: DbExecutor,
   ) {
     const touchedMedicineIds = new Set<string>();
+    const touchedMedicineBranchIds = new Map<string, string>();
 
     for (const item of input.items) {
       const batch = await this.inventoryRepository.findBatchById(
         input.shopId,
+        input.branchId,
         item.batchId,
         executor,
       );
@@ -331,6 +388,11 @@ export class InventoryStockService {
       }
 
       const nextAvailableQuantity = batch.quantityAvailable - item.quantity;
+      const batchBranchId = resolveBranchId(batch.branchId, input.branchId);
+
+      if (!batchBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Batch branch is missing.");
+      }
 
       if (nextAvailableQuantity < 0) {
         throw buildAppError(
@@ -344,6 +406,7 @@ export class InventoryStockService {
         {
           batchId: item.batchId,
           shopId: input.shopId,
+          branchId: batchBranchId,
           quantityDelta: -item.quantity,
           nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
         },
@@ -361,6 +424,7 @@ export class InventoryStockService {
       await this.inventoryRepository.createStockTransaction(
         {
           shopId: input.shopId,
+          branchId: batchBranchId,
           medicineId: item.medicineId,
           batchId: item.batchId,
           transactionType: "purchase_return_out",
@@ -376,10 +440,22 @@ export class InventoryStockService {
       );
 
       touchedMedicineIds.add(item.medicineId);
+      touchedMedicineBranchIds.set(item.medicineId, batchBranchId);
     }
 
     for (const medicineId of touchedMedicineIds) {
-      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+      const alertBranchId = input.branchId ?? touchedMedicineBranchIds.get(medicineId);
+
+      if (!alertBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Alert branch is missing.");
+      }
+
+      await this.alertsService.syncMedicineAlerts(
+        input.shopId,
+        alertBranchId,
+        medicineId,
+        executor,
+      );
     }
 
     return {
@@ -390,6 +466,7 @@ export class InventoryStockService {
   async restoreSaleReturnStock(
     input: {
       shopId: string;
+      branchId?: string;
       saleReturnId: string;
       createdByUserId: string;
       items: Array<{
@@ -402,10 +479,12 @@ export class InventoryStockService {
     executor: DbExecutor,
   ) {
     const touchedMedicineIds = new Set<string>();
+    const touchedMedicineBranchIds = new Map<string, string>();
 
     for (const item of input.items) {
       const batch = await this.inventoryRepository.findBatchById(
         input.shopId,
+        input.branchId,
         item.batchId,
         executor,
       );
@@ -415,10 +494,17 @@ export class InventoryStockService {
       }
 
       const nextAvailableQuantity = batch.quantityAvailable + item.quantity;
+      const batchBranchId = resolveBranchId(batch.branchId, input.branchId);
+
+      if (!batchBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Batch branch is missing.");
+      }
+
       const updatedBatch = await this.inventoryRepository.changeBatchQuantity(
         {
           batchId: item.batchId,
           shopId: input.shopId,
+          branchId: batchBranchId,
           quantityDelta: item.quantity,
           nextStatus: getBatchStatus(batch.expiryDate, nextAvailableQuantity),
         },
@@ -436,6 +522,7 @@ export class InventoryStockService {
       await this.inventoryRepository.createStockTransaction(
         {
           shopId: input.shopId,
+          branchId: batchBranchId,
           medicineId: item.medicineId,
           batchId: item.batchId,
           transactionType: "sales_return_in",
@@ -451,10 +538,22 @@ export class InventoryStockService {
       );
 
       touchedMedicineIds.add(item.medicineId);
+      touchedMedicineBranchIds.set(item.medicineId, batchBranchId);
     }
 
     for (const medicineId of touchedMedicineIds) {
-      await this.alertsService.syncMedicineAlerts(input.shopId, medicineId, executor);
+      const alertBranchId = input.branchId ?? touchedMedicineBranchIds.get(medicineId);
+
+      if (!alertBranchId) {
+        throw buildAppError(500, "BRANCH_CONTEXT_MISSING", "Alert branch is missing.");
+      }
+
+      await this.alertsService.syncMedicineAlerts(
+        input.shopId,
+        alertBranchId,
+        medicineId,
+        executor,
+      );
     }
 
     return {

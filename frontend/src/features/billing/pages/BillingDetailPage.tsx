@@ -8,6 +8,7 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import {
   formatCurrency,
   formatDate,
@@ -74,6 +75,15 @@ export const BillingDetailPage = () => {
         actions={
           <>
             <BillingModuleNav canCreateBills={canCreateBills} />
+            {bill.status === "completed" ? (
+              <DocumentActionGroup
+                id={bill.id}
+                kind="sale-invoice"
+                pdfVariant="a4"
+                previewVariant="a4"
+                printVariant="compact"
+              />
+            ) : null}
             {canCreateBills && bill.status === "held" ? (
               <Link
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"

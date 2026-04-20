@@ -1,7 +1,9 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
+import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
@@ -12,15 +14,25 @@ import {
   getReportsDashboardSummary,
   reportsQueryKeys,
 } from "../api/reports";
+import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportsNav } from "../components/ReportsNav";
 
 export const ReportsDashboardPage = () => {
   const sessionQuery = useSessionQuery();
   const role = sessionQuery.data?.user.role;
+  const [branchId, setBranchId] = useState("");
+  const [combineBranches, setCombineBranches] = useState(false);
+  const params = useMemo(
+    () => ({
+      branchId: branchId || undefined,
+      combineBranches: combineBranches || undefined,
+    }),
+    [branchId, combineBranches],
+  );
 
   const dashboardQuery = useQuery({
-    queryKey: reportsQueryKeys.dashboard,
-    queryFn: () => getReportsDashboardSummary({}),
+    queryKey: reportsQueryKeys.dashboard(params),
+    queryFn: () => getReportsDashboardSummary(params),
   });
 
   if (!role || dashboardQuery.isLoading) {
@@ -47,6 +59,20 @@ export const ReportsDashboardPage = () => {
         eyebrow="Reports & Analytics"
         title="Reports dashboard"
       />
+
+      <FilterBar
+        description="Switch between the active branch and combined branch summary when multiple branches are available."
+        title="Report scope"
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <BranchScopeControl
+            branchId={branchId}
+            combineBranches={combineBranches}
+            onBranchIdChange={setBranchId}
+            onCombineBranchesChange={setCombineBranches}
+          />
+        </div>
+      </FilterBar>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <SummaryCard

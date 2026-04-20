@@ -13,6 +13,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime } from "../../../lib/utils";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import { purchasesQueryKeys } from "../../purchases/api/purchases";
 import { suppliersQueryKeys } from "../../suppliers/api/suppliers";
 import { AccountingModuleNav } from "../components/AccountingModuleNav";
@@ -258,6 +259,14 @@ export const SupplierAccountingPage = () => {
                       </div>
                     ))}
                   </dl>
+                  <div className="mt-3">
+                    <DocumentActionGroup
+                      compact
+                      id={item.id}
+                      kind="supplier-receipt"
+                      showPreview={false}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
@@ -366,6 +375,7 @@ export const SupplierAccountingPage = () => {
                     <th className="px-4">Linked purchase</th>
                     <th className="px-4">Status</th>
                     <th className="px-4">Operator</th>
+                    <th className="px-4">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -385,7 +395,17 @@ export const SupplierAccountingPage = () => {
                         {item.linkedPurchase?.purchaseNumber || (item.allocations.length ? `${item.allocations.length} purchases` : "Advance / general")}
                       </td>
                       <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-700">{item.paidBy.fullName}</td>
+                      <td className="px-4 py-4 text-sm text-slate-700">
+                        {item.paidBy.fullName}
+                      </td>
+                      <td className="rounded-r-3xl px-4 py-4">
+                        <DocumentActionGroup
+                          compact
+                          id={item.id}
+                          kind="supplier-receipt"
+                          showPreview={false}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -2,7 +2,10 @@ import type { NextFunction, Request, Response } from "express";
 
 import { env } from "../../config/env";
 import { AppError } from "../../shared/errors/app-error";
+import { BranchesService } from "../branches/branches.service";
 import { authService } from "./auth.service";
+
+const branchesService = new BranchesService();
 
 export const requireAuth = async (
   req: Request,
@@ -32,6 +35,17 @@ export const requireAuth = async (
 
     req.authSession = session;
     req.authenticatedUser = session.user;
+    const requestedBranchId = req.header("x-branch-id");
+    const branchAccess = await branchesService.resolveRequestBranchContext({
+      shopId: session.user.shopId,
+      userId: session.user.id,
+      role: session.user.role,
+      ...(typeof requestedBranchId === "string" && requestedBranchId.length
+        ? { requestedBranchId }
+        : {}),
+    });
+    req.authBranchAccess = branchAccess;
+    req.authBranch = branchAccess.currentBranch;
     next();
   } catch (error) {
     next(error);

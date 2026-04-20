@@ -35,11 +35,12 @@ export class NotificationsService {
 
   async listNotifications(
     shopId: string,
+    branchId: string,
     user: PublicUser,
     query: ListNotificationsQuery,
   ) {
-    await this.alertsService.syncShopAlerts(shopId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    await this.alertsService.syncShopAlerts(shopId, branchId);
+    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 
@@ -73,9 +74,9 @@ export class NotificationsService {
     );
   }
 
-  async getUnreadCount(shopId: string, user: PublicUser) {
-    await this.alertsService.syncShopAlerts(shopId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+  async getUnreadCount(shopId: string, branchId: string, user: PublicUser) {
+    await this.alertsService.syncShopAlerts(shopId, branchId);
+    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 
@@ -87,9 +88,9 @@ export class NotificationsService {
     };
   }
 
-  async getSummary(shopId: string, user: PublicUser) {
-    await this.alertsService.syncShopAlerts(shopId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+  async getSummary(shopId: string, branchId: string, user: PublicUser) {
+    await this.alertsService.syncShopAlerts(shopId, branchId);
+    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 

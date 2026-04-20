@@ -75,7 +75,10 @@ export const authController = {
   getSession: asyncHandler(async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
-      data: req.authSession,
+      data: {
+        ...req.authSession,
+        branchContext: req.authBranchAccess,
+      },
     });
   }),
 

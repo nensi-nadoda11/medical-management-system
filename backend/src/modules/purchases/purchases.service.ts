@@ -327,15 +327,15 @@ export class PurchasesService {
     private readonly purchaseReturnsRepository = new PurchaseReturnsRepository(),
   ) {}
 
-  async listPurchases(shopId: string, query: ListPurchasesQuery) {
+  async listPurchases(shopId: string, branchId: string, query: ListPurchasesQuery) {
     const normalizedQuery = {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
 
     const [items, total] = await Promise.all([
-      this.purchasesRepository.listPurchases(shopId, normalizedQuery),
-      this.purchasesRepository.countPurchases(shopId, normalizedQuery),
+      this.purchasesRepository.listPurchases(shopId, branchId, normalizedQuery),
+      this.purchasesRepository.countPurchases(shopId, branchId, normalizedQuery),
     ]);
 
     return buildPaginatedResponse(
@@ -346,9 +346,10 @@ export class PurchasesService {
     );
   }
 
-  async getPurchaseById(shopId: string, purchaseId: string) {
+  async getPurchaseById(shopId: string, branchId: string, purchaseId: string) {
     const purchase = await this.purchasesRepository.findPurchaseDetailById(
       shopId,
+      branchId,
       purchaseId,
     );
 
@@ -386,7 +387,12 @@ export class PurchasesService {
     });
   }
 
-  async createPurchase(shopId: string, userId: string, input: CreatePurchaseInput) {
+  async createPurchase(
+    shopId: string,
+    branchId: string,
+    userId: string,
+    input: CreatePurchaseInput,
+  ) {
     const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
 
     if (!settings.allowDraftPurchases) {
@@ -422,6 +428,7 @@ export class PurchasesService {
       const duplicateInvoice =
         await this.purchasesRepository.findDuplicateSupplierInvoice(
           shopId,
+          branchId,
           input.supplierId,
           normalizedInvoiceNumber,
         );
@@ -462,6 +469,7 @@ export class PurchasesService {
       const purchase = await this.purchasesRepository.createPurchase(
         {
           shopId,
+          branchId,
           supplierId: input.supplierId,
           purchaseNumber,
           purchaseNumberNormalized: normalizeSearchValue(purchaseNumber),
@@ -515,11 +523,12 @@ export class PurchasesService {
       return purchase;
     });
 
-    return this.getPurchaseById(shopId, createdPurchase.id);
+    return this.getPurchaseById(shopId, branchId, createdPurchase.id);
   }
 
   async updateDraftPurchase(
     shopId: string,
+    branchId: string,
     purchaseId: string,
     userId: string,
     input: UpdateDraftPurchaseInput,
@@ -536,6 +545,7 @@ export class PurchasesService {
 
     const existingPurchase = await this.purchasesRepository.findPurchaseById(
       shopId,
+      branchId,
       purchaseId,
     );
 
@@ -576,6 +586,7 @@ export class PurchasesService {
       const duplicateInvoice =
         await this.purchasesRepository.findDuplicateSupplierInvoice(
           shopId,
+          branchId,
           input.supplierId,
           normalizedInvoiceNumber,
           purchaseId,
@@ -649,6 +660,7 @@ export class PurchasesService {
       await this.purchasesRepository.replacePurchaseItems(
         purchaseId,
         shopId,
+        branchId,
         calculated.items.map((item) => ({
           medicineId: item.medicineId,
           batchNumber: item.batchNumber,
@@ -669,15 +681,21 @@ export class PurchasesService {
       );
     });
 
-    return this.getPurchaseById(shopId, purchaseId);
+    return this.getPurchaseById(shopId, branchId, purchaseId);
   }
 
-  async finalizePurchase(shopId: string, purchaseId: string, userId: string) {
+  async finalizePurchase(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    userId: string,
+  ) {
     let supplierId: string | null = null;
 
     await db.transaction(async (tx) => {
       const purchase = await this.purchasesRepository.findPurchaseById(
         shopId,
+        branchId,
         purchaseId,
         tx,
       );
@@ -696,6 +714,7 @@ export class PurchasesService {
 
       const items = await this.purchasesRepository.listPurchaseItemsByPurchaseId(
         purchaseId,
+        branchId,
         tx,
       );
 
@@ -710,6 +729,7 @@ export class PurchasesService {
       const stockPostingResult = await this.inventoryStockService.postPurchaseStock(
         {
           shopId,
+          branchId,
           purchaseId,
           createdByUserId: userId,
           items: items.map((item) => ({
@@ -756,23 +776,25 @@ export class PurchasesService {
       );
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     if (supplierId) {
       await this.alertsService.syncSupplierPayableNotification(shopId, supplierId);
     }
 
-    return this.getPurchaseById(shopId, purchaseId);
+    return this.getPurchaseById(shopId, branchId, purchaseId);
   }
 
   async cancelPurchase(
     shopId: string,
+    branchId: string,
     purchaseId: string,
     userId: string,
     input: CancelPurchaseInput,
   ) {
     const purchase = await this.purchasesRepository.findPurchaseById(
       shopId,
+      branchId,
       purchaseId,
     );
 
@@ -803,6 +825,6 @@ export class PurchasesService {
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
     }, db);
 
-    return this.getPurchaseById(shopId, purchaseId);
+    return this.getPurchaseById(shopId, branchId, purchaseId);
   }
 }

@@ -903,6 +903,47 @@ export class AccountingRepository {
     return result?.total ?? 0;
   }
 
+  async getOutstandingCustomersSummary(
+    shopId: string,
+    query: ListOutstandingCustomersQuery,
+  ) {
+    const summary = customerSummarySubquery(shopId);
+    const filters = [
+      eq(customers.shopId, shopId),
+      sql`${summary.outstandingAmount} > 0`,
+    ];
+
+    if (query.search) {
+      const digits = query.search.replace(/\D/g, "");
+      filters.push(
+        or(
+          like(customers.fullNameNormalized, `%${query.search}%`),
+          like(customers.customerCode, `%${query.search}%`),
+          like(customers.mobileNumber, `%${digits || query.search}%`),
+        )!,
+      );
+    }
+
+    const [result] = await getDbExecutor()
+      .select({
+        entityCount: count(),
+        openBillCount: sql<number>`coalesce(sum(${summary.openBillCount}), 0)`,
+        totalOutstandingAmount:
+          sql<string>`coalesce(sum(${summary.outstandingAmount}), 0.00)`,
+        totalAdvanceAmount: sql<string>`coalesce(sum(${summary.advanceAmount}), 0.00)`,
+      })
+      .from(customers)
+      .innerJoin(summary, eq(summary.customerId, customers.id))
+      .where(and(...filters));
+
+    return {
+      entityCount: result?.entityCount ?? 0,
+      openBillCount: Number(result?.openBillCount ?? 0),
+      totalOutstandingAmount: result?.totalOutstandingAmount ?? "0.00",
+      totalAdvanceAmount: result?.totalAdvanceAmount ?? "0.00",
+    };
+  }
+
   async getCustomerFinancialSummary(shopId: string, customerId: string) {
     const summary = customerSummarySubquery(shopId);
     const [row] = await getDbExecutor()
@@ -1126,6 +1167,47 @@ export class AccountingRepository {
       .where(and(...filters));
 
     return result?.total ?? 0;
+  }
+
+  async getOutstandingSuppliersSummary(
+    shopId: string,
+    query: ListOutstandingSuppliersQuery,
+  ) {
+    const summary = supplierSummarySubquery(shopId);
+    const filters = [
+      eq(suppliers.shopId, shopId),
+      sql`${summary.outstandingAmount} > 0`,
+    ];
+
+    if (query.search) {
+      const digits = query.search.replace(/\D/g, "");
+      filters.push(
+        or(
+          like(suppliers.supplierNameNormalized, `%${query.search}%`),
+          like(suppliers.mobileNumber, `%${digits || query.search}%`),
+          like(suppliers.companyNameNormalized, `%${query.search}%`),
+        )!,
+      );
+    }
+
+    const [result] = await getDbExecutor()
+      .select({
+        entityCount: count(),
+        openPurchaseCount: sql<number>`coalesce(sum(${summary.openPurchaseCount}), 0)`,
+        totalOutstandingAmount:
+          sql<string>`coalesce(sum(${summary.outstandingAmount}), 0.00)`,
+        totalAdvanceAmount: sql<string>`coalesce(sum(${summary.advanceAmount}), 0.00)`,
+      })
+      .from(suppliers)
+      .innerJoin(summary, eq(summary.supplierId, suppliers.id))
+      .where(and(...filters));
+
+    return {
+      entityCount: result?.entityCount ?? 0,
+      openPurchaseCount: Number(result?.openPurchaseCount ?? 0),
+      totalOutstandingAmount: result?.totalOutstandingAmount ?? "0.00",
+      totalAdvanceAmount: result?.totalAdvanceAmount ?? "0.00",
+    };
   }
 
   async getSupplierFinancialSummary(shopId: string, supplierId: string) {

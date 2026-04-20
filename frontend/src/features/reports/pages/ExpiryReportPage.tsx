@@ -18,6 +18,7 @@ import {
   getExpiryReport,
   reportsQueryKeys,
 } from "../api/reports";
+import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
@@ -30,6 +31,8 @@ export const ExpiryReportPage = () => {
   const [search, setSearch] = useState("");
   const [medicineId, setMedicineId] = useState("");
   const [expiryWindow, setExpiryWindow] = useState<"expired" | "30" | "60" | "90">("30");
+  const [branchId, setBranchId] = useState("");
+  const [combineBranches, setCombineBranches] = useState(false);
   const [sortBy, setSortBy] = useState<"expiryDate" | "medicineName">("expiryDate");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
@@ -41,12 +44,14 @@ export const ExpiryReportPage = () => {
       search: deferredSearch || undefined,
       medicineId: medicineId || undefined,
       expiryWindow,
+      branchId: branchId || undefined,
+      combineBranches: combineBranches || undefined,
       sortBy,
       sortOrder,
       page,
       pageSize: 10,
     }),
-    [deferredSearch, expiryWindow, medicineId, page, sortBy, sortOrder],
+    [branchId, combineBranches, deferredSearch, expiryWindow, medicineId, page, sortBy, sortOrder],
   );
 
   const reportQuery = useQuery({
@@ -204,6 +209,18 @@ export const ExpiryReportPage = () => {
               <option value="90">Next 90 days</option>
             </select>
           </label>
+          <BranchScopeControl
+            branchId={branchId}
+            combineBranches={combineBranches}
+            onBranchIdChange={(value) => {
+              setBranchId(value);
+              setPage(1);
+            }}
+            onCombineBranchesChange={(value) => {
+              setCombineBranches(value);
+              setPage(1);
+            }}
+          />
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select

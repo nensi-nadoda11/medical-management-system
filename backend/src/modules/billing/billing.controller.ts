@@ -8,6 +8,7 @@ const getUserId = (req: Request) =>
   (req.authenticatedUser ?? req.authSession!.user).id;
 const getRouteId = (req: Request) => req.params.id as string;
 const getMedicineId = (req: Request) => req.params.medicineId as string;
+const getBranchId = (req: Request) => req.authBranch!.id;
 
 export class BillingController {
   constructor(private readonly billingService = new BillingService()) {}
@@ -16,6 +17,7 @@ export class BillingController {
     try {
       const result = await this.billingService.listBills(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -29,6 +31,7 @@ export class BillingController {
     try {
       const result = await this.billingService.getBillById(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
       );
 
@@ -42,6 +45,7 @@ export class BillingController {
     try {
       const result = await this.billingService.createHeldBill(
         getShopId(req),
+        getBranchId(req),
         getUserId(req),
         req.body,
       );
@@ -59,6 +63,7 @@ export class BillingController {
     try {
       const result = await this.billingService.updateHeldBill(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
         getUserId(req),
         req.body,
@@ -81,6 +86,7 @@ export class BillingController {
     try {
       const result = await this.billingService.createCompletedBill(
         getShopId(req),
+        getBranchId(req),
         getUserId(req),
         req.body,
       );
@@ -98,6 +104,7 @@ export class BillingController {
     try {
       const result = await this.billingService.completeHeldBill(
         getShopId(req),
+        getBranchId(req),
         getRouteId(req),
         getUserId(req),
       );
@@ -119,6 +126,7 @@ export class BillingController {
     try {
       const result = await this.billingService.searchSellableMedicines(
         getShopId(req),
+        getBranchId(req),
         (req.validatedQuery ?? req.query) as never,
       );
 
@@ -136,6 +144,7 @@ export class BillingController {
     try {
       const result = await this.billingService.getSellableMedicineOptions(
         getShopId(req),
+        getBranchId(req),
         getMedicineId(req),
       );
 

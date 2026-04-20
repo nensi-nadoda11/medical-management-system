@@ -12,6 +12,7 @@ import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime, humanizeLabel } from "../../../lib/utils";
 import { billingQueryKeys } from "../../billing/api/billing";
 import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   cancelSalesReturn,
@@ -109,6 +110,9 @@ export const SalesReturnDetailPage = () => {
         actions={
           <>
             <BillingModuleNav canCreateBills={canManageReturns} />
+            {salesReturn.status === "completed" ? (
+              <DocumentActionGroup id={salesReturn.id} kind="sale-return" />
+            ) : null}
             <Link
               className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               to={`/app/billing/${salesReturn.saleId}`}

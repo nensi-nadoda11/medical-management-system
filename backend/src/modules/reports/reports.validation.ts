@@ -29,13 +29,17 @@ const dateRangeQuerySchema = z.object({
 });
 
 const exportFormatSchema = z.enum(["xlsx", "pdf"]);
+const branchScopeQuerySchema = z.object({
+  branchId: z.string().uuid().optional(),
+  combineBranches: z.coerce.boolean().default(false),
+});
 
 export const getDashboardSummarySchema = z.object({
-  query: dateRangeQuerySchema,
+  query: dateRangeQuerySchema.merge(branchScopeQuerySchema),
 });
 
 export const listSalesReportSchema = z.object({
-  query: paginationQuerySchema.merge(dateRangeQuerySchema).extend({
+  query: paginationQuerySchema.merge(dateRangeQuerySchema).merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     groupBy: z.enum(["day", "month"]).default("day"),
     paymentMethod: z
@@ -54,7 +58,7 @@ export const exportSalesReportSchema = z.object({
 });
 
 export const listProfitReportSchema = z.object({
-  query: paginationQuerySchema.merge(dateRangeQuerySchema).extend({
+  query: paginationQuerySchema.merge(dateRangeQuerySchema).merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     groupBy: z.enum(["day", "month"]).default("day"),
     sortBy: z.enum(["completedAt", "revenue", "profit"]).default("completedAt"),
@@ -68,7 +72,7 @@ export const exportProfitReportSchema = z.object({
 });
 
 export const listStockReportSchema = z.object({
-  query: paginationQuerySchema.extend({
+  query: paginationQuerySchema.merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     categoryId: z.string().uuid().optional(),
     manufacturerId: z.string().uuid().optional(),
@@ -86,7 +90,7 @@ export const exportStockReportSchema = z.object({
 });
 
 export const listLowStockReportSchema = z.object({
-  query: paginationQuerySchema.extend({
+  query: paginationQuerySchema.merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     categoryId: z.string().uuid().optional(),
     manufacturerId: z.string().uuid().optional(),
@@ -103,7 +107,7 @@ export const exportLowStockReportSchema = z.object({
 });
 
 export const listExpiryReportSchema = z.object({
-  query: paginationQuerySchema.extend({
+  query: paginationQuerySchema.merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     medicineId: z.string().uuid().optional(),
     expiryWindow: z.enum(["expired", "30", "60", "90"]).default("30"),
@@ -118,7 +122,7 @@ export const exportExpiryReportSchema = z.object({
 });
 
 export const listSupplierReportSchema = z.object({
-  query: paginationQuerySchema.merge(dateRangeQuerySchema).extend({
+  query: paginationQuerySchema.merge(dateRangeQuerySchema).merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
     supplierId: z.string().uuid().optional(),
     sortBy: z

@@ -15,6 +15,7 @@ import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime } from "../../../lib/utils";
 import { billingQueryKeys } from "../../billing/api/billing";
 import { customersQueryKeys } from "../../customers/api/customers";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import { AccountingModuleNav } from "../components/AccountingModuleNav";
 import { CustomerPaymentEntryModal } from "../components/CustomerPaymentEntryModal";
 import {
@@ -258,6 +259,14 @@ export const CustomerAccountingPage = () => {
                       </div>
                     ))}
                   </dl>
+                  <div className="mt-3">
+                    <DocumentActionGroup
+                      compact
+                      id={item.id}
+                      kind="customer-receipt"
+                      showPreview={false}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
@@ -366,6 +375,7 @@ export const CustomerAccountingPage = () => {
                     <th className="px-4">Linked bill</th>
                     <th className="px-4">Status</th>
                     <th className="px-4">Operator</th>
+                    <th className="px-4">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -385,7 +395,17 @@ export const CustomerAccountingPage = () => {
                         {item.linkedSale?.billNumber || (item.allocations.length ? `${item.allocations.length} bills` : "Advance / general")}
                       </td>
                       <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-700">{item.receivedBy.fullName}</td>
+                      <td className="px-4 py-4 text-sm text-slate-700">
+                        {item.receivedBy.fullName}
+                      </td>
+                      <td className="rounded-r-3xl px-4 py-4">
+                        <DocumentActionGroup
+                          compact
+                          id={item.id}
+                          kind="customer-receipt"
+                          showPreview={false}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

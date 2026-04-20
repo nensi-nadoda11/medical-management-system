@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { LoadingState } from "../ui/LoadingState";
 import { useSessionQuery } from "../../features/auth/hooks/use-session";
-import { hasPermission } from "../../types/auth";
+import { canAccessModule } from "../../types/auth";
 import type { AdminPermissionKey } from "../../types/admin-settings";
 
 export const RequireAuth = () => {
@@ -92,10 +92,10 @@ export const RequirePermissions = ({
   }
 
   const session = sessionQuery.data;
-  const allowed =
-    mode === "all"
-      ? permissions.every((permission) => hasPermission(session.user, permission))
-      : permissions.some((permission) => hasPermission(session.user, permission));
+  const allowed = canAccessModule(session.user, {
+    permissions,
+    permissionMode: mode,
+  });
 
   if (!allowed) {
     return <Navigate replace to="/app" />;

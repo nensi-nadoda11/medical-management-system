@@ -17,6 +17,7 @@ import {
 } from "../../../lib/utils";
 import { accountingQueryKeys } from "../../accounting/api/accounting";
 import { useSessionQuery } from "../../auth/hooks/use-session";
+import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import { purchasesQueryKeys } from "../../purchases/api/purchases";
 import { hasPermission } from "../../../types/auth";
@@ -130,6 +131,9 @@ export const PurchaseReturnDetailPage = () => {
             >
               View purchase
             </Link>
+            {purchaseReturn.status === "completed" ? (
+              <DocumentActionGroup id={purchaseReturn.id} kind="purchase-return" />
+            ) : null}
             {canEditDraft && purchaseReturn.status === "draft" ? (
               <Link
                 className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"

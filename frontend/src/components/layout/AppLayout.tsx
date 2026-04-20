@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useToast } from "../../hooks/use-toast";
 import { AUTH_EXPIRED_EVENT } from "../../lib/api";
+import { setStoredBranchId, syncStoredBranchId } from "../../lib/branch-context";
 import { cn } from "../../lib/utils";
 import { authService } from "../../services/auth";
 import { authQueryKeys, useSessionQuery } from "../../features/auth/hooks/use-session";
@@ -12,19 +13,19 @@ import {
   getNotificationSummary,
   notificationsQueryKeys,
 } from "../../features/notifications/api/notifications";
-import { hasPermission } from "../../types/auth";
+import { canAccessModule } from "../../types/auth";
 import type { AdminPermissionKey } from "../../types/admin-settings";
 
 type NavigationItem = {
   label: string;
-  roles: Array<"admin" | "staff" | "accountant">;
+  roles?: Array<"admin" | "staff" | "accountant">;
   permissions?: AdminPermissionKey[];
   resolveTo: (role: "admin" | "staff" | "accountant") => string;
 };
 
 const navigation: NavigationItem[] = [
   {
-    label: "Overview",
+    label: "Dashboard",
     roles: ["admin", "staff", "accountant"] as const,
     resolveTo: () => "/app",
   },
@@ -66,31 +67,26 @@ const navigation: NavigationItem[] = [
   },
   {
     label: "Shop Setup",
-    roles: ["admin"] as const,
     permissions: ["shop.view"],
     resolveTo: () => "/app/shop-setup",
   },
   {
     label: "Staff Management",
-    roles: ["admin"] as const,
     permissions: ["users.view"],
     resolveTo: () => "/app/staff-management",
   },
   {
     label: "Medicines",
-    roles: ["admin"] as const,
     permissions: ["medicines.view"],
     resolveTo: () => "/app/medicines",
   },
   {
     label: "Suppliers",
-    roles: ["admin"] as const,
     permissions: ["suppliers.view"],
     resolveTo: () => "/app/suppliers",
   },
   {
     label: "Purchases",
-    roles: ["admin"] as const,
     permissions: ["purchases.view"],
     resolveTo: () => "/app/purchases",
   },
@@ -102,9 +98,24 @@ const navigation: NavigationItem[] = [
   },
   {
     label: "Inventory",
-    roles: ["admin"] as const,
     permissions: ["inventory.view"],
     resolveTo: () => "/app/inventory",
+  },
+  {
+    label: "Stock Transfers",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/inventory/transfers",
+  },
+  {
+    label: "Branches",
+    roles: ["admin"] as const,
+    permissions: ["shop.manage"],
+    resolveTo: () => "/app/branches",
+  },
+  {
+    label: "Data Management",
+    roles: ["admin"] as const,
+    resolveTo: () => "/app/data-management",
   },
   {
     label: "Admin Settings",
@@ -199,18 +210,32 @@ export const AppLayout = () => {
     };
   }, []);
 
-  if (!sessionQuery.data) {
+  const session = sessionQuery.data;
+  const branchContext = session?.branchContext;
+  const accessibleBranches = branchContext?.accessibleBranches ?? [];
+
+  useEffect(() => {
+    if (!branchContext) {
+      return;
+    }
+
+    syncStoredBranchId(
+      branchContext.accessibleBranches.map((branch) => branch.id),
+      branchContext.currentBranch.id,
+    );
+  }, [branchContext]);
+
+  if (!session) {
     return null;
   }
 
-  const session = sessionQuery.data;
   const visibleNavigation = navigation
-    .filter(
-      (item) =>
-        item.roles.includes(session.user.role) &&
-        (item.permissions ?? []).every((permission) =>
-          hasPermission(session.user, permission),
-        ),
+    .filter((item) =>
+      canAccessModule(session.user, {
+        roles: item.roles,
+        permissions: item.permissions,
+        permissionMode: "all",
+      }),
     )
     .map((item) => ({
       label: item.label,
@@ -240,6 +265,11 @@ export const AppLayout = () => {
                 <p className="mt-1 text-sm text-slate-300">
                   Signed in as {session.user.role}
                 </p>
+                {branchContext ? (
+                  <p className="mt-2 text-sm text-slate-300">
+                    Branch {branchContext.currentBranch.name}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -287,6 +317,39 @@ export const AppLayout = () => {
               </div>
 
               <div className="flex items-center gap-2.5">
+                {accessibleBranches.length > 1 ? (
+                  <label className="hidden min-w-[220px] grid gap-1.5 lg:grid">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Branch
+                    </span>
+                    <select
+                      className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                      onChange={async (event) => {
+                        const nextBranchId = event.target.value;
+                        setStoredBranchId(nextBranchId);
+                        await Promise.all([
+                          queryClient.invalidateQueries(),
+                          queryClient.invalidateQueries({
+                            queryKey: authQueryKeys.session,
+                          }),
+                        ]);
+                        pushToast({
+                          title: "Branch switched",
+                          description: "Workspace data has been refreshed for the selected branch.",
+                          variant: "success",
+                        });
+                      }}
+                      value={branchContext?.currentBranch.id ?? ""}
+                    >
+                      {accessibleBranches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.code})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
                 <div className="relative" ref={notificationMenuRef}>
                   <button
                     aria-expanded={isNotificationMenuOpen}

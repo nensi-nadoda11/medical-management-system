@@ -37,7 +37,8 @@ export interface CreateAuditLogInput {
     | "sales_returns"
     | "purchase_returns"
     | "accounting"
-    | "notifications";
+    | "notifications"
+    | "data_management";
   action: string;
   entityType: string;
   entityId: string;

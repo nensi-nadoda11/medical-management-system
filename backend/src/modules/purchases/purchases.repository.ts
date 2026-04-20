@@ -16,8 +16,12 @@ import { medicines, purchaseItems, purchases, suppliers } from "../../db/schema"
 import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 import type { ListPurchasesQuery } from "./purchases.validation";
 
-const buildPurchaseFilters = (shopId: string, query: ListPurchasesQuery) => {
-  const filters = [eq(purchases.shopId, shopId)];
+const buildPurchaseFilters = (
+  shopId: string,
+  branchId: string,
+  query: ListPurchasesQuery,
+) => {
+  const filters = [eq(purchases.shopId, shopId), eq(purchases.branchId, branchId)];
 
   if (query.search) {
     filters.push(
@@ -77,12 +81,23 @@ export class PurchasesRepository {
       );
   }
 
-  async findPurchaseById(shopId: string, purchaseId: string, executor?: DbExecutor) {
+  async findPurchaseById(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    executor?: DbExecutor,
+  ) {
     const database = getDbExecutor(executor);
     const [purchase] = await database
       .select()
       .from(purchases)
-      .where(and(eq(purchases.id, purchaseId), eq(purchases.shopId, shopId)))
+      .where(
+        and(
+          eq(purchases.id, purchaseId),
+          eq(purchases.shopId, shopId),
+          eq(purchases.branchId, branchId),
+        ),
+      )
       .limit(1);
 
     return purchase ?? null;
@@ -90,6 +105,7 @@ export class PurchasesRepository {
 
   async findPurchaseDetailById(
     shopId: string,
+    branchId: string,
     purchaseId: string,
     executor?: DbExecutor,
   ) {
@@ -110,7 +126,13 @@ export class PurchasesRepository {
       })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(and(eq(purchases.id, purchaseId), eq(purchases.shopId, shopId)))
+      .where(
+        and(
+          eq(purchases.id, purchaseId),
+          eq(purchases.shopId, shopId),
+          eq(purchases.branchId, branchId),
+        ),
+      )
       .limit(1);
 
     if (!purchaseRecord) {
@@ -132,7 +154,12 @@ export class PurchasesRepository {
       })
       .from(purchaseItems)
       .innerJoin(medicines, eq(purchaseItems.medicineId, medicines.id))
-      .where(eq(purchaseItems.purchaseId, purchaseId))
+      .where(
+        and(
+          eq(purchaseItems.purchaseId, purchaseId),
+          eq(purchaseItems.branchId, branchId),
+        ),
+      )
       .orderBy(asc(purchaseItems.createdAt), asc(purchaseItems.id));
 
     return {
@@ -143,6 +170,7 @@ export class PurchasesRepository {
 
   async findDuplicateSupplierInvoice(
     shopId: string,
+    branchId: string,
     supplierId: string,
     supplierInvoiceNumberNormalized: string,
     excludePurchaseId?: string,
@@ -151,6 +179,7 @@ export class PurchasesRepository {
     const database = getDbExecutor(executor);
     const filters = [
       eq(purchases.shopId, shopId),
+      eq(purchases.branchId, branchId),
       eq(purchases.supplierId, supplierId),
       eq(
         purchases.supplierInvoiceNumberNormalized,
@@ -171,7 +200,7 @@ export class PurchasesRepository {
     return purchase ?? null;
   }
 
-  async listPurchases(shopId: string, query: ListPurchasesQuery) {
+  async listPurchases(shopId: string, branchId: string, query: ListPurchasesQuery) {
     const orderBy =
       query.sortBy === "createdAt"
         ? [
@@ -214,24 +243,26 @@ export class PurchasesRepository {
       })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(buildPurchaseFilters(shopId, query))
+      .where(buildPurchaseFilters(shopId, branchId, query))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countPurchases(shopId: string, query: ListPurchasesQuery) {
+  async countPurchases(shopId: string, branchId: string, query: ListPurchasesQuery) {
     const [result] = await getDbExecutor()
       .select({ total: count() })
       .from(purchases)
-      .where(buildPurchaseFilters(shopId, query));
+      .where(buildPurchaseFilters(shopId, branchId, query));
 
     return result?.total ?? 0;
   }
 
   async createPurchase(
     payload: typeof purchases.$inferInsert,
-    items: Array<Omit<typeof purchaseItems.$inferInsert, "purchaseId" | "shopId">>,
+    items: Array<
+      Omit<typeof purchaseItems.$inferInsert, "purchaseId" | "shopId" | "branchId">
+    >,
     executor: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
@@ -247,6 +278,7 @@ export class PurchasesRepository {
           ...item,
           purchaseId: purchase.id,
           shopId: payload.shopId,
+          branchId: payload.branchId,
         })),
       );
     }
@@ -275,7 +307,10 @@ export class PurchasesRepository {
   async replacePurchaseItems(
     purchaseId: string,
     shopId: string,
-    items: Array<Omit<typeof purchaseItems.$inferInsert, "purchaseId" | "shopId">>,
+    branchId: string,
+    items: Array<
+      Omit<typeof purchaseItems.$inferInsert, "purchaseId" | "shopId" | "branchId">
+    >,
     executor: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
@@ -287,22 +322,29 @@ export class PurchasesRepository {
 
     await database.insert(purchaseItems).values(
       items.map((item) => ({
-        ...item,
-        purchaseId,
-        shopId,
-      })),
+          ...item,
+          purchaseId,
+          shopId,
+          branchId,
+        })),
     );
   }
 
   async listPurchaseItemsByPurchaseId(
     purchaseId: string,
+    branchId: string,
     executor?: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
     return database
       .select()
       .from(purchaseItems)
-      .where(eq(purchaseItems.purchaseId, purchaseId))
+      .where(
+        and(
+          eq(purchaseItems.purchaseId, purchaseId),
+          eq(purchaseItems.branchId, branchId),
+        ),
+      )
       .orderBy(asc(purchaseItems.createdAt), asc(purchaseItems.id));
   }
 

@@ -21,6 +21,7 @@ import {
   getLowStockReport,
   reportsQueryKeys,
 } from "../api/reports";
+import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
@@ -33,6 +34,8 @@ export const LowStockReportPage = () => {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [manufacturerId, setManufacturerId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [combineBranches, setCombineBranches] = useState(false);
   const [sortBy, setSortBy] = useState<
     "medicineName" | "availableQuantity" | "reorderLevel" | "shortage"
   >("shortage");
@@ -46,12 +49,14 @@ export const LowStockReportPage = () => {
       search: deferredSearch || undefined,
       categoryId: categoryId || undefined,
       manufacturerId: manufacturerId || undefined,
+      branchId: branchId || undefined,
+      combineBranches: combineBranches || undefined,
       sortBy,
       sortOrder,
       page,
       pageSize: 10,
     }),
-    [categoryId, deferredSearch, manufacturerId, page, sortBy, sortOrder],
+    [branchId, categoryId, combineBranches, deferredSearch, manufacturerId, page, sortBy, sortOrder],
   );
 
   const reportQuery = useQuery({
@@ -222,6 +227,18 @@ export const LowStockReportPage = () => {
               ))}
             </select>
           </label>
+          <BranchScopeControl
+            branchId={branchId}
+            combineBranches={combineBranches}
+            onBranchIdChange={(value) => {
+              setBranchId(value);
+              setPage(1);
+            }}
+            onCombineBranchesChange={(value) => {
+              setCombineBranches(value);
+              setPage(1);
+            }}
+          />
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select

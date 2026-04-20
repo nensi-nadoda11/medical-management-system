@@ -43,12 +43,16 @@ export class InventoryService {
     private readonly adminSettingsService = new AdminSettingsService(),
   ) {}
 
-  async listInventorySummary(shopId: string, query: ListInventorySummaryQuery) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async listInventorySummary(
+    shopId: string,
+    branchId: string,
+    query: ListInventorySummaryQuery,
+  ) {
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId);
 
     const [items, total] = await Promise.all([
-      this.inventoryRepository.listInventorySummary(shopId, query),
-      this.inventoryRepository.countInventorySummary(shopId, query),
+      this.inventoryRepository.listInventorySummary(shopId, branchId, query),
+      this.inventoryRepository.countInventorySummary(shopId, branchId, query),
     ]);
 
     return buildPaginatedResponse(
@@ -79,13 +83,15 @@ export class InventoryService {
 
   async getInventoryMedicineDetail(
     shopId: string,
+    branchId: string,
     medicineId: string,
     query: GetInventoryMedicineDetailQuery,
   ) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId);
 
     const record = await this.inventoryRepository.getInventoryMedicineDetail(
       shopId,
+      branchId,
       medicineId,
     );
 
@@ -94,7 +100,7 @@ export class InventoryService {
     }
 
     const recentTransactions = query.includeTransactions
-      ? await this.inventoryRepository.listStockTransactions(shopId, {
+      ? await this.inventoryRepository.listStockTransactions(shopId, branchId, {
           page: 1,
           pageSize: 50,
           sortBy: "createdAt",
@@ -132,10 +138,14 @@ export class InventoryService {
     };
   }
 
-  async listStockTransactions(shopId: string, query: ListStockTransactionsQuery) {
+  async listStockTransactions(
+    shopId: string,
+    branchId: string,
+    query: ListStockTransactionsQuery,
+  ) {
     const [items, total] = await Promise.all([
-      this.inventoryRepository.listStockTransactions(shopId, query),
-      this.inventoryRepository.countStockTransactions(shopId, query),
+      this.inventoryRepository.listStockTransactions(shopId, branchId, query),
+      this.inventoryRepository.countStockTransactions(shopId, branchId, query),
     ]);
 
     return buildPaginatedResponse(
@@ -150,19 +160,23 @@ export class InventoryService {
     );
   }
 
-  async listLowStock(shopId: string, query: ListLowStockQuery) {
-    return this.listInventorySummary(shopId, {
+  async listLowStock(shopId: string, branchId: string, query: ListLowStockQuery) {
+    return this.listInventorySummary(shopId, branchId, {
       ...query,
       lowStockOnly: true,
     });
   }
 
-  async listExpiryReport(shopId: string, query: ListExpiryReportQuery) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async listExpiryReport(
+    shopId: string,
+    branchId: string,
+    query: ListExpiryReportQuery,
+  ) {
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId);
 
     const [items, total] = await Promise.all([
-      this.inventoryRepository.listExpiryReport(shopId, query),
-      this.inventoryRepository.countExpiryReport(shopId, query),
+      this.inventoryRepository.listExpiryReport(shopId, branchId, query),
+      this.inventoryRepository.countExpiryReport(shopId, branchId, query),
     ]);
 
     return buildPaginatedResponse(
@@ -188,6 +202,7 @@ export class InventoryService {
 
   async createStockAdjustment(
     shopId: string,
+    branchId: string,
     userId: string,
     input: CreateStockAdjustmentInput,
   ) {
@@ -205,6 +220,7 @@ export class InventoryService {
       this.inventoryStockService.applyManualAdjustment(
         {
           shopId,
+          branchId,
           medicineId: input.medicineId,
           batchId: input.batchId,
           adjustmentType: input.adjustmentType,
@@ -217,7 +233,7 @@ export class InventoryService {
       ),
     );
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     return {
       adjustment: adjustmentResult.adjustment,

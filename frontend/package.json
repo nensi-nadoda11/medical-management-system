@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "vitest --pool threads",
+    "test:run": "vitest run --pool threads",
     "lint": "eslint .",
     "preview": "vite preview"
   },

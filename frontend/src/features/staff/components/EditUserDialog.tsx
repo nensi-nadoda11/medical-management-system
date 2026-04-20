@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -7,12 +7,14 @@ import { z } from "zod";
 import { Modal } from "../../../components/ui/Modal";
 import { useToast } from "../../../hooks/use-toast";
 import type { StaffUser } from "../../../types/staff";
+import { branchesQueryKeys, getBranches, getUserBranchAssignments, updateUserBranchAssignments } from "../../branches/api/branches";
 import { staffQueryKeys, updateUser } from "../api/staff";
 
 const editUserSchema = z.object({
   fullName: z.string().trim().min(2, "Full name is required.").max(160),
   email: z.string().trim().email("Enter a valid email address.").max(320),
   role: z.enum(["staff", "accountant"]),
+  branchIds: z.array(z.string()),
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -33,7 +35,20 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
       fullName: "",
       email: "",
       role: "staff",
+      branchIds: [],
     },
+  });
+
+  const branchesQuery = useQuery({
+    queryKey: branchesQueryKeys.list,
+    queryFn: getBranches,
+    enabled: open,
+  });
+
+  const assignmentsQuery = useQuery({
+    queryKey: branchesQueryKeys.assignments(user?.id ?? ""),
+    queryFn: () => getUserBranchAssignments(user!.id),
+    enabled: open && Boolean(user?.id),
   });
 
   useEffect(() => {
@@ -46,17 +61,32 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        branchIds: assignmentsQuery.data?.branchIds ?? [],
       });
     }
-  }, [form, user]);
+  }, [assignmentsQuery.data?.branchIds, form, user]);
 
   const updateMutation = useMutation({
-    mutationFn: (values: EditUserFormValues) => updateUser(user!.id, values),
+    mutationFn: async (values: EditUserFormValues) => {
+      const { branchIds, ...userPayload } = values;
+      const nextBranchIds =
+        branchIds.length || branchesQuery.data?.defaultBranchId
+          ? branchIds.length
+            ? branchIds
+            : [branchesQuery.data!.defaultBranchId]
+          : [];
+
+      await updateUser(user!.id, userPayload);
+      await updateUserBranchAssignments(user!.id, nextBranchIds);
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: staffQueryKeys.users });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: staffQueryKeys.users }),
+        queryClient.invalidateQueries({ queryKey: branchesQueryKeys.all }),
+      ]);
       pushToast({
         title: "User updated",
-        description: "Staff member details were saved successfully.",
+        description: "Staff member details and branch access were saved successfully.",
         variant: "success",
       });
       onClose();
@@ -66,8 +96,14 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = form;
+  const selectedBranchIds = watch("branchIds");
+  const availableBranches = (branchesQuery.data?.items ?? []).filter(
+    (branch) => branch.status === "active",
+  );
 
   return (
     <Modal
@@ -131,6 +167,47 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
           </select>
           {errors.role ? <span className="text-sm text-rose-600">{errors.role.message}</span> : null}
         </label>
+
+        <div className="grid gap-2 text-sm font-medium text-slate-700">
+          <span>Branch access</span>
+          <div className="grid gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-3">
+            {availableBranches.map((branch) => {
+              const checked = selectedBranchIds.includes(branch.id);
+
+              return (
+                <label
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3"
+                  key={branch.id}
+                >
+                  <input
+                    checked={checked}
+                    onChange={(event) =>
+                      setValue(
+                        "branchIds",
+                        event.target.checked
+                          ? [...selectedBranchIds, branch.id]
+                          : selectedBranchIds.filter((item) => item !== branch.id),
+                        { shouldDirty: true },
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    {branch.name} ({branch.code}){branch.isDefault ? " - Default" : ""}
+                  </span>
+                </label>
+              );
+            })}
+            {!availableBranches.length ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                No active branches available for assignment.
+              </div>
+            ) : null}
+          </div>
+          <span className="text-xs text-slate-500">
+            If nothing is selected, the default branch will be assigned automatically.
+          </span>
+        </div>
 
         {updateMutation.error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

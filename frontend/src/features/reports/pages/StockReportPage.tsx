@@ -18,6 +18,7 @@ import {
   getStockReport,
   reportsQueryKeys,
 } from "../api/reports";
+import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
@@ -31,6 +32,8 @@ export const StockReportPage = () => {
   const [categoryId, setCategoryId] = useState("");
   const [manufacturerId, setManufacturerId] = useState("");
   const [batchStatus, setBatchStatus] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [combineBranches, setCombineBranches] = useState(false);
   const [sortBy, setSortBy] = useState<
     "medicineName" | "expiryDate" | "quantityAvailable" | "stockValue"
   >("expiryDate");
@@ -45,12 +48,24 @@ export const StockReportPage = () => {
       categoryId: categoryId || undefined,
       manufacturerId: manufacturerId || undefined,
       batchStatus: (batchStatus as "active" | "exhausted" | "expired") || undefined,
+      branchId: branchId || undefined,
+      combineBranches: combineBranches || undefined,
       sortBy,
       sortOrder,
       page,
       pageSize: 10,
     }),
-    [batchStatus, categoryId, deferredSearch, manufacturerId, page, sortBy, sortOrder],
+    [
+      batchStatus,
+      branchId,
+      categoryId,
+      combineBranches,
+      deferredSearch,
+      manufacturerId,
+      page,
+      sortBy,
+      sortOrder,
+    ],
   );
 
   const stockQuery = useQuery({
@@ -233,6 +248,18 @@ export const StockReportPage = () => {
               <option value="expired">Expired</option>
             </select>
           </label>
+          <BranchScopeControl
+            branchId={branchId}
+            combineBranches={combineBranches}
+            onBranchIdChange={(value) => {
+              setBranchId(value);
+              setPage(1);
+            }}
+            onCombineBranchesChange={(value) => {
+              setCombineBranches(value);
+              setPage(1);
+            }}
+          />
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select

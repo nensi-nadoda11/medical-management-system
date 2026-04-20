@@ -225,15 +225,15 @@ export class BillingService {
     private readonly adminSettingsService = new AdminSettingsService(),
   ) {}
 
-  async listBills(shopId: string, query: ListBillsQuery) {
+  async listBills(shopId: string, branchId: string, query: ListBillsQuery) {
     const normalizedQuery = {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
 
     const [items, total] = await Promise.all([
-      this.billingRepository.listSales(shopId, normalizedQuery),
-      this.billingRepository.countSales(shopId, normalizedQuery),
+      this.billingRepository.listSales(shopId, branchId, normalizedQuery),
+      this.billingRepository.countSales(shopId, branchId, normalizedQuery),
     ]);
 
     return buildPaginatedResponse(
@@ -244,8 +244,12 @@ export class BillingService {
     );
   }
 
-  async getBillById(shopId: string, saleId: string) {
-    const sale = await this.billingRepository.findSaleDetailById(shopId, saleId);
+  async getBillById(shopId: string, branchId: string, saleId: string) {
+    const sale = await this.billingRepository.findSaleDetailById(
+      shopId,
+      branchId,
+      saleId,
+    );
 
     if (!sale) {
       throw buildAppError(404, "BILL_NOT_FOUND", "Bill not found.");
@@ -254,7 +258,12 @@ export class BillingService {
     return toSaleDetailResponse(sale);
   }
 
-  async createHeldBill(shopId: string, userId: string, input: SaveBillInput) {
+  async createHeldBill(
+    shopId: string,
+    branchId: string,
+    userId: string,
+    input: SaveBillInput,
+  ) {
     const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
 
     if (!settings.allowHeldBills) {
@@ -268,14 +277,16 @@ export class BillingService {
     const saleId = await db.transaction(async (tx) => {
       const preparedDraft = await this.prepareSaleDraft(
         shopId,
+        branchId,
         input,
         settings,
         tx,
       );
-      const billMeta = await this.buildBillMeta(shopId, tx);
+      const billMeta = await this.buildBillMeta(shopId, branchId, tx);
       const created = await this.billingRepository.createSale(
         {
           shopId,
+          branchId,
           billSequence: billMeta.sequence,
           billNumber: billMeta.billNumber,
           billNumberNormalized: normalizeSearchValue(billMeta.billNumber),
@@ -326,11 +337,12 @@ export class BillingService {
       return created.sale.id;
     });
 
-    return this.getBillById(shopId, saleId);
+    return this.getBillById(shopId, branchId, saleId);
   }
 
   async updateHeldBill(
     shopId: string,
+    branchId: string,
     saleId: string,
     userId: string,
     input: SaveBillInput,
@@ -345,7 +357,11 @@ export class BillingService {
       );
     }
 
-    const existingSale = await this.billingRepository.findSaleById(shopId, saleId);
+    const existingSale = await this.billingRepository.findSaleById(
+      shopId,
+      branchId,
+      saleId,
+    );
 
     if (!existingSale) {
       throw buildAppError(404, "BILL_NOT_FOUND", "Bill not found.");
@@ -362,6 +378,7 @@ export class BillingService {
     await db.transaction(async (tx) => {
       const preparedDraft = await this.prepareSaleDraft(
         shopId,
+        branchId,
         input,
         settings,
         tx,
@@ -402,6 +419,7 @@ export class BillingService {
       await this.billingRepository.replaceSaleItems(
         saleId,
         shopId,
+        branchId,
         preparedDraft.items.map((item) => ({
           medicineId: item.medicineId,
           batchId: item.batchId,
@@ -419,24 +437,31 @@ export class BillingService {
       );
     });
 
-    return this.getBillById(shopId, saleId);
+    return this.getBillById(shopId, branchId, saleId);
   }
 
-  async createCompletedBill(shopId: string, userId: string, input: SaveBillInput) {
+  async createCompletedBill(
+    shopId: string,
+    branchId: string,
+    userId: string,
+    input: SaveBillInput,
+  ) {
     const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
     let customerId: string | null = null;
 
     const saleId = await db.transaction(async (tx) => {
       const preparedDraft = await this.prepareSaleDraft(
         shopId,
+        branchId,
         input,
         settings,
         tx,
       );
-      const billMeta = await this.buildBillMeta(shopId, tx);
+      const billMeta = await this.buildBillMeta(shopId, branchId, tx);
       const created = await this.billingRepository.createSale(
         {
           shopId,
+          branchId,
           billSequence: billMeta.sequence,
           billNumber: billMeta.billNumber,
           billNumberNormalized: normalizeSearchValue(billMeta.billNumber),
@@ -487,6 +512,7 @@ export class BillingService {
       await this.inventoryStockService.depleteSaleStock(
         {
           shopId,
+          branchId,
           saleId: created.sale.id,
           createdByUserId: userId,
           items: created.items.map((item) => ({
@@ -522,23 +548,33 @@ export class BillingService {
       return created.sale.id;
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     if (customerId) {
       await this.alertsService.syncCustomerDueNotification(shopId, customerId);
     }
 
-    return this.getBillById(shopId, saleId);
+    return this.getBillById(shopId, branchId, saleId);
   }
 
-  async completeHeldBill(shopId: string, saleId: string, userId: string) {
+  async completeHeldBill(
+    shopId: string,
+    branchId: string,
+    saleId: string,
+    userId: string,
+  ) {
     const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
     let customerId: string | null = null;
 
     await db.transaction(async (tx) => {
-      await this.inventoryRepository.syncBatchStatuses(shopId, tx);
+      await this.inventoryRepository.syncBatchStatuses(shopId, branchId, tx);
 
-      const sale = await this.billingRepository.findSaleById(shopId, saleId, tx);
+      const sale = await this.billingRepository.findSaleById(
+        shopId,
+        branchId,
+        saleId,
+        tx,
+      );
 
       if (!sale) {
         throw buildAppError(404, "BILL_NOT_FOUND", "Bill not found.");
@@ -560,7 +596,11 @@ export class BillingService {
         );
       }
 
-      const items = await this.billingRepository.listSaleItemsBySaleId(saleId, tx);
+      const items = await this.billingRepository.listSaleItemsBySaleId(
+        saleId,
+        branchId,
+        tx,
+      );
 
       if (!items.length) {
         throw buildAppError(
@@ -573,6 +613,7 @@ export class BillingService {
       await this.inventoryStockService.depleteSaleStock(
         {
           shopId,
+          branchId,
           saleId,
           createdByUserId: userId,
           items: items.map((item) => ({
@@ -606,20 +647,21 @@ export class BillingService {
       }
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
 
     if (customerId) {
       await this.alertsService.syncCustomerDueNotification(shopId, customerId);
     }
 
-    return this.getBillById(shopId, saleId);
+    return this.getBillById(shopId, branchId, saleId);
   }
 
   async searchSellableMedicines(
     shopId: string,
+    branchId: string,
     query: SearchSellableMedicinesQuery,
   ) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId);
 
     const normalizedQuery = {
       ...query,
@@ -627,8 +669,8 @@ export class BillingService {
     };
 
     const [items, total] = await Promise.all([
-      this.billingRepository.listSellableMedicines(shopId, normalizedQuery),
-      this.billingRepository.countSellableMedicines(shopId, normalizedQuery),
+      this.billingRepository.listSellableMedicines(shopId, branchId, normalizedQuery),
+      this.billingRepository.countSellableMedicines(shopId, branchId, normalizedQuery),
     ]);
 
     return buildPaginatedResponse(
@@ -654,8 +696,8 @@ export class BillingService {
     );
   }
 
-  async getSellableMedicineOptions(shopId: string, medicineId: string) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async getSellableMedicineOptions(shopId: string, branchId: string, medicineId: string) {
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId);
     const settings = await this.adminSettingsService.getResolvedShopSettings(shopId);
 
     const medicines = await this.billingRepository.findMedicinesByIds(shopId, [
@@ -669,6 +711,7 @@ export class BillingService {
 
     const batches = await this.billingRepository.listSellableBatchesByMedicineIds(
       shopId,
+      branchId,
       [medicineId],
     );
 
@@ -715,11 +758,15 @@ export class BillingService {
     };
   }
 
-  private async buildBillMeta(shopId: string, executor: DbExecutor) {
+  private async buildBillMeta(
+    shopId: string,
+    branchId: string,
+    executor: DbExecutor,
+  ) {
     await this.billingRepository.lockBillSequence(shopId, executor);
     const [shop, sequence] = await Promise.all([
       this.billingRepository.getShopById(shopId, executor),
-      this.billingRepository.getNextBillSequence(shopId, executor),
+      this.billingRepository.getNextBillSequence(shopId, branchId, executor),
     ]);
 
     if (!shop) {
@@ -734,11 +781,12 @@ export class BillingService {
 
   private async prepareSaleDraft(
     shopId: string,
+    branchId: string,
     input: SaveBillInput,
     settings: Awaited<ReturnType<AdminSettingsService["getResolvedShopSettings"]>>,
     executor?: DbExecutor,
   ): Promise<PreparedSaleDraft> {
-    await this.inventoryRepository.syncBatchStatuses(shopId, executor);
+    await this.inventoryRepository.syncBatchStatuses(shopId, branchId, executor);
 
     const medicineIds = [...new Set(input.items.map((item) => item.medicineId))];
     const batchIds = [
@@ -751,9 +799,10 @@ export class BillingService {
 
     const [medicines, selectedBatches, sellableBatches] = await Promise.all([
       this.billingRepository.findMedicinesByIds(shopId, medicineIds, executor),
-      this.billingRepository.findBatchesByIds(shopId, batchIds, executor),
+      this.billingRepository.findBatchesByIds(shopId, branchId, batchIds, executor),
       this.billingRepository.listSellableBatchesByMedicineIds(
         shopId,
+        branchId,
         medicineIds,
         executor,
       ),

@@ -266,6 +266,20 @@ export interface OutstandingSuppliersParams {
   sortOrder?: "asc" | "desc";
 }
 
+export interface OutstandingCustomersListSummary {
+  entityCount: number;
+  openBillCount: number;
+  totalOutstandingAmount: string;
+  totalAdvanceAmount: string;
+}
+
+export interface OutstandingSuppliersListSummary {
+  entityCount: number;
+  openPurchaseCount: number;
+  totalOutstandingAmount: string;
+  totalAdvanceAmount: string;
+}
+
 export interface SaveCustomerAccountingPaymentPayload {
   customerId: string;
   saleId?: string;
@@ -288,5 +302,12 @@ export interface SaveSupplierAccountingPaymentPayload {
 
 export type CustomerPaymentsResponse = PaginatedResponse<CustomerPaymentListItem>;
 export type SupplierPaymentsResponse = PaginatedResponse<SupplierPaymentListItem>;
-export type OutstandingCustomersResponse = PaginatedResponse<CustomerOutstandingSummaryItem>;
-export type OutstandingSuppliersResponse = PaginatedResponse<SupplierOutstandingSummaryItem>;
+export interface OutstandingCustomersResponse
+  extends PaginatedResponse<CustomerOutstandingSummaryItem> {
+  summary: OutstandingCustomersListSummary;
+}
+
+export interface OutstandingSuppliersResponse
+  extends PaginatedResponse<SupplierOutstandingSummaryItem> {
+  summary: OutstandingSuppliersListSummary;
+}

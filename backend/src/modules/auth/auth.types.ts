@@ -1,3 +1,5 @@
+import type { BranchRequestContext } from "../branches/branches.service";
+
 export const USER_ROLES = ["admin", "staff", "accountant"] as const;
 export const OTP_CHANNELS = ["email", "mobile"] as const;
 
@@ -29,4 +31,5 @@ export interface AuthenticatedRequestContext {
   user: PublicUser;
   shop: PublicShop;
   sessionExpiresAt: string;
+  branchContext?: BranchRequestContext;
 }

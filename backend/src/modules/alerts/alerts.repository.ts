@@ -12,6 +12,7 @@ import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 export class AlertsRepository {
   async findLowStockAlertState(
     shopId: string,
+    branchId: string,
     medicineId: string,
     executor?: DbExecutor,
   ) {
@@ -21,6 +22,7 @@ export class AlertsRepository {
       .where(
         and(
           eq(lowStockAlertStates.shopId, shopId),
+          eq(lowStockAlertStates.branchId, branchId),
           eq(lowStockAlertStates.medicineId, medicineId),
         ),
       )
@@ -32,6 +34,7 @@ export class AlertsRepository {
   async upsertLowStockAlertState(
     payload: {
       shopId: string;
+      branchId: string;
       medicineId: string;
       isLowStock: boolean;
       currentAvailableQuantity: number;
@@ -52,7 +55,11 @@ export class AlertsRepository {
         updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: [lowStockAlertStates.shopId, lowStockAlertStates.medicineId],
+        target: [
+          lowStockAlertStates.shopId,
+          lowStockAlertStates.branchId,
+          lowStockAlertStates.medicineId,
+        ],
         set: {
           isLowStock: payload.isLowStock,
           currentAvailableQuantity: payload.currentAvailableQuantity,
@@ -95,6 +102,7 @@ export class AlertsRepository {
 
   async listCurrentLowStockMedicines(
     shopId: string,
+    branchId: string,
     defaultThreshold: number,
     executor?: DbExecutor,
   ) {
@@ -130,6 +138,7 @@ export class AlertsRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
@@ -141,6 +150,7 @@ export class AlertsRepository {
 
   async listCurrentExpiryBatches(
     shopId: string,
+    branchId: string,
     nearExpiryDays: number,
     executor?: DbExecutor,
   ) {
@@ -164,6 +174,7 @@ export class AlertsRepository {
       .where(
         and(
           eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
           gt(medicineBatches.quantityAvailable, 0),
           lte(medicineBatches.expiryDate, nearExpiryLimit),
         ),

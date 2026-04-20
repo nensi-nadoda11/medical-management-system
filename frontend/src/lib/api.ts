@@ -1,6 +1,13 @@
 import axios from "axios";
+import { getStoredBranchId } from "./branch-context";
+import { resolveApiBaseUrl } from "./api-config";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+const API_BASE_URL = resolveApiBaseUrl(
+  import.meta.env as {
+    VITE_API_BASE_URL?: string;
+    VITE_BACKEND_URL?: string;
+  },
+);
 export const AUTH_EXPIRED_EVENT = "mms:auth-expired";
 
 export class ApiError extends Error {
@@ -34,6 +41,16 @@ export const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+});
+
+apiClient.interceptors.request.use((config) => {
+  const branchId = getStoredBranchId();
+
+  if (branchId) {
+    config.headers.set("x-branch-id", branchId);
+  }
+
+  return config;
 });
 
 apiClient.interceptors.response.use(

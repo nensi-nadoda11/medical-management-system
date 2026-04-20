@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { BranchesService } from "../branches/branches.service";
 import { ReportsService } from "./reports.service";
 
 const getAuthContext = (req: Request) => {
@@ -8,6 +9,7 @@ const getAuthContext = (req: Request) => {
 
   return {
     shopId: user.shopId,
+    branchId: req.authBranch!.id,
     userId: user.id,
     role: user.role,
     shopName: shop?.name ?? "Medical Management System",
@@ -15,7 +17,30 @@ const getAuthContext = (req: Request) => {
 };
 
 export class ReportsController {
-  constructor(private readonly reportsService = new ReportsService()) {}
+  constructor(
+    private readonly reportsService = new ReportsService(),
+    private readonly branchesService = new BranchesService(),
+  ) {}
+
+  private async resolveBranchIds(
+    req: Request,
+    query: { branchId?: string; combineBranches?: boolean },
+  ) {
+    const session = req.authSession!;
+    const requestedBranchId = query.combineBranches ? undefined : query.branchId;
+    const branchContext = requestedBranchId
+      ? await this.branchesService.resolveRequestBranchContext({
+          shopId: session.user.shopId,
+          userId: session.user.id,
+          role: session.user.role,
+          requestedBranchId,
+        })
+      : req.authBranchAccess!;
+
+    return query.combineBranches
+      ? branchContext.accessibleBranches.map((branch) => branch.id)
+      : [branchContext.currentBranch.id];
+  }
 
   getDashboardSummary = async (
     req: Request,
@@ -24,13 +49,19 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getDashboardSummary(
         auth.shopId,
+        branchIds,
         {
           userId: auth.userId,
           role: auth.role,
         },
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -42,13 +73,19 @@ export class ReportsController {
   getSalesReport = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getSalesReport(
         auth.shopId,
+        branchIds,
         {
           userId: auth.userId,
           role: auth.role,
         },
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -64,14 +101,20 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportSalesReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
         {
           userId: auth.userId,
           role: auth.role,
         },
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);
@@ -89,13 +132,19 @@ export class ReportsController {
   getProfitReport = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getProfitReport(
         auth.shopId,
+        branchIds,
         {
           userId: auth.userId,
           role: auth.role,
         },
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -111,14 +160,20 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportProfitReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
         {
           userId: auth.userId,
           role: auth.role,
         },
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);
@@ -136,9 +191,15 @@ export class ReportsController {
   getStockReport = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getStockReport(
         auth.shopId,
-        (req.validatedQuery ?? req.query) as never,
+        branchIds,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -154,10 +215,16 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportStockReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);
@@ -179,9 +246,15 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getLowStockReport(
         auth.shopId,
-        (req.validatedQuery ?? req.query) as never,
+        branchIds,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -197,10 +270,16 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportLowStockReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);
@@ -218,9 +297,15 @@ export class ReportsController {
   getExpiryReport = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getExpiryReport(
         auth.shopId,
-        (req.validatedQuery ?? req.query) as never,
+        branchIds,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -236,10 +321,16 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportExpiryReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);
@@ -261,9 +352,15 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const result = await this.reportsService.getSupplierReport(
         auth.shopId,
-        (req.validatedQuery ?? req.query) as never,
+        branchIds,
+        query as never,
       );
 
       return res.status(200).json({ data: result });
@@ -279,10 +376,16 @@ export class ReportsController {
   ) => {
     try {
       const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
       const exportResult = await this.reportsService.exportSupplierReport(
         auth.shopId,
+        branchIds,
         auth.shopName,
-        (req.validatedQuery ?? req.query) as never,
+        query as never,
       );
 
       res.setHeader("Content-Type", exportResult.contentType);

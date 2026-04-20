@@ -4,6 +4,7 @@ import { NotificationsService } from "./notifications.service";
 
 const getUser = (req: Request) => req.authenticatedUser ?? req.authSession!.user;
 const getShopId = (req: Request) => getUser(req).shopId;
+const getBranchId = (req: Request) => req.authBranch!.id;
 const getNotificationId = (req: Request) => req.params.id as string;
 
 export class NotificationsController {
@@ -19,6 +20,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.listNotifications(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
         (req.validatedQuery ?? req.query) as never,
       );
@@ -33,6 +35,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.getUnreadCount(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
       );
 
@@ -46,6 +49,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.getSummary(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
       );
 

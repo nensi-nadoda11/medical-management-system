@@ -95,26 +95,34 @@ export class ReportsService {
 
   async getDashboardSummary(
     shopId: string,
+    branchIds: string[],
     accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
     _query: DashboardSummaryQuery,
   ) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+    await Promise.all(
+      branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
+    );
 
     const [todaySales, monthlySales, lowStockCount, expirySummary, monthlyProfit] =
       await Promise.all([
-        this.reportsRepository.getTodaySalesSummary(shopId, accessScope),
-        this.reportsRepository.getMonthlySalesSummary(shopId, accessScope),
-        this.inventoryRepository.countInventorySummary(shopId, {
-          page: 1,
-          pageSize: 1,
-          sortBy: "availableQuantity",
-          sortOrder: "asc",
-          search: undefined,
-          lowStockOnly: true,
-        }),
-        this.reportsRepository.getExpirySummary(shopId),
+        this.reportsRepository.getTodaySalesSummary(shopId, branchIds, accessScope),
+        this.reportsRepository.getMonthlySalesSummary(shopId, branchIds, accessScope),
+        Promise.all(
+          branchIds.map((branchId) =>
+            this.inventoryRepository.countInventorySummary(shopId, branchId, {
+              page: 1,
+              pageSize: 1,
+              sortBy: "availableQuantity",
+              sortOrder: "asc",
+              search: undefined,
+              lowStockOnly: true,
+            }),
+          ),
+        ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
+        this.reportsRepository.getExpirySummary(shopId, branchIds),
         this.reportsRepository.getProfitSummary(
           shopId,
+          branchIds,
           normalizeRange<Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo">>(
             {
               search: undefined,
@@ -150,6 +158,7 @@ export class ReportsService {
 
   async getSalesReport(
     shopId: string,
+    branchIds: string[],
     accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
     query: SalesReportQuery,
   ) {
@@ -159,15 +168,31 @@ export class ReportsService {
     );
 
     const [summary, paymentBreakdown, trend, rows, total] = await Promise.all([
-      this.reportsRepository.getSalesSummary(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.getSalesPaymentBreakdown(
+      this.reportsRepository.getSalesSummary(
         shopId,
+        branchIds,
         normalizedQuery,
         accessScope,
       ),
-      this.reportsRepository.getSalesTrend(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.listSalesReportRows(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.countSalesReportRows(shopId, normalizedQuery, accessScope),
+      this.reportsRepository.getSalesPaymentBreakdown(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.getSalesTrend(shopId, branchIds, normalizedQuery, accessScope),
+      this.reportsRepository.listSalesReportRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.countSalesReportRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
     ]);
 
     return {
@@ -216,6 +241,7 @@ export class ReportsService {
 
   async getProfitReport(
     shopId: string,
+    branchIds: string[],
     accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
     query: ProfitReportQuery,
   ) {
@@ -225,10 +251,30 @@ export class ReportsService {
     );
 
     const [summary, trend, rows, total] = await Promise.all([
-      this.reportsRepository.getProfitSummary(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.getProfitTrend(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.listProfitRows(shopId, normalizedQuery, accessScope),
-      this.reportsRepository.countProfitRows(shopId, normalizedQuery, accessScope),
+      this.reportsRepository.getProfitSummary(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.getProfitTrend(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.listProfitRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.countProfitRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
     ]);
 
     const revenue = toMoneyNumber(summary?.revenue);
@@ -285,8 +331,10 @@ export class ReportsService {
     };
   }
 
-  async getStockReport(shopId: string, query: StockReportQuery) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async getStockReport(shopId: string, branchIds: string[], query: StockReportQuery) {
+    await Promise.all(
+      branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
+    );
 
     const normalizedQuery = {
       ...query,
@@ -294,24 +342,28 @@ export class ReportsService {
     };
 
     const [summary, lowStockCount, rows, total] = await Promise.all([
-      this.reportsRepository.getStockSummary(shopId, normalizedQuery),
-      this.inventoryRepository.countInventorySummary(shopId, {
-        page: 1,
-        pageSize: 1,
-        sortBy: "availableQuantity",
-        sortOrder: "asc",
-        lowStockOnly: true,
-        search: normalizedQuery.search,
-        ...(normalizedQuery.categoryId
-          ? { categoryId: normalizedQuery.categoryId }
-          : {}),
-        ...(normalizedQuery.manufacturerId
-          ? { manufacturerId: normalizedQuery.manufacturerId }
-          : {}),
-        ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
-      }),
-      this.reportsRepository.listStockRows(shopId, normalizedQuery),
-      this.reportsRepository.countStockRows(shopId, normalizedQuery),
+      this.reportsRepository.getStockSummary(shopId, branchIds, normalizedQuery),
+      Promise.all(
+        branchIds.map((branchId) =>
+          this.inventoryRepository.countInventorySummary(shopId, branchId, {
+            page: 1,
+            pageSize: 1,
+            sortBy: "availableQuantity",
+            sortOrder: "asc",
+            lowStockOnly: true,
+            search: normalizedQuery.search,
+            ...(normalizedQuery.categoryId
+              ? { categoryId: normalizedQuery.categoryId }
+              : {}),
+            ...(normalizedQuery.manufacturerId
+              ? { manufacturerId: normalizedQuery.manufacturerId }
+              : {}),
+            ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
+          }),
+        ),
+      ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
+      this.reportsRepository.listStockRows(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.countStockRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -345,8 +397,10 @@ export class ReportsService {
     };
   }
 
-  async getLowStockReport(shopId: string, query: LowStockReportQuery) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async getLowStockReport(shopId: string, branchIds: string[], query: LowStockReportQuery) {
+    await Promise.all(
+      branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
+    );
 
     const normalizedQuery = {
       ...query,
@@ -354,9 +408,9 @@ export class ReportsService {
     };
 
     const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getLowStockSummary(shopId, normalizedQuery),
-      this.reportsRepository.listLowStockRows(shopId, normalizedQuery),
-      this.reportsRepository.countLowStockRows(shopId, normalizedQuery),
+      this.reportsRepository.getLowStockSummary(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.listLowStockRows(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.countLowStockRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -380,8 +434,10 @@ export class ReportsService {
     };
   }
 
-  async getExpiryReport(shopId: string, query: ExpiryReportQuery) {
-    await this.inventoryRepository.syncBatchStatuses(shopId);
+  async getExpiryReport(shopId: string, branchIds: string[], query: ExpiryReportQuery) {
+    await Promise.all(
+      branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
+    );
 
     const normalizedQuery = {
       ...query,
@@ -389,9 +445,9 @@ export class ReportsService {
     };
 
     const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getExpirySummary(shopId),
-      this.reportsRepository.listExpiryRows(shopId, normalizedQuery),
-      this.reportsRepository.countExpiryRows(shopId, normalizedQuery),
+      this.reportsRepository.getExpirySummary(shopId, branchIds),
+      this.reportsRepository.listExpiryRows(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.countExpiryRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -423,16 +479,16 @@ export class ReportsService {
     };
   }
 
-  async getSupplierReport(shopId: string, query: SupplierReportQuery) {
+  async getSupplierReport(shopId: string, branchIds: string[], query: SupplierReportQuery) {
     const normalizedQuery = normalizeRange<SupplierReportQuery>(
       { ...query, search: normalizeSearch(query.search) },
       true,
     );
 
     const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getSupplierSummary(shopId, normalizedQuery),
-      this.reportsRepository.listSupplierRows(shopId, normalizedQuery),
-      this.reportsRepository.countSupplierRows(shopId, normalizedQuery),
+      this.reportsRepository.getSupplierSummary(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.listSupplierRows(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.countSupplierRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -465,11 +521,12 @@ export class ReportsService {
 
   async exportSalesReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
     query: SalesReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getSalesReport(shopId, accessScope, {
+    const report = await this.getSalesReport(shopId, branchIds, accessScope, {
       ...query,
       page: 1,
       pageSize: 2000,
@@ -511,11 +568,12 @@ export class ReportsService {
 
   async exportProfitReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
     query: ProfitReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getProfitReport(shopId, accessScope, {
+    const report = await this.getProfitReport(shopId, branchIds, accessScope, {
       ...query,
       page: 1,
       pageSize: 2000,
@@ -558,10 +616,11 @@ export class ReportsService {
 
   async exportStockReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     query: StockReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getStockReport(shopId, {
+    const report = await this.getStockReport(shopId, branchIds, {
       ...query,
       page: 1,
       pageSize: 2000,
@@ -600,10 +659,11 @@ export class ReportsService {
 
   async exportLowStockReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     query: LowStockReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getLowStockReport(shopId, {
+    const report = await this.getLowStockReport(shopId, branchIds, {
       ...query,
       page: 1,
       pageSize: 2000,
@@ -640,10 +700,11 @@ export class ReportsService {
 
   async exportExpiryReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     query: ExpiryReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getExpiryReport(shopId, {
+    const report = await this.getExpiryReport(shopId, branchIds, {
       ...query,
       page: 1,
       pageSize: 2000,
@@ -680,10 +741,11 @@ export class ReportsService {
 
   async exportSupplierReport(
     shopId: string,
+    branchIds: string[],
     shopName: string,
     query: SupplierReportQuery & { format: "xlsx" | "pdf" },
   ) {
-    const report = await this.getSupplierReport(shopId, {
+    const report = await this.getSupplierReport(shopId, branchIds, {
       ...query,
       page: 1,
       pageSize: 2000,

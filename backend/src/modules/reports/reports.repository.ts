@@ -4,11 +4,13 @@ import {
   desc,
   eq,
   gte,
+  inArray,
   like,
   lte,
   or,
   sql,
 } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import {
   manufacturers,
@@ -61,13 +63,18 @@ const currentStockValueExpr = sql<string>`
   coalesce(sum(${medicineBatches.purchaseRate} * ${medicineBatches.quantityAvailable}), 0)::text
 `;
 
+const buildBranchScopeFilter = (column: AnyPgColumn, branchIds: string[]) =>
+  branchIds.length === 1 ? eq(column, branchIds[0]!) : inArray(column, branchIds);
+
 const buildCompletedSalesFilters = (
   shopId: string,
+  branchIds: string[],
   query: Pick<SalesReportQuery, "search" | "paymentMethod" | "dateFrom" | "dateTo">,
   accessScope: ReportAccessScope,
 ) => {
   const filters = [
     eq(sales.shopId, shopId),
+    buildBranchScopeFilter(sales.branchId, branchIds),
     eq(sales.status, "completed"),
   ];
 
@@ -102,11 +109,13 @@ const buildCompletedSalesFilters = (
 
 const buildProfitFilters = (
   shopId: string,
+  branchIds: string[],
   query: Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo">,
   accessScope: ReportAccessScope,
 ) => {
   const filters = [
     eq(sales.shopId, shopId),
+    buildBranchScopeFilter(sales.branchId, branchIds),
     eq(sales.status, "completed"),
   ];
 
@@ -134,9 +143,10 @@ const buildProfitFilters = (
   return and(...filters);
 };
 
-const buildStockFilters = (shopId: string, query: StockReportQuery) => {
+const buildStockFilters = (shopId: string, branchIds: string[], query: StockReportQuery) => {
   const filters = [
     eq(medicineBatches.shopId, shopId),
+    buildBranchScopeFilter(medicineBatches.branchId, branchIds),
     sql`${medicineBatches.quantityAvailable} > 0`,
   ];
 
@@ -165,7 +175,11 @@ const buildStockFilters = (shopId: string, query: StockReportQuery) => {
   return and(...filters);
 };
 
-const buildLowStockFilters = (shopId: string, query: LowStockReportQuery) => {
+const buildLowStockFilters = (
+  shopId: string,
+  _branchIds: string[],
+  query: LowStockReportQuery,
+) => {
   const filters = [eq(medicines.shopId, shopId)];
 
   if (query.search) {
@@ -188,9 +202,14 @@ const buildLowStockFilters = (shopId: string, query: LowStockReportQuery) => {
   return and(...filters);
 };
 
-const buildExpiryFilters = (shopId: string, query: ExpiryReportQuery) => {
+const buildExpiryFilters = (
+  shopId: string,
+  branchIds: string[],
+  query: ExpiryReportQuery,
+) => {
   const filters = [
     eq(medicineBatches.shopId, shopId),
+    buildBranchScopeFilter(medicineBatches.branchId, branchIds),
     sql`${medicineBatches.quantityAvailable} > 0`,
   ];
 
@@ -220,8 +239,16 @@ const buildExpiryFilters = (shopId: string, query: ExpiryReportQuery) => {
   return and(...filters);
 };
 
-const buildSupplierFilters = (shopId: string, query: SupplierReportQuery) => {
-  const filters = [eq(purchases.shopId, shopId), eq(purchases.status, "finalized")];
+const buildSupplierFilters = (
+  shopId: string,
+  branchIds: string[],
+  query: SupplierReportQuery,
+) => {
+  const filters = [
+    eq(purchases.shopId, shopId),
+    buildBranchScopeFilter(purchases.branchId, branchIds),
+    eq(purchases.status, "finalized"),
+  ];
 
   if (query.search) {
     filters.push(
@@ -263,6 +290,7 @@ export class ReportsRepository {
 
   async getSalesSummary(
     shopId: string,
+    branchIds: string[],
     query: Pick<SalesReportQuery, "search" | "paymentMethod" | "dateFrom" | "dateTo">,
     accessScope: ReportAccessScope,
   ) {
@@ -273,13 +301,14 @@ export class ReportsRepository {
         averageBillValue: sql<string>`coalesce(avg(${sales.grandTotal}), 0)::text`,
       })
       .from(sales)
-      .where(buildCompletedSalesFilters(shopId, query, accessScope));
+      .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope));
 
     return result;
   }
 
   async getSalesPaymentBreakdown(
     shopId: string,
+    branchIds: string[],
     query: Pick<SalesReportQuery, "search" | "paymentMethod" | "dateFrom" | "dateTo">,
     accessScope: ReportAccessScope,
   ) {
@@ -290,13 +319,14 @@ export class ReportsRepository {
         totalBills: sql<number>`count(${sales.id})`,
       })
       .from(sales)
-      .where(buildCompletedSalesFilters(shopId, query, accessScope))
+      .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope))
       .groupBy(sales.paymentMethod)
       .orderBy(desc(sql`coalesce(sum(${sales.grandTotal}), 0)`));
   }
 
   async getSalesTrend(
     shopId: string,
+    branchIds: string[],
     query: Pick<
       SalesReportQuery,
       "search" | "paymentMethod" | "dateFrom" | "dateTo" | "groupBy"
@@ -314,13 +344,14 @@ export class ReportsRepository {
         averageBillValue: sql<string>`coalesce(avg(${sales.grandTotal}), 0)::text`,
       })
       .from(sales)
-      .where(buildCompletedSalesFilters(shopId, query, accessScope))
+      .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope))
       .groupBy(periodExpr)
       .orderBy(asc(periodExpr));
   }
 
   async listSalesReportRows(
     shopId: string,
+    branchIds: string[],
     query: SalesReportQuery,
     accessScope: ReportAccessScope,
   ) {
@@ -357,7 +388,7 @@ export class ReportsRepository {
       })
       .from(sales)
       .innerJoin(users, eq(sales.createdByUserId, users.id))
-      .where(buildCompletedSalesFilters(shopId, query, accessScope))
+      .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
@@ -365,19 +396,21 @@ export class ReportsRepository {
 
   async countSalesReportRows(
     shopId: string,
+    branchIds: string[],
     query: SalesReportQuery,
     accessScope: ReportAccessScope,
   ) {
     const [result] = await getDbExecutor()
       .select({ total: sql<number>`count(${sales.id})` })
       .from(sales)
-      .where(buildCompletedSalesFilters(shopId, query, accessScope));
+      .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope));
 
     return result?.total ?? 0;
   }
 
   async getProfitSummary(
     shopId: string,
+    branchIds: string[],
     query: Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo">,
     accessScope: ReportAccessScope,
   ) {
@@ -390,13 +423,14 @@ export class ReportsRepository {
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
-      .where(buildProfitFilters(shopId, query, accessScope));
+      .where(buildProfitFilters(shopId, branchIds, query, accessScope));
 
     return result;
   }
 
   async getProfitTrend(
     shopId: string,
+    branchIds: string[],
     query: Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo" | "groupBy">,
     accessScope: ReportAccessScope,
   ) {
@@ -413,13 +447,14 @@ export class ReportsRepository {
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
-      .where(buildProfitFilters(shopId, query, accessScope))
+      .where(buildProfitFilters(shopId, branchIds, query, accessScope))
       .groupBy(periodExpr)
       .orderBy(asc(periodExpr));
   }
 
   async listProfitRows(
     shopId: string,
+    branchIds: string[],
     query: ProfitReportQuery,
     accessScope: ReportAccessScope,
   ) {
@@ -464,7 +499,7 @@ export class ReportsRepository {
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
       .innerJoin(users, eq(sales.createdByUserId, users.id))
-      .where(buildProfitFilters(shopId, query, accessScope))
+      .where(buildProfitFilters(shopId, branchIds, query, accessScope))
       .groupBy(sales.id, users.id)
       .orderBy(...orderBy)
       .limit(query.pageSize)
@@ -473,6 +508,7 @@ export class ReportsRepository {
 
   async countProfitRows(
     shopId: string,
+    branchIds: string[],
     query: ProfitReportQuery,
     accessScope: ReportAccessScope,
   ) {
@@ -481,7 +517,7 @@ export class ReportsRepository {
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
-      .where(buildProfitFilters(shopId, query, accessScope))
+      .where(buildProfitFilters(shopId, branchIds, query, accessScope))
       .groupBy(sales.id)
       .as("profit_rows");
 
@@ -492,7 +528,7 @@ export class ReportsRepository {
     return result?.total ?? 0;
   }
 
-  async getStockSummary(shopId: string, query: StockReportQuery) {
+  async getStockSummary(shopId: string, branchIds: string[], query: StockReportQuery) {
     const [result] = await getDbExecutor()
       .select({
         totalBatches: sql<number>`count(${medicineBatches.id})`,
@@ -502,12 +538,12 @@ export class ReportsRepository {
       })
       .from(medicineBatches)
       .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
-      .where(buildStockFilters(shopId, query));
+      .where(buildStockFilters(shopId, branchIds, query));
 
     return result;
   }
 
-  async listStockRows(shopId: string, query: StockReportQuery) {
+  async listStockRows(shopId: string, branchIds: string[], query: StockReportQuery) {
     const stockValueExpr = sql<string>`(${medicineBatches.purchaseRate} * ${medicineBatches.quantityAvailable})::text`;
     const orderBy =
       query.sortBy === "medicineName"
@@ -543,23 +579,27 @@ export class ReportsRepository {
       .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
       .innerJoin(medicineCategories, eq(medicines.categoryId, medicineCategories.id))
       .innerJoin(manufacturers, eq(medicines.manufacturerId, manufacturers.id))
-      .where(buildStockFilters(shopId, query))
+      .where(buildStockFilters(shopId, branchIds, query))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countStockRows(shopId: string, query: StockReportQuery) {
+  async countStockRows(shopId: string, branchIds: string[], query: StockReportQuery) {
     const [result] = await getDbExecutor()
       .select({ total: sql<number>`count(${medicineBatches.id})` })
       .from(medicineBatches)
       .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
-      .where(buildStockFilters(shopId, query));
+      .where(buildStockFilters(shopId, branchIds, query));
 
     return result?.total ?? 0;
   }
 
-  async getLowStockSummary(shopId: string, query: LowStockReportQuery) {
+  async getLowStockSummary(
+    shopId: string,
+    branchIds: string[],
+    query: LowStockReportQuery,
+  ) {
     const grouped = getDbExecutor()
       .select({
         medicineId: medicines.id,
@@ -571,10 +611,11 @@ export class ReportsRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          buildBranchScopeFilter(medicineBatches.branchId, branchIds),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(buildLowStockFilters(shopId, query))
+      .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicines.reorderLevel)
       .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
       .as("low_stock_summary");
@@ -590,7 +631,11 @@ export class ReportsRepository {
     return result;
   }
 
-  async listLowStockRows(shopId: string, query: LowStockReportQuery) {
+  async listLowStockRows(
+    shopId: string,
+    branchIds: string[],
+    query: LowStockReportQuery,
+  ) {
     const shortageExpr = sql<number>`greatest(${medicines.reorderLevel} - ${availableQuantityExpr}, 0)`;
     const orderBy =
       query.sortBy === "medicineName"
@@ -629,10 +674,11 @@ export class ReportsRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          buildBranchScopeFilter(medicineBatches.branchId, branchIds),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(buildLowStockFilters(shopId, query))
+      .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicineCategories.id, manufacturers.id)
       .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
       .orderBy(...orderBy)
@@ -640,7 +686,11 @@ export class ReportsRepository {
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countLowStockRows(shopId: string, query: LowStockReportQuery) {
+  async countLowStockRows(
+    shopId: string,
+    branchIds: string[],
+    query: LowStockReportQuery,
+  ) {
     const grouped = getDbExecutor()
       .select({ medicineId: medicines.id })
       .from(medicines)
@@ -648,10 +698,11 @@ export class ReportsRepository {
         medicineBatches,
         and(
           eq(medicineBatches.shopId, shopId),
+          buildBranchScopeFilter(medicineBatches.branchId, branchIds),
           eq(medicineBatches.medicineId, medicines.id),
         ),
       )
-      .where(buildLowStockFilters(shopId, query))
+      .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicines.reorderLevel)
       .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
       .as("low_stock_rows");
@@ -663,7 +714,7 @@ export class ReportsRepository {
     return result?.total ?? 0;
   }
 
-  async getExpirySummary(shopId: string) {
+  async getExpirySummary(shopId: string, branchIds: string[]) {
     const [result] = await getDbExecutor()
       .select({
         expiredCount: sql<number>`coalesce(sum(case when ${medicineBatches.quantityAvailable} > 0 and ${medicineBatches.expiryDate} < now() then 1 else 0 end), 0)`,
@@ -672,12 +723,12 @@ export class ReportsRepository {
         next90Count: sql<number>`coalesce(sum(case when ${medicineBatches.quantityAvailable} > 0 and ${medicineBatches.expiryDate} >= now() and ${medicineBatches.expiryDate} <= now() + interval '90 day' then 1 else 0 end), 0)`,
       })
       .from(medicineBatches)
-      .where(eq(medicineBatches.shopId, shopId));
+      .where(and(eq(medicineBatches.shopId, shopId), buildBranchScopeFilter(medicineBatches.branchId, branchIds)));
 
     return result;
   }
 
-  async listExpiryRows(shopId: string, query: ExpiryReportQuery) {
+  async listExpiryRows(shopId: string, branchIds: string[], query: ExpiryReportQuery) {
     const orderBy =
       query.sortBy === "medicineName"
         ? [asc(medicines.medicineNameNormalized), asc(medicineBatches.expiryDate)]
@@ -700,23 +751,27 @@ export class ReportsRepository {
       })
       .from(medicineBatches)
       .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
-      .where(buildExpiryFilters(shopId, query))
+      .where(buildExpiryFilters(shopId, branchIds, query))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countExpiryRows(shopId: string, query: ExpiryReportQuery) {
+  async countExpiryRows(shopId: string, branchIds: string[], query: ExpiryReportQuery) {
     const [result] = await getDbExecutor()
       .select({ total: sql<number>`count(${medicineBatches.id})` })
       .from(medicineBatches)
       .innerJoin(medicines, eq(medicineBatches.medicineId, medicines.id))
-      .where(buildExpiryFilters(shopId, query));
+      .where(buildExpiryFilters(shopId, branchIds, query));
 
     return result?.total ?? 0;
   }
 
-  async getSupplierSummary(shopId: string, query: SupplierReportQuery) {
+  async getSupplierSummary(
+    shopId: string,
+    branchIds: string[],
+    query: SupplierReportQuery,
+  ) {
     const [result] = await getDbExecutor()
       .select({
         supplierCount: sql<number>`count(distinct ${purchases.supplierId})`,
@@ -726,12 +781,16 @@ export class ReportsRepository {
       })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(buildSupplierFilters(shopId, query));
+      .where(buildSupplierFilters(shopId, branchIds, query));
 
     return result;
   }
 
-  async listSupplierRows(shopId: string, query: SupplierReportQuery) {
+  async listSupplierRows(
+    shopId: string,
+    branchIds: string[],
+    query: SupplierReportQuery,
+  ) {
     const totalPurchaseExpr = sql<string>`coalesce(sum(${purchases.grandTotal}), 0)::text`;
     const totalPaidExpr = sql<string>`coalesce(sum(${purchases.paidAmount}), 0)::text`;
     const totalDueExpr = sql<string>`coalesce(sum(${purchases.dueAmount}), 0)::text`;
@@ -762,19 +821,23 @@ export class ReportsRepository {
       })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(buildSupplierFilters(shopId, query))
+      .where(buildSupplierFilters(shopId, branchIds, query))
       .groupBy(suppliers.id)
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
   }
 
-  async countSupplierRows(shopId: string, query: SupplierReportQuery) {
+  async countSupplierRows(
+    shopId: string,
+    branchIds: string[],
+    query: SupplierReportQuery,
+  ) {
     const grouped = getDbExecutor()
       .select({ supplierId: suppliers.id })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(buildSupplierFilters(shopId, query))
+      .where(buildSupplierFilters(shopId, branchIds, query))
       .groupBy(suppliers.id)
       .as("supplier_rows");
 
@@ -785,9 +848,14 @@ export class ReportsRepository {
     return result?.total ?? 0;
   }
 
-  async getTodaySalesSummary(shopId: string, accessScope: ReportAccessScope) {
+  async getTodaySalesSummary(
+    shopId: string,
+    branchIds: string[],
+    accessScope: ReportAccessScope,
+  ) {
     return this.getSalesSummary(
       shopId,
+      branchIds,
       {
         search: undefined,
         paymentMethod: undefined,
@@ -798,13 +866,18 @@ export class ReportsRepository {
     );
   }
 
-  async getMonthlySalesSummary(shopId: string, accessScope: ReportAccessScope) {
+  async getMonthlySalesSummary(
+    shopId: string,
+    branchIds: string[],
+    accessScope: ReportAccessScope,
+  ) {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
     return this.getSalesSummary(
       shopId,
+      branchIds,
       {
         search: undefined,
         paymentMethod: undefined,

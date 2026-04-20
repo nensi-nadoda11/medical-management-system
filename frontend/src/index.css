@@ -65,3 +65,32 @@ a {
     font-size: 16px;
   }
 }
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body,
+  #root {
+    min-height: auto;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .document-page {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .document-sheet {
+    box-shadow: none !important;
+    border-color: #e2e8f0 !important;
+  }
+}

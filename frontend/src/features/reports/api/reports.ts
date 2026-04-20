@@ -1,6 +1,8 @@
-import { apiClient, apiRequest } from "../../../lib/api";
+import { apiRequest } from "../../../lib/api";
+import { downloadApiFile } from "../../../lib/download";
 import type {
   DashboardSummary,
+  DashboardSummaryParams,
   ExpiryReport,
   ExpiryReportParams,
   LowStockReport,
@@ -22,45 +24,16 @@ const cleanParams = (params: object) =>
     ).filter(([, value]) => value !== undefined && value !== ""),
   );
 
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
-};
-
-const parseFilename = (header?: string | null, fallback = "report") => {
-  if (!header) {
-    return fallback;
-  }
-
-  const match = /filename="?([^"]+)"?/i.exec(header);
-  return match?.[1] ?? fallback;
-};
-
 const downloadReportExport = async (
   path: string,
   params: Record<string, string | number | boolean | undefined>,
   fallbackFilename: string,
-) => {
-  const response = await apiClient.get(path, {
-    params: cleanParams(params),
-    responseType: "blob",
-  });
-
-  downloadBlob(
-    response.data,
-    parseFilename(response.headers["content-disposition"], fallbackFilename),
-  );
-};
+) => downloadApiFile(path, cleanParams(params), fallbackFilename);
 
 export const reportsQueryKeys = {
   all: ["reports"] as const,
-  dashboard: ["reports", "dashboard"] as const,
+  dashboard: (params: DashboardSummaryParams) =>
+    ["reports", "dashboard", params] as const,
   sales: (params: SalesReportParams) => [...reportsQueryKeys.all, "sales", params] as const,
   profit: (params: ProfitReportParams) => [...reportsQueryKeys.all, "profit", params] as const,
   stock: (params: StockReportParams) => [...reportsQueryKeys.all, "stock", params] as const,
@@ -71,7 +44,7 @@ export const reportsQueryKeys = {
     [...reportsQueryKeys.all, "suppliers", params] as const,
 };
 
-export const getReportsDashboardSummary = (params: { dateFrom?: string; dateTo?: string }) =>
+export const getReportsDashboardSummary = (params: DashboardSummaryParams) =>
   apiRequest<DashboardSummary>({
     method: "GET",
     url: "/reports/dashboard/summary",

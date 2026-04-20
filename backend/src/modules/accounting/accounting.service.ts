@@ -350,24 +350,28 @@ export class AccountingService {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
-    const [items, total] = await Promise.all([
+    const [summary, items, total] = await Promise.all([
+      this.accountingRepository.getOutstandingCustomersSummary(shopId, normalizedQuery),
       this.accountingRepository.listOutstandingCustomers(shopId, normalizedQuery),
       this.accountingRepository.countOutstandingCustomers(shopId, normalizedQuery),
     ]);
 
-    return buildPaginatedResponse(
-      items.map((item) => ({
-        id: item.customer.id,
-        customerCode: item.customer.customerCode,
-        fullName: item.customer.fullName,
-        mobileNumber: item.customer.mobileNumber,
-        status: item.customer.status,
-        summary: item.summary,
-      })),
-      total,
-      normalizedQuery.page,
-      normalizedQuery.pageSize,
-    );
+    return {
+      summary,
+      ...buildPaginatedResponse(
+        items.map((item) => ({
+          id: item.customer.id,
+          customerCode: item.customer.customerCode,
+          fullName: item.customer.fullName,
+          mobileNumber: item.customer.mobileNumber,
+          status: item.customer.status,
+          summary: item.summary,
+        })),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
+      ),
+    };
   }
 
   async getCustomerLedger(
@@ -661,24 +665,28 @@ export class AccountingService {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
-    const [items, total] = await Promise.all([
+    const [summary, items, total] = await Promise.all([
+      this.accountingRepository.getOutstandingSuppliersSummary(shopId, normalizedQuery),
       this.accountingRepository.listOutstandingSuppliers(shopId, normalizedQuery),
       this.accountingRepository.countOutstandingSuppliers(shopId, normalizedQuery),
     ]);
 
-    return buildPaginatedResponse(
-      items.map((item) => ({
-        id: item.supplier.id,
-        supplierName: item.supplier.supplierName,
-        companyName: item.supplier.companyName,
-        mobileNumber: item.supplier.mobileNumber,
-        status: item.supplier.status,
-        summary: item.summary,
-      })),
-      total,
-      normalizedQuery.page,
-      normalizedQuery.pageSize,
-    );
+    return {
+      summary,
+      ...buildPaginatedResponse(
+        items.map((item) => ({
+          id: item.supplier.id,
+          supplierName: item.supplier.supplierName,
+          companyName: item.supplier.companyName,
+          mobileNumber: item.supplier.mobileNumber,
+          status: item.supplier.status,
+          summary: item.summary,
+        })),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
+      ),
+    };
   }
 
   async getSupplierLedger(
