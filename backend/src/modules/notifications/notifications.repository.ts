@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -291,6 +292,11 @@ export class NotificationsRepository {
       return [];
     }
 
+    const freshnessCondition = or(
+      isNull(notifications.readAt),
+      gt(notifications.readAt, sql`now() - interval '24 hours'`),
+    );
+
     return getDbExecutor(executor)
       .select()
       .from(notifications)
@@ -298,6 +304,7 @@ export class NotificationsRepository {
         and(
           eq(notifications.shopId, shopId),
           inArray(notifications.type, allowedTypes),
+          freshnessCondition,
         ),
       )
       .orderBy(

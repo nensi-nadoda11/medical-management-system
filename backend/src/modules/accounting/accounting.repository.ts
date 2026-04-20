@@ -653,6 +653,41 @@ export class AccountingRepository {
       .offset((query.page - 1) * query.pageSize);
   }
 
+  async findCustomerPaymentById(
+    shopId: string,
+    paymentId: string,
+    executor?: DbExecutor,
+  ) {
+    const [record] = await getDbExecutor(executor)
+      .select({
+        payment: customerPayments,
+        customer: {
+          id: customers.id,
+          customerCode: customers.customerCode,
+          fullName: customers.fullName,
+          mobileNumber: customers.mobileNumber,
+        },
+        linkedSale: {
+          id: sales.id,
+          billNumber: sales.billNumber,
+          billDate: sql<Date | null>`coalesce(${sales.completedAt}, ${sales.createdAt})`,
+        },
+        receivedBy: {
+          id: users.id,
+          fullName: users.fullName,
+          role: users.role,
+        },
+      })
+      .from(customerPayments)
+      .innerJoin(customers, eq(customerPayments.customerId, customers.id))
+      .leftJoin(sales, eq(customerPayments.saleId, sales.id))
+      .innerJoin(users, eq(customerPayments.receivedByUserId, users.id))
+      .where(and(eq(customerPayments.shopId, shopId), eq(customerPayments.id, paymentId)))
+      .limit(1);
+
+    return record ?? null;
+  }
+
   async countCustomerPayments(shopId: string, query: ListAccountingCustomerPaymentsQuery) {
     const [result] = await getDbExecutor()
       .select({ total: count() })
@@ -750,6 +785,41 @@ export class AccountingRepository {
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
+  }
+
+  async findSupplierPaymentById(
+    shopId: string,
+    paymentId: string,
+    executor?: DbExecutor,
+  ) {
+    const [record] = await getDbExecutor(executor)
+      .select({
+        payment: supplierPayments,
+        supplier: {
+          id: suppliers.id,
+          supplierName: suppliers.supplierName,
+          companyName: suppliers.companyName,
+          mobileNumber: suppliers.mobileNumber,
+        },
+        linkedPurchase: {
+          id: purchases.id,
+          purchaseNumber: purchases.purchaseNumber,
+          purchaseDate: purchases.purchaseDate,
+        },
+        paidBy: {
+          id: users.id,
+          fullName: users.fullName,
+          role: users.role,
+        },
+      })
+      .from(supplierPayments)
+      .innerJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
+      .leftJoin(purchases, eq(supplierPayments.purchaseId, purchases.id))
+      .innerJoin(users, eq(supplierPayments.paidByUserId, users.id))
+      .where(and(eq(supplierPayments.shopId, shopId), eq(supplierPayments.id, paymentId)))
+      .limit(1);
+
+    return record ?? null;
   }
 
   async countSupplierPayments(shopId: string, query: ListAccountingSupplierPaymentsQuery) {

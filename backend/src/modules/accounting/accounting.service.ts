@@ -1,5 +1,6 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import {
   moneyMinorUnitsToString,
   sumMoneyMinorUnits,
@@ -273,14 +274,11 @@ export class AccountingService {
         tx,
       );
 
-      const [paymentRecord] = await this.accountingRepository.listCustomerPayments(shopId, {
-        search: undefined,
-        customerId: input.customerId,
-        page: 1,
-        pageSize: 1,
-        sortBy: "createdAt",
-        sortOrder: "desc",
-      });
+      const paymentRecord = await this.accountingRepository.findCustomerPaymentById(
+        shopId,
+        created.payment.id,
+        tx,
+      );
       const paymentAllocations =
         await this.accountingRepository.listCustomerPaymentAllocationsByPaymentIds(
           shopId,
@@ -301,7 +299,16 @@ export class AccountingService {
       );
     }
 
-    await this.alertsService.syncCustomerDueNotification(shopId, input.customerId);
+    try {
+      await this.alertsService.syncCustomerDueNotification(shopId, input.customerId);
+    } catch (error) {
+      logger.error("Customer payment recorded but due notification sync failed", {
+        customerId: input.customerId,
+        shopId,
+        paymentId: result.id,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     return result;
   }
@@ -590,14 +597,11 @@ export class AccountingService {
         tx,
       );
 
-      const [paymentRecord] = await this.accountingRepository.listSupplierPayments(shopId, {
-        search: undefined,
-        supplierId: input.supplierId,
-        page: 1,
-        pageSize: 1,
-        sortBy: "createdAt",
-        sortOrder: "desc",
-      });
+      const paymentRecord = await this.accountingRepository.findSupplierPaymentById(
+        shopId,
+        created.payment.id,
+        tx,
+      );
       const paymentAllocations =
         await this.accountingRepository.listSupplierPaymentAllocationsByPaymentIds(
           shopId,
@@ -618,7 +622,16 @@ export class AccountingService {
       );
     }
 
-    await this.alertsService.syncSupplierPayableNotification(shopId, input.supplierId);
+    try {
+      await this.alertsService.syncSupplierPayableNotification(shopId, input.supplierId);
+    } catch (error) {
+      logger.error("Supplier payment recorded but payable notification sync failed", {
+        supplierId: input.supplierId,
+        shopId,
+        paymentId: result.id,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     return result;
   }

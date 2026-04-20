@@ -1,5 +1,6 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import {
   moneyMinorUnitsToString,
   roundPercentageAmount,
@@ -447,6 +448,7 @@ export class SalesReturnsService {
     userRole: "admin" | "staff" | "accountant",
   ) {
     await this.assertSalesReturnAllowed(shopId, userRole);
+    let customerId: string | null = null;
 
     await db.transaction(async (tx) => {
       await this.inventoryRepository.syncBatchStatuses(shopId, tx);
@@ -481,6 +483,18 @@ export class SalesReturnsService {
           "Sales return must contain at least one item.",
         );
       }
+
+      const sale = await this.salesReturnsRepository.findSaleById(
+        shopId,
+        existing.saleId,
+        tx,
+      );
+
+      if (!sale) {
+        throw buildAppError(404, "BILL_NOT_FOUND", "Bill not found.");
+      }
+
+      customerId = sale.customerId;
 
       const preparedDraft = await this.prepareReturnDraft(
         shopId,
@@ -549,9 +563,39 @@ export class SalesReturnsService {
         },
         tx,
       );
+
+      if (sale.customerId) {
+        await this.accountingLedgerService.syncCustomerSaleFinancials(
+          shopId,
+          existing.saleId,
+          userId,
+          tx,
+        );
+      }
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    try {
+      await this.alertsService.dispatchPendingInventoryAlertEmails(shopId);
+    } catch (error) {
+      logger.error("Sales return completed but inventory alert email dispatch failed", {
+        returnId,
+        shopId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
+    if (customerId) {
+      try {
+        await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+      } catch (error) {
+        logger.error("Sales return completed but customer due notification sync failed", {
+          returnId,
+          shopId,
+          customerId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
 
     return this.getSalesReturnById(shopId, returnId);
   }

@@ -1,13 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { useToast } from "../../hooks/use-toast";
 import { AUTH_EXPIRED_EVENT } from "../../lib/api";
-import { setStoredBranchId, syncStoredBranchId } from "../../lib/branch-context";
+import {
+  setStoredBranchId,
+  syncStoredBranchId,
+} from "../../lib/branch-context";
 import { cn } from "../../lib/utils";
 import { authService } from "../../services/auth";
-import { authQueryKeys, useSessionQuery } from "../../features/auth/hooks/use-session";
+import {
+  authQueryKeys,
+  useSessionQuery,
+} from "../../features/auth/hooks/use-session";
+import { WorkspaceErrorBoundary } from "../ui/WorkspaceErrorBoundary";
 import {
   bulkMarkNotificationsRead,
   getNotificationSummary,
@@ -126,6 +139,7 @@ const navigation: NavigationItem[] = [
 ];
 
 export const AppLayout = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -158,7 +172,9 @@ export const AppLayout = () => {
   const bulkReadMutation = useMutation({
     mutationFn: () => bulkMarkNotificationsRead(),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.all });
+      await queryClient.invalidateQueries({
+        queryKey: notificationsQueryKeys.all,
+      });
       pushToast({
         title: "Notifications updated",
         description: "All visible unread notifications were marked as read.",
@@ -215,7 +231,10 @@ export const AppLayout = () => {
   const accessibleBranches = branchContext?.accessibleBranches ?? [];
 
   useEffect(() => {
-    if (!branchContext) {
+    if (
+      !branchContext?.currentBranch?.id ||
+      !Array.isArray(branchContext.accessibleBranches)
+    ) {
       return;
     }
 
@@ -335,7 +354,8 @@ export const AppLayout = () => {
                         ]);
                         pushToast({
                           title: "Branch switched",
-                          description: "Workspace data has been refreshed for the selected branch.",
+                          description:
+                            "Workspace data has been refreshed for the selected branch.",
                           variant: "success",
                         });
                       }}
@@ -401,45 +421,51 @@ export const AppLayout = () => {
 
                       <div className="mt-4">
                         {notificationsSummaryQuery.isLoading ? (
-                          <p className="text-sm text-slate-500">Loading notifications...</p>
+                          <p className="text-sm text-slate-500">
+                            Loading notifications...
+                          </p>
                         ) : notificationsSummaryQuery.error ? (
                           <p className="text-sm text-rose-600">
                             {notificationsSummaryQuery.error.message}
                           </p>
-                        ) : notificationsSummaryQuery.data?.latest.length ? (
-                          <div className="space-y-2.5">
-                            {notificationsSummaryQuery.data.latest.map((item) => (
-                              <Link
-                                className={cn(
-                                  "block rounded-[20px] border px-3.5 py-3 transition hover:border-slate-300 hover:bg-slate-50",
-                                  item.isRead
-                                    ? "border-slate-200 bg-white"
-                                    : "border-teal-200 bg-teal-50/50",
-                                )}
-                                key={item.id}
-                                onClick={() => setIsNotificationMenuOpen(false)}
-                                to={item.actionPath ?? "/app/notifications"}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={cn(
-                                      "h-2.5 w-2.5 rounded-full",
-                                      item.severity === "critical"
-                                        ? "bg-rose-500"
-                                        : item.severity === "warning"
-                                          ? "bg-amber-500"
-                                          : "bg-slate-400",
-                                    )}
-                                  />
-                                  <p className="text-sm font-semibold text-slate-900">
-                                    {item.title}
+                        ) : notificationsSummaryQuery.data?.latest?.length ? (
+                          <div className="max-h-[24rem] space-y-2.5 overflow-y-auto pr-1">
+                            {notificationsSummaryQuery.data.latest.map(
+                              (item) => (
+                                <Link
+                                  className={cn(
+                                    "block rounded-[20px] border px-3.5 py-3 transition hover:border-slate-300 hover:bg-slate-50",
+                                    item.isRead
+                                      ? "border-slate-200 bg-white"
+                                      : "border-teal-200 bg-teal-50/50",
+                                  )}
+                                  key={item.id}
+                                  onClick={() =>
+                                    setIsNotificationMenuOpen(false)
+                                  }
+                                  to={item.actionPath ?? "/app/notifications"}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "h-2.5 w-2.5 rounded-full",
+                                        item.severity === "critical"
+                                          ? "bg-rose-500"
+                                          : item.severity === "warning"
+                                            ? "bg-amber-500"
+                                            : "bg-slate-400",
+                                      )}
+                                    />
+                                    <p className="text-sm font-semibold text-slate-900">
+                                      {item.title}
+                                    </p>
+                                  </div>
+                                  <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-slate-600">
+                                    {item.message}
                                   </p>
-                                </div>
-                                <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-slate-600">
-                                  {item.message}
-                                </p>
-                              </Link>
-                            ))}
+                                </Link>
+                              ),
+                            )}
                           </div>
                         ) : (
                           <p className="text-sm text-slate-500">
@@ -454,7 +480,9 @@ export const AppLayout = () => {
                         onClick={() => bulkReadMutation.mutate()}
                         type="button"
                       >
-                        {bulkReadMutation.isPending ? "Updating..." : "Mark all read"}
+                        {bulkReadMutation.isPending
+                          ? "Updating..."
+                          : "Mark all read"}
                       </button>
                     </div>
                   ) : null}
@@ -476,7 +504,9 @@ export const AppLayout = () => {
                         <p className="text-sm font-semibold text-slate-950">
                           {session.user.fullName}
                         </p>
-                        <p className="text-sm text-slate-600">{session.user.email}</p>
+                        <p className="text-sm text-slate-600">
+                          {session.user.email}
+                        </p>
                       </div>
                       <button
                         className="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -484,7 +514,9 @@ export const AppLayout = () => {
                         onClick={() => logoutMutation.mutate()}
                         type="button"
                       >
-                        {logoutMutation.isPending ? "Signing out..." : "Log out"}
+                        {logoutMutation.isPending
+                          ? "Signing out..."
+                          : "Log out"}
                       </button>
                     </div>
                   ) : null}
@@ -493,7 +525,11 @@ export const AppLayout = () => {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-4 lg:py-4">
-              <Outlet />
+              <WorkspaceErrorBoundary
+                resetKey={`${location.pathname}${location.search}${location.hash}`}
+              >
+                <Outlet />
+              </WorkspaceErrorBoundary>
             </div>
           </div>
         </div>

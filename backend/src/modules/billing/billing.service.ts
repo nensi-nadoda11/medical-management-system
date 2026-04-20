@@ -1,5 +1,6 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import {
   moneyMinorUnitsToString,
   roundPercentageAmount,
@@ -548,10 +549,29 @@ export class BillingService {
       return created.sale.id;
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    try {
+      await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    } catch (error) {
+      logger.error("Bill completed but inventory alert email dispatch failed", {
+        saleId,
+        shopId,
+        branchId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     if (customerId) {
-      await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+      try {
+        await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+      } catch (error) {
+        logger.error("Bill completed but customer due notification sync failed", {
+          saleId,
+          shopId,
+          branchId,
+          customerId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
 
     return this.getBillById(shopId, branchId, saleId);
@@ -647,10 +667,29 @@ export class BillingService {
       }
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    try {
+      await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    } catch (error) {
+      logger.error("Held bill completion succeeded but inventory alert email dispatch failed", {
+        saleId,
+        shopId,
+        branchId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     if (customerId) {
-      await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+      try {
+        await this.alertsService.syncCustomerDueNotification(shopId, customerId);
+      } catch (error) {
+        logger.error("Held bill completion succeeded but customer due notification sync failed", {
+          saleId,
+          shopId,
+          branchId,
+          customerId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
 
     return this.getBillById(shopId, branchId, saleId);

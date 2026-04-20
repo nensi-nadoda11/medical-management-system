@@ -257,14 +257,17 @@ WHERE p.branch_id IS NULL
 
 UPDATE medicine_batches mb
 SET branch_id = COALESCE(
-  p.branch_id,
+  (
+    SELECT p.branch_id
+    FROM purchase_items pi
+    INNER JOIN purchases p
+      ON p.id = pi.purchase_id
+    WHERE pi.medicine_batch_id = mb.id
+    LIMIT 1
+  ),
   b.id
 )
 FROM branches b
-LEFT JOIN purchase_items pi
-  ON pi.medicine_batch_id = mb.id
-LEFT JOIN purchases p
-  ON p.id = pi.purchase_id
 WHERE mb.branch_id IS NULL
   AND b.shop_id = mb.shop_id
   AND b.is_default = true;
@@ -277,66 +280,124 @@ WHERE s.branch_id IS NULL
   AND b.is_default = true;
 
 UPDATE customer_payments cp
-SET branch_id = COALESCE(s.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT s.branch_id
+    FROM sales s
+    WHERE s.id = cp.sale_id
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN sales s
-  ON s.id = cp.sale_id
 WHERE cp.branch_id IS NULL
   AND b.shop_id = cp.shop_id
   AND b.is_default = true;
 
 UPDATE customer_payment_allocations cpa
-SET branch_id = COALESCE(s.branch_id, cp.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT s.branch_id
+    FROM sales s
+    WHERE s.id = cpa.sale_id
+    LIMIT 1
+  ),
+  (
+    SELECT cp.branch_id
+    FROM customer_payments cp
+    WHERE cp.id = cpa.customer_payment_id
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN sales s
-  ON s.id = cpa.sale_id
-LEFT JOIN customer_payments cp
-  ON cp.id = cpa.customer_payment_id
 WHERE cpa.branch_id IS NULL
   AND b.shop_id = cpa.shop_id
   AND b.is_default = true;
 
 UPDATE supplier_payments sp
-SET branch_id = COALESCE(p.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT p.branch_id
+    FROM purchases p
+    WHERE p.id = sp.purchase_id
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN purchases p
-  ON p.id = sp.purchase_id
 WHERE sp.branch_id IS NULL
   AND b.shop_id = sp.shop_id
   AND b.is_default = true;
 
 UPDATE supplier_payment_allocations spa
-SET branch_id = COALESCE(p.branch_id, sp.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT p.branch_id
+    FROM purchases p
+    WHERE p.id = spa.purchase_id
+    LIMIT 1
+  ),
+  (
+    SELECT sp.branch_id
+    FROM supplier_payments sp
+    WHERE sp.id = spa.supplier_payment_id
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN purchases p
-  ON p.id = spa.purchase_id
-LEFT JOIN supplier_payments sp
-  ON sp.id = spa.supplier_payment_id
 WHERE spa.branch_id IS NULL
   AND b.shop_id = spa.shop_id
   AND b.is_default = true;
 
 UPDATE ledger_entries le
-SET branch_id = COALESCE(s.branch_id, p.branch_id, sr.branch_id, pr.branch_id, cp.branch_id, sp.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT s.branch_id
+    FROM sales s
+    WHERE le.reference_type = 'sale'
+      AND s.id = le.reference_id
+    LIMIT 1
+  ),
+  (
+    SELECT p.branch_id
+    FROM purchases p
+    WHERE le.reference_type = 'purchase'
+      AND p.id = le.reference_id
+    LIMIT 1
+  ),
+  (
+    SELECT sr.branch_id
+    FROM sale_returns sr
+    WHERE le.reference_type = 'sale_return'
+      AND sr.id = le.reference_id
+    LIMIT 1
+  ),
+  (
+    SELECT pr.branch_id
+    FROM purchase_returns pr
+    WHERE le.reference_type = 'purchase_return'
+      AND pr.id = le.reference_id
+    LIMIT 1
+  ),
+  (
+    SELECT cp.branch_id
+    FROM customer_payments cp
+    WHERE le.reference_type = 'customer_payment'
+      AND cp.id = le.reference_id
+    LIMIT 1
+  ),
+  (
+    SELECT sp.branch_id
+    FROM supplier_payments sp
+    WHERE le.reference_type = 'supplier_payment'
+      AND sp.id = le.reference_id
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN sales s
-  ON le.reference_type = 'sale'
- AND s.id = le.reference_id
-LEFT JOIN purchases p
-  ON le.reference_type = 'purchase'
- AND p.id = le.reference_id
-LEFT JOIN sale_returns sr
-  ON le.reference_type = 'sale_return'
- AND sr.id = le.reference_id
-LEFT JOIN purchase_returns pr
-  ON le.reference_type = 'purchase_return'
- AND pr.id = le.reference_id
-LEFT JOIN customer_payments cp
-  ON le.reference_type = 'customer_payment'
- AND cp.id = le.reference_id
-LEFT JOIN supplier_payments sp
-  ON le.reference_type = 'supplier_payment'
- AND sp.id = le.reference_id
 WHERE le.branch_id IS NULL
   AND b.shop_id = le.shop_id
   AND b.is_default = true;
@@ -394,12 +455,18 @@ WHERE st.branch_id IS NULL
   AND mb.id = st.batch_id;
 
 UPDATE low_stock_alert_states ls
-SET branch_id = COALESCE(mb.branch_id, b.id)
+SET branch_id = COALESCE(
+  (
+    SELECT mb.branch_id
+    FROM medicine_batches mb
+    WHERE mb.shop_id = ls.shop_id
+      AND mb.medicine_id = ls.medicine_id
+      AND mb.quantity_available > 0
+    LIMIT 1
+  ),
+  b.id
+)
 FROM branches b
-LEFT JOIN medicine_batches mb
-  ON mb.shop_id = ls.shop_id
- AND mb.medicine_id = ls.medicine_id
- AND mb.quantity_available > 0
 WHERE ls.branch_id IS NULL
   AND b.shop_id = ls.shop_id
   AND b.is_default = true;

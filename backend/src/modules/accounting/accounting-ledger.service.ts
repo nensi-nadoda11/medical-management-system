@@ -17,6 +17,9 @@ const mapPaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: number) 
   return "partial" as const;
 };
 
+const toDateValue = (value: Date | string) =>
+  value instanceof Date ? value : new Date(value);
+
 type LedgerSeedEntry = {
   transactionType:
     | "opening_balance"
@@ -317,7 +320,13 @@ export class AccountingLedgerService {
     entries: LedgerSeedEntry[],
     executor: DbExecutor,
   ) {
-    const sortedEntries = [...entries].sort((left, right) => {
+    const normalizedEntries = entries.map((entry) => ({
+      ...entry,
+      entryDate: toDateValue(entry.entryDate),
+      createdAt: toDateValue(entry.createdAt),
+    }));
+
+    const sortedEntries = [...normalizedEntries].sort((left, right) => {
       const entryDateDelta = left.entryDate.getTime() - right.entryDate.getTime();
 
       if (entryDateDelta !== 0) {

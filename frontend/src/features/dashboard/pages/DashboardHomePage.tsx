@@ -72,14 +72,64 @@ const isPresent = <T,>(value: T | null | undefined): value is T => value !== nul
 const describeDelta = (value: number, label: string) =>
   `${formatNumber(value)} ${label}${value === 1 ? "" : "s"}`;
 
+const defaultDashboardSummary = {
+  todaySales: {
+    totalSales: "0.00",
+    totalBills: 0,
+  },
+  monthlySales: {
+    totalSales: "0.00",
+    totalBills: 0,
+  },
+  totalProfit: "0.00",
+  lowStockCount: 0,
+  expiryCount: 0,
+  expiryBreakdown: {
+    expired: 0,
+    next30Days: 0,
+    next60Days: 0,
+    next90Days: 0,
+  },
+};
+
+const defaultSalesSummary = {
+  totalSales: "0.00",
+  totalBills: 0,
+  averageBillValue: "0.00",
+};
+
+const defaultProfitSummary = {
+  revenue: "0.00",
+  cost: "0.00",
+  profit: "0.00",
+  profitPercent: "0.00",
+};
+
+const defaultNotificationSummary = {
+  unreadCount: 0,
+  criticalCount: 0,
+  latest: [],
+};
+
+const defaultOutstandingCustomersSummary = {
+  entityCount: 0,
+  openBillCount: 0,
+  totalOutstandingAmount: "0.00",
+  totalAdvanceAmount: "0.00",
+};
+
+const defaultOutstandingSuppliersSummary = {
+  entityCount: 0,
+  openPurchaseCount: 0,
+  totalOutstandingAmount: "0.00",
+  totalAdvanceAmount: "0.00",
+};
+
 export const DashboardHomePage = () => {
   const sessionQuery = useSessionQuery();
-
-  if (!sessionQuery.data) {
-    return null;
-  }
-
-  const { shop, user } = sessionQuery.data;
+  const session = sessionQuery.data;
+  const shop = session?.shop;
+  const user = session?.user;
   const canViewReports = canAccessModule(user, {
     permissions: ["reports.view"],
     permissionMode: "all",
@@ -122,6 +172,7 @@ export const DashboardHomePage = () => {
   const notificationsSummaryQuery = useQuery({
     queryKey: notificationsQueryKeys.summary,
     queryFn: getNotificationSummary,
+    enabled: Boolean(session),
     refetchInterval: 60_000,
   });
 
@@ -316,42 +367,91 @@ export const DashboardHomePage = () => {
     staleTime: 60_000,
   });
 
-  const reportsSummary = reportsSummaryQuery.data;
-  const salesInsights = salesInsightsQuery.data;
-  const profitMonth = profitMonthQuery.data;
-  const profitToday = profitTodayQuery.data;
-  const alerts = notificationsSummaryQuery.data?.latest ?? [];
+  const reportsSummary = {
+    ...defaultDashboardSummary,
+    ...(reportsSummaryQuery.data ?? {}),
+    todaySales: {
+      ...defaultDashboardSummary.todaySales,
+      ...(reportsSummaryQuery.data?.todaySales ?? {}),
+    },
+    monthlySales: {
+      ...defaultDashboardSummary.monthlySales,
+      ...(reportsSummaryQuery.data?.monthlySales ?? {}),
+    },
+    expiryBreakdown: {
+      ...defaultDashboardSummary.expiryBreakdown,
+      ...(reportsSummaryQuery.data?.expiryBreakdown ?? {}),
+    },
+  };
+  const salesInsightsSummary = {
+    ...defaultSalesSummary,
+    ...(salesInsightsQuery.data?.summary ?? {}),
+  };
+  const salesTrend = salesInsightsQuery.data?.trend ?? [];
+  const profitMonthSummary = {
+    ...defaultProfitSummary,
+    ...(profitMonthQuery.data?.summary ?? {}),
+  };
+  const profitMonthTrend = profitMonthQuery.data?.trend ?? [];
+  const profitTodaySummary = {
+    ...defaultProfitSummary,
+    ...(profitTodayQuery.data?.summary ?? {}),
+  };
+  const notificationsSummary = {
+    ...defaultNotificationSummary,
+    ...(notificationsSummaryQuery.data ?? {}),
+    latest: notificationsSummaryQuery.data?.latest ?? [],
+  };
+  const customerDueSummary = {
+    ...defaultOutstandingCustomersSummary,
+    ...(customerDueQuery.data?.summary ?? {}),
+  };
+  const supplierPayableSummary = {
+    ...defaultOutstandingSuppliersSummary,
+    ...(supplierPayableQuery.data?.summary ?? {}),
+  };
+  const alerts = notificationsSummary.latest;
+  const lowStockTotal =
+    reportsSummary.lowStockCount ?? lowStockQuery.data?.pagination?.total ?? 0;
+  const nearExpiryTotal =
+    reportsSummary.expiryBreakdown.next30Days ??
+    expiryQuery.data?.pagination?.total ??
+    0;
 
   const salesTrendPoints: TrendPoint[] =
-    salesInsights?.trend.map((item) => ({
+    salesTrend.map((item) => ({
       label: toPeriodLabel(item.periodStart),
       value: parseMoney(item.totalSales),
     })) ?? [];
   const profitTrendPoints: TrendPoint[] =
-    profitMonth?.trend.map((item) => ({
+    profitMonthTrend.map((item) => ({
       label: toPeriodLabel(item.periodStart),
       value: parseMoney(item.profit),
     })) ?? [];
 
   const strongestSalesDay =
-    salesInsights?.trend.reduce((current, item) =>
-      parseMoney(item.totalSales) > parseMoney(current?.totalSales)
-        ? item
-        : (current ?? item),
-    ) ?? null;
+    salesTrend.length
+      ? salesTrend.reduce((current, item) =>
+          parseMoney(item.totalSales) > parseMoney(current.totalSales)
+            ? item
+            : current,
+        )
+      : null;
   const strongestProfitDay =
-    profitMonth?.trend.reduce((current, item) =>
-      parseMoney(item.profit) > parseMoney(current?.profit)
-        ? item
-        : (current ?? item),
-    ) ?? null;
+    profitMonthTrend.length
+      ? profitMonthTrend.reduce((current, item) =>
+          parseMoney(item.profit) > parseMoney(current.profit)
+            ? item
+            : current,
+        )
+      : null;
 
   const topMetrics = [
     canViewReports
       ? {
           label: "Today sales",
-          value: formatCurrency(reportsSummary?.todaySales.totalSales),
-          hint: describeDelta(reportsSummary?.todaySales.totalBills ?? 0, "bill"),
+          value: formatCurrency(reportsSummary.todaySales.totalSales),
+          hint: describeDelta(reportsSummary.todaySales.totalBills, "bill"),
           to: "/app/reports/sales",
           tone: "accent" as const,
         }
@@ -359,8 +459,8 @@ export const DashboardHomePage = () => {
     canViewReports
       ? {
           label: "Monthly sales",
-          value: formatCurrency(reportsSummary?.monthlySales.totalSales),
-          hint: describeDelta(reportsSummary?.monthlySales.totalBills ?? 0, "bill"),
+          value: formatCurrency(reportsSummary.monthlySales.totalSales),
+          hint: describeDelta(reportsSummary.monthlySales.totalBills, "bill"),
           to: "/app/reports/sales",
           tone: "default" as const,
         }
@@ -368,7 +468,7 @@ export const DashboardHomePage = () => {
     canViewReports
       ? {
           label: "Today profit",
-          value: formatCurrency(profitToday?.summary.profit),
+          value: formatCurrency(profitTodaySummary.profit),
           hint: "Completed sales for today",
           to: "/app/reports/profit",
           tone: "accent" as const,
@@ -377,8 +477,8 @@ export const DashboardHomePage = () => {
     canViewReports
       ? {
           label: "Monthly profit",
-          value: formatCurrency(profitMonth?.summary.profit ?? reportsSummary?.totalProfit),
-          hint: `${formatNumber(parseMoney(profitMonth?.summary.profitPercent))}% margin`,
+          value: formatCurrency(profitMonthSummary.profit || reportsSummary.totalProfit),
+          hint: `${formatNumber(parseMoney(profitMonthSummary.profitPercent))}% margin`,
           to: "/app/reports/profit",
           tone: "default" as const,
         }
@@ -386,37 +486,29 @@ export const DashboardHomePage = () => {
     canViewInventory
       ? {
           label: "Low stock count",
-          value: formatNumber(reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total),
+          value: formatNumber(lowStockTotal),
           hint: "Medicines at or below reorder level",
           to: "/app/inventory/low-stock",
-          tone:
-            (reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total ?? 0) > 0
-              ? ("warning" as const)
-              : ("default" as const),
+          tone: lowStockTotal > 0 ? ("warning" as const) : ("default" as const),
         }
       : null,
     canViewInventory
       ? {
           label: "Near expiry count",
-          value: formatNumber(
-            reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total,
-          ),
+          value: formatNumber(nearExpiryTotal),
           hint: "Batches expiring within 30 days",
           to: "/app/inventory/expiry",
-          tone:
-            (reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total ?? 0) > 0
-              ? ("danger" as const)
-              : ("default" as const),
+          tone: nearExpiryTotal > 0 ? ("danger" as const) : ("default" as const),
         }
       : null,
     canViewPayments
       ? {
           label: "Customer due amount",
-          value: formatCurrency(customerDueQuery.data?.summary.totalOutstandingAmount),
-          hint: describeDelta(customerDueQuery.data?.summary.entityCount ?? 0, "customer"),
+          value: formatCurrency(customerDueSummary.totalOutstandingAmount),
+          hint: describeDelta(customerDueSummary.entityCount, "customer"),
           to: "/app/accounting/customers",
           tone:
-            (customerDueQuery.data?.summary.entityCount ?? 0) > 0
+            customerDueSummary.entityCount > 0
               ? ("warning" as const)
               : ("default" as const),
         }
@@ -424,11 +516,11 @@ export const DashboardHomePage = () => {
     canViewPayments
       ? {
           label: "Supplier payable amount",
-          value: formatCurrency(supplierPayableQuery.data?.summary.totalOutstandingAmount),
-          hint: describeDelta(supplierPayableQuery.data?.summary.entityCount ?? 0, "supplier"),
+          value: formatCurrency(supplierPayableSummary.totalOutstandingAmount),
+          hint: describeDelta(supplierPayableSummary.entityCount, "supplier"),
           to: "/app/accounting/suppliers",
           tone:
-            (supplierPayableQuery.data?.summary.entityCount ?? 0) > 0
+            supplierPayableSummary.entityCount > 0
               ? ("warning" as const)
               : ("default" as const),
         }
@@ -441,11 +533,8 @@ export const DashboardHomePage = () => {
           title: "Low stock follow-up",
           description: "Open the medicines under reorder level and resolve urgent shortages.",
           to: "/app/inventory/low-stock",
-          metric: `${formatNumber(reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total ?? 0)} items`,
-          tone:
-            (reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total ?? 0) > 0
-              ? ("warning" as const)
-              : ("default" as const),
+          metric: `${formatNumber(lowStockTotal)} items`,
+          tone: lowStockTotal > 0 ? ("warning" as const) : ("default" as const),
         }
       : null,
     canViewInventory
@@ -453,13 +542,8 @@ export const DashboardHomePage = () => {
           title: "Near expiry review",
           description: "See batches that need disposal, transfer, or sales push planning.",
           to: "/app/inventory/expiry",
-          metric: `${formatNumber(
-            reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total ?? 0,
-          )} batches`,
-          tone:
-            (reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total ?? 0) > 0
-              ? ("danger" as const)
-              : ("default" as const),
+          metric: `${formatNumber(nearExpiryTotal)} batches`,
+          tone: nearExpiryTotal > 0 ? ("danger" as const) : ("default" as const),
         }
       : null,
     canViewPayments
@@ -467,7 +551,7 @@ export const DashboardHomePage = () => {
           title: "Receivables queue",
           description: "Review overdue customers, open bills, and collection priority.",
           to: "/app/accounting/customers",
-          metric: formatCurrency(customerDueQuery.data?.summary.totalOutstandingAmount),
+          metric: formatCurrency(customerDueSummary.totalOutstandingAmount),
           tone: "warning" as const,
         }
       : null,
@@ -476,7 +560,7 @@ export const DashboardHomePage = () => {
           title: "Payables queue",
           description: "Monitor supplier balances and recent settlement pressure.",
           to: "/app/accounting/suppliers",
-          metric: formatCurrency(supplierPayableQuery.data?.summary.totalOutstandingAmount),
+          metric: formatCurrency(supplierPayableSummary.totalOutstandingAmount),
           tone: "default" as const,
         }
       : null,
@@ -485,7 +569,7 @@ export const DashboardHomePage = () => {
           title: "Sales reports",
           description: "Drill into completed bills, value trends, and performance snapshots.",
           to: "/app/reports/sales",
-          metric: formatCurrency(reportsSummary?.monthlySales.totalSales),
+          metric: formatCurrency(reportsSummary.monthlySales.totalSales),
           tone: "accent" as const,
         }
       : null,
@@ -493,11 +577,8 @@ export const DashboardHomePage = () => {
       title: "Notification center",
       description: "Review unread alerts, critical warnings, and system follow-up items.",
       to: "/app/notifications",
-      metric: `${formatNumber(notificationsSummaryQuery.data?.unreadCount ?? 0)} unread`,
-      tone:
-        (notificationsSummaryQuery.data?.criticalCount ?? 0) > 0
-          ? ("danger" as const)
-          : ("default" as const),
+      metric: `${formatNumber(notificationsSummary.unreadCount)} unread`,
+      tone: notificationsSummary.criticalCount > 0 ? ("danger" as const) : ("default" as const),
     },
   ].filter(isPresent);
 
@@ -577,6 +658,10 @@ export const DashboardHomePage = () => {
     alerts.length ||
     activityItems.length;
 
+  if (!session || !shop || !user) {
+    return null;
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -592,7 +677,7 @@ export const DashboardHomePage = () => {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={user.role} tone={user.role} />
-            {reportsSummary?.lowStockCount || reportsSummary?.expiryBreakdown.expired ? (
+            {reportsSummary.lowStockCount || reportsSummary.expiryBreakdown.expired ? (
               <span className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">
                 Attention required
               </span>
@@ -665,10 +750,10 @@ export const DashboardHomePage = () => {
                       Last 7 days sales
                     </p>
                     <p className="mt-2 text-lg font-semibold text-slate-950">
-                      {formatCurrency(salesInsights?.summary.totalSales)}
+                      {formatCurrency(salesInsightsSummary.totalSales)}
                     </p>
                     <p className="mt-1.5 text-sm text-slate-600">
-                      {describeDelta(salesInsights?.summary.totalBills ?? 0, "completed bill")}
+                      {describeDelta(salesInsightsSummary.totalBills, "completed bill")}
                     </p>
                   </div>
                   <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
@@ -676,10 +761,10 @@ export const DashboardHomePage = () => {
                       Average bill value
                     </p>
                     <p className="mt-2 text-lg font-semibold text-slate-950">
-                      {formatCurrency(salesInsights?.summary.averageBillValue)}
+                      {formatCurrency(salesInsightsSummary.averageBillValue)}
                     </p>
                     <p className="mt-1.5 text-sm text-slate-600">
-                      Month-to-date sales at {formatCurrency(reportsSummary?.monthlySales.totalSales)}
+                      Month-to-date sales at {formatCurrency(reportsSummary.monthlySales.totalSales)}
                     </p>
                   </div>
                   <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
@@ -717,14 +802,14 @@ export const DashboardHomePage = () => {
             <MetricCard
               hint="Unread items in your queue"
               label="Unread"
-              tone={(notificationsSummaryQuery.data?.unreadCount ?? 0) > 0 ? "accent" : "default"}
-              value={formatNumber(notificationsSummaryQuery.data?.unreadCount)}
+                tone={notificationsSummary.unreadCount > 0 ? "accent" : "default"}
+                value={formatNumber(notificationsSummary.unreadCount)}
             />
             <MetricCard
               hint="Critical active alerts"
               label="Critical"
-              tone={(notificationsSummaryQuery.data?.criticalCount ?? 0) > 0 ? "danger" : "default"}
-              value={formatNumber(notificationsSummaryQuery.data?.criticalCount)}
+                tone={notificationsSummary.criticalCount > 0 ? "danger" : "default"}
+                value={formatNumber(notificationsSummary.criticalCount)}
             />
             <MetricCard
               hint="Latest dashboard alerts"
@@ -769,12 +854,12 @@ export const DashboardHomePage = () => {
                     hint="Completed sales for today"
                     label="Today profit"
                     tone="accent"
-                    value={formatCurrency(profitToday?.summary.profit)}
+                    value={formatCurrency(profitTodaySummary.profit)}
                   />
                   <MetricCard
-                    hint={`${formatNumber(parseMoney(profitMonth?.summary.profitPercent))}% margin this month`}
+                    hint={`${formatNumber(parseMoney(profitMonthSummary.profitPercent))}% margin this month`}
                     label="Monthly profit"
-                    value={formatCurrency(profitMonth?.summary.profit)}
+                    value={formatCurrency(profitMonthSummary.profit)}
                   />
                   <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -783,7 +868,7 @@ export const DashboardHomePage = () => {
                           Revenue
                         </p>
                         <p className="mt-1.5 text-sm font-semibold text-slate-950">
-                          {formatCurrency(profitMonth?.summary.revenue)}
+                          {formatCurrency(profitMonthSummary.revenue)}
                         </p>
                       </div>
                       <div>
@@ -791,7 +876,7 @@ export const DashboardHomePage = () => {
                           Cost
                         </p>
                         <p className="mt-1.5 text-sm font-semibold text-slate-950">
-                          {formatCurrency(profitMonth?.summary.cost)}
+                          {formatCurrency(profitMonthSummary.cost)}
                         </p>
                       </div>
                     </div>
@@ -832,20 +917,20 @@ export const DashboardHomePage = () => {
               <MetricCard
                 hint="Medicines under threshold"
                 label="Low stock"
-                tone={(reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total ?? 0) > 0 ? "warning" : "default"}
-                value={formatNumber(reportsSummary?.lowStockCount ?? lowStockQuery.data?.pagination.total)}
+                tone={lowStockTotal > 0 ? "warning" : "default"}
+                value={formatNumber(lowStockTotal)}
               />
               <MetricCard
                 hint="Expired batches with quantity"
                 label="Expired stock"
-                tone={(reportsSummary?.expiryBreakdown.expired ?? 0) > 0 ? "danger" : "default"}
-                value={formatNumber(reportsSummary?.expiryBreakdown.expired)}
+                tone={reportsSummary.expiryBreakdown.expired > 0 ? "danger" : "default"}
+                value={formatNumber(reportsSummary.expiryBreakdown.expired)}
               />
               <MetricCard
                 hint="Batches expiring in 30 days"
                 label="Near expiry"
-                tone={(reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total ?? 0) > 0 ? "danger" : "default"}
-                value={formatNumber(reportsSummary?.expiryBreakdown.next30Days ?? expiryQuery.data?.pagination.total)}
+                tone={nearExpiryTotal > 0 ? "danger" : "default"}
+                value={formatNumber(nearExpiryTotal)}
               />
             </div>
 
@@ -946,26 +1031,26 @@ export const DashboardHomePage = () => {
           >
             <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard
-                hint={`${formatNumber(customerDueQuery.data?.summary.openBillCount)} open bills`}
+                hint={`${formatNumber(customerDueSummary.openBillCount)} open bills`}
                 label="Customer due"
-                tone={(customerDueQuery.data?.summary.entityCount ?? 0) > 0 ? "warning" : "default"}
-                value={formatCurrency(customerDueQuery.data?.summary.totalOutstandingAmount)}
+                tone={customerDueSummary.entityCount > 0 ? "warning" : "default"}
+                value={formatCurrency(customerDueSummary.totalOutstandingAmount)}
               />
               <MetricCard
-                hint={`${formatNumber(customerDueQuery.data?.summary.totalAdvanceAmount)} customer advance`}
+                hint={`${formatNumber(customerDueSummary.totalAdvanceAmount)} customer advance`}
                 label="Due customers"
-                value={formatNumber(customerDueQuery.data?.summary.entityCount)}
+                value={formatNumber(customerDueSummary.entityCount)}
               />
               <MetricCard
-                hint={`${formatNumber(supplierPayableQuery.data?.summary.openPurchaseCount)} open purchases`}
+                hint={`${formatNumber(supplierPayableSummary.openPurchaseCount)} open purchases`}
                 label="Supplier payable"
-                tone={(supplierPayableQuery.data?.summary.entityCount ?? 0) > 0 ? "warning" : "default"}
-                value={formatCurrency(supplierPayableQuery.data?.summary.totalOutstandingAmount)}
+                tone={supplierPayableSummary.entityCount > 0 ? "warning" : "default"}
+                value={formatCurrency(supplierPayableSummary.totalOutstandingAmount)}
               />
               <MetricCard
-                hint={`${formatNumber(supplierPayableQuery.data?.summary.totalAdvanceAmount)} supplier advance`}
+                hint={`${formatNumber(supplierPayableSummary.totalAdvanceAmount)} supplier advance`}
                 label="Payable suppliers"
-                value={formatNumber(supplierPayableQuery.data?.summary.entityCount)}
+                value={formatNumber(supplierPayableSummary.entityCount)}
               />
             </div>
 
@@ -1077,13 +1162,13 @@ export const DashboardHomePage = () => {
         </SectionCard>
       </div>
 
-      {user.role === "admin" && reportsSummary ? (
+      {user.role === "admin" ? (
         <div
           className={cn(
             "rounded-[24px] border px-4 py-4 shadow-sm shadow-slate-200/60",
             (reportsSummary.lowStockCount > 0 ||
               reportsSummary.expiryBreakdown.expired > 0 ||
-              notificationsSummaryQuery.data?.criticalCount)
+              notificationsSummary.criticalCount)
               ? "border-rose-200 bg-[linear-gradient(180deg,#fff7f7_0%,#fff3f3_100%)]"
               : "border-emerald-200 bg-[linear-gradient(180deg,#f6fffb_0%,#f1fbf6_100%)]",
           )}
@@ -1096,11 +1181,11 @@ export const DashboardHomePage = () => {
               <p className="mt-1.5 text-sm text-slate-700">
                 {reportsSummary.lowStockCount > 0 ||
                 reportsSummary.expiryBreakdown.expired > 0 ||
-                (notificationsSummaryQuery.data?.criticalCount ?? 0) > 0
+                notificationsSummary.criticalCount > 0
                   ? `${formatNumber(reportsSummary.lowStockCount)} low stock medicines, ${formatNumber(
                       reportsSummary.expiryBreakdown.expired,
                     )} expired batches, and ${formatNumber(
-                      notificationsSummaryQuery.data?.criticalCount ?? 0,
+                      notificationsSummary.criticalCount,
                     )} critical alerts need attention.`
                   : "Inventory risk and critical alerts are currently under control."}
               </p>
