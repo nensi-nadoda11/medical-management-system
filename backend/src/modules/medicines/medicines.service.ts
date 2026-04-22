@@ -235,6 +235,49 @@ export class MedicinesService {
     return toCategoryResponse(updatedCategory);
   }
 
+  async deleteCategory(shopId: string, categoryId: string) {
+    const category = await this.medicinesRepository.findCategoryById(
+      shopId,
+      categoryId,
+    );
+
+    if (!category) {
+      throw buildAppError(404, "CATEGORY_NOT_FOUND", "Category not found.");
+    }
+
+    // Check if any medicines are using this category
+    const count = await this.medicinesRepository.countMedicines(shopId, {
+      categoryId,
+      page: 1,
+      pageSize: 1,
+      sortBy: "medicineName",
+      sortOrder: "asc",
+    });
+
+    if (Number(count) > 0) {
+      throw buildAppError(
+        400,
+        "CATEGORY_IN_USE",
+        "Cannot delete category because it is being used by one or more medicines.",
+      );
+    }
+
+    const deleted = await this.medicinesRepository.deleteCategory(
+      shopId,
+      categoryId,
+    );
+
+    if (!deleted) {
+      throw buildAppError(
+        500,
+        "CATEGORY_DELETE_FAILED",
+        "Failed to delete category.",
+      );
+    }
+
+    return { id: categoryId, success: true };
+  }
+
   async listManufacturers(shopId: string, query: ListMasterDataQuery) {
     const normalizedQuery = {
       ...query,
@@ -338,6 +381,53 @@ export class MedicinesService {
     }
 
     return toManufacturerResponse(updatedManufacturer);
+  }
+
+  async deleteManufacturer(shopId: string, manufacturerId: string) {
+    const manufacturer = await this.medicinesRepository.findManufacturerById(
+      shopId,
+      manufacturerId,
+    );
+
+    if (!manufacturer) {
+      throw buildAppError(
+        404,
+        "MANUFACTURER_NOT_FOUND",
+        "Manufacturer not found.",
+      );
+    }
+
+    // Check if any medicines are using this manufacturer
+    const count = await this.medicinesRepository.countMedicines(shopId, {
+      manufacturerId,
+      page: 1,
+      pageSize: 1,
+      sortBy: "medicineName",
+      sortOrder: "asc",
+    });
+
+    if (Number(count) > 0) {
+      throw buildAppError(
+        400,
+        "MANUFACTURER_IN_USE",
+        "Cannot delete manufacturer because it is being used by one or more medicines.",
+      );
+    }
+
+    const deleted = await this.medicinesRepository.deleteManufacturer(
+      shopId,
+      manufacturerId,
+    );
+
+    if (!deleted) {
+      throw buildAppError(
+        500,
+        "MANUFACTURER_DELETE_FAILED",
+        "Failed to delete manufacturer.",
+      );
+    }
+
+    return { id: manufacturerId, success: true };
   }
 
   async listMedicines(shopId: string, query: ListMedicinesQuery) {

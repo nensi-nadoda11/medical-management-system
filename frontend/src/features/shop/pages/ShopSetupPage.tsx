@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,7 +10,6 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { useToast } from "../../../hooks/use-toast";
-import { formatDateTime } from "../../../lib/utils";
 import type { UpdateShopProfilePayload } from "../../../types/shop";
 import { getShopProfile, shopQueryKeys, updateShopProfile } from "../api/shop";
 
@@ -117,6 +116,8 @@ export const ShopSetupPage = () => {
     defaultValues,
   });
 
+  const [isEditing, setIsEditing] = useState(false);
+
   useEffect(() => {
     if (!shopProfileQuery.data) {
       return;
@@ -146,8 +147,14 @@ export const ShopSetupPage = () => {
         description: "Your shop setup changes were saved successfully.",
         variant: "success",
       });
+      setIsEditing(false);
     },
   });
+
+  const handleCancel = () => {
+    form.reset();
+    setIsEditing(false);
+  };
 
   if (shopProfileQuery.isLoading) {
     return <LoadingState title="Loading shop profile" />;
@@ -188,6 +195,8 @@ export const ShopSetupPage = () => {
     formState: { errors, isDirty },
   } = form;
 
+  const inputClasses = "rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-50 disabled:text-slate-600 disabled:opacity-80";
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -197,7 +206,7 @@ export const ShopSetupPage = () => {
         title="Shop Setup"
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div>
         <SectionCard
           description="These details are used across admin workflows, invoices, and communication screens."
           title="Shop profile"
@@ -212,7 +221,8 @@ export const ShopSetupPage = () => {
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Shop name
                 <input
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                  className={inputClasses}
+                  disabled={!isEditing}
                   placeholder="CarePoint Diagnostics"
                   {...register("name")}
                 />
@@ -237,7 +247,8 @@ export const ShopSetupPage = () => {
                   <label className="grid gap-2 text-sm font-medium text-slate-700" key={field}>
                     {label}
                     <input
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                      className={inputClasses}
+                      disabled={!isEditing}
                       {...register(field as keyof ShopProfileFormValues)}
                     />
                     {error ? <span className="text-sm text-rose-600">{error.message}</span> : null}
@@ -248,47 +259,42 @@ export const ShopSetupPage = () => {
 
             <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-500">
-                Save only after reviewing the business information carefully.
+                {isEditing 
+                  ? "Save only after reviewing the business information carefully."
+                  : "Click edit to update your shop profile information."}
               </p>
-              <button
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={updateMutation.isPending || !isDirty}
-                type="submit"
-              >
-                {updateMutation.isPending ? "Saving..." : "Save profile"}
-              </button>
+              
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <button
+                    className="ui-btn ui-btn--secondary"
+                    onClick={() => setIsEditing(true)}
+                    type="button"
+                  >
+                    Edit profile
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="ui-btn ui-btn--ghost"
+                      onClick={handleCancel}
+                      type="button"
+                      disabled={updateMutation.isPending}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="ui-btn ui-btn--primary disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={updateMutation.isPending || !isDirty}
+                      type="submit"
+                    >
+                      {updateMutation.isPending ? "Saving..." : "Save changes"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </form>
-        </SectionCard>
-
-        <SectionCard
-          description="A quick reference for verification and account state."
-          title="Setup summary"
-        >
-          <div className="grid gap-4">
-            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Shop slug
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-950">{shopProfile.slug}</p>
-            </article>
-            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Created
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-950">
-                {formatDateTime(shopProfile.createdAt)}
-              </p>
-            </article>
-            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Last updated
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-950">
-                {formatDateTime(shopProfile.updatedAt)}
-              </p>
-            </article>
-          </div>
         </SectionCard>
       </div>
     </div>

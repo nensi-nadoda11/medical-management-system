@@ -2,16 +2,17 @@ import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
+import { Pencil, Trash2, Eye } from "lucide-react";
+
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { FilterBar } from "../../../components/ui/FilterBar";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
+import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { useToast } from "../../../hooks/use-toast";
 import {
   formatCurrency,
@@ -22,6 +23,7 @@ import { listSuppliers, suppliersQueryKeys } from "../../suppliers/api/suppliers
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import {
   cancelPurchase,
+  deletePurchase,
   finalizePurchase,
   listPurchases,
   purchasesQueryKeys,
@@ -48,6 +50,7 @@ export const PurchasesPage = () => {
   const [page, setPage] = useState(1);
   const [finalizeTarget, setFinalizeTarget] = useState<PurchaseListItem | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PurchaseListItem | null>(null);
   const [cancelNotes, setCancelNotes] = useState("");
 
   const deferredSearch = useDeferredValue(search);
@@ -119,11 +122,23 @@ export const PurchasesPage = () => {
     },
   });
 
-  const activeError = purchasesQuery.error ?? suppliersQuery.error;
+  const deleteMutation = useMutation({
+    mutationFn: (purchaseId: string) => deletePurchase(purchaseId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.all }),
+      ]);
+      pushToast({
+        title: "Purchase deleted",
+        description: "The purchase record and associated stock have been removed.",
+        variant: "success",
+      });
+      setDeleteTarget(null);
+    },
+  });
 
-  if (purchasesQuery.isLoading || suppliersQuery.isLoading) {
-    return <LoadingState title="Loading purchases" />;
-  }
+  const activeError = purchasesQuery.error ?? suppliersQuery.error;
 
   if (activeError) {
     return (
@@ -152,7 +167,7 @@ export const PurchasesPage = () => {
       <PageHeader
         actions={
           <Link
-            className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             to="/app/purchases/new"
           >
             Create purchase
@@ -187,36 +202,6 @@ export const PurchasesPage = () => {
           value={formatCurrency(visibleGrandTotal)}
         />
       </div>
-
-      <SectionCard
-        description="Use purchases to move from bill entry to stock posting without losing control."
-        title="How This Module Works"
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            [
-              "Draft first",
-              "Create or edit a draft while the bill is being checked or stock is still under review.",
-            ],
-            [
-              "Finalize later",
-              "Finalize only after medicine rows, batch numbers, expiry dates, and rates are correct.",
-            ],
-            [
-              "Track payment separately",
-              "Grand total, paid amount, and due amount are visible here so the operator can review payment status quickly.",
-            ],
-          ].map(([title, description]) => (
-            <article
-              className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5"
-              key={title}
-            >
-              <p className="text-sm font-semibold text-slate-950">{title}</p>
-              <p className="mt-1.5 text-sm leading-5 text-slate-600">{description}</p>
-            </article>
-          ))}
-        </div>
-      </SectionCard>
 
       <FilterBar
         actions={
@@ -372,212 +357,16 @@ export const PurchasesPage = () => {
         description="Compact purchase visibility for everyday procurement operations."
         title="Purchase register"
       >
-        {purchases.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {purchases.map((purchase) => (
-                <article
-                  className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
-                  key={purchase.id}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-950">
-                          {purchase.purchaseNumber}
-                        </h3>
-                        <StatusBadge label={purchase.status} />
-                        <StatusBadge label={purchase.paymentStatus} />
-                      </div>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {purchase.supplier.supplierName}
-                      </p>
-                    </div>
-                    <p className="text-base font-semibold text-slate-950">
-                      {formatCurrency(purchase.grandTotal)}
-                    </p>
-                  </div>
-
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      [
-                        "Supplier invoice",
-                        purchase.supplierInvoiceNumber || "Not provided",
-                      ],
-                      ["Invoice date", formatDate(purchase.supplierInvoiceDate)],
-                      ["Purchase date", formatDate(purchase.purchaseDate)],
-                      ["Created", formatDateTime(purchase.createdAt)],
-                      [
-                        "Finalized",
-                        purchase.finalizedAt
-                          ? formatDateTime(purchase.finalizedAt)
-                          : "Not finalized",
-                      ],
-                      ["Due", formatCurrency(purchase.dueAmount)],
-                    ].map(([label, value]) => (
-                      <div
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                        key={label}
-                      >
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {label}
-                        </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">
-                          {value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                      to={`/app/purchases/${purchase.id}`}
-                    >
-                      View
-                    </Link>
-                    {purchase.status === "draft" ? (
-                      <Link
-                        className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                        to={`/app/purchases/${purchase.id}/edit`}
-                      >
-                        Edit
-                      </Link>
-                    ) : null}
-                    {purchase.status === "draft" ? (
-                      <button
-                        className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                        onClick={() => setFinalizeTarget(purchase)}
-                        type="button"
-                      >
-                        Finalize
-                      </button>
-                    ) : null}
-                    {purchase.status === "draft" ? (
-                      <button
-                        className="rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-                        onClick={() => setCancelTarget(purchase)}
-                        type="button"
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1360px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Purchase</th>
-                    <th className="px-4">Supplier</th>
-                    <th className="px-4">Supplier invoice</th>
-                    <th className="px-4">Purchase date</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Payment</th>
-                    <th className="px-4">Grand total</th>
-                    <th className="px-4">Created / Finalized</th>
-                    <th className="px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchases.map((purchase) => (
-                    <tr className="rounded-3xl bg-slate-50" key={purchase.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">
-                            {purchase.purchaseNumber}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-600">
-                            Due {formatCurrency(purchase.dueAmount)}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {purchase.supplier.supplierName}
-                          </p>
-                          <p className="mt-1 text-slate-600">
-                            {purchase.supplier.companyName || purchase.supplier.mobileNumber}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        <div>
-                          <p>{purchase.supplierInvoiceNumber || "Not provided"}</p>
-                          <p className="mt-1 text-slate-500">
-                            {formatDate(purchase.supplierInvoiceDate)}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {formatDate(purchase.purchaseDate)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={purchase.status} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={purchase.paymentStatus} />
-                      </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">
-                        {formatCurrency(purchase.grandTotal)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
-                        <div>
-                          <p>{formatDateTime(purchase.createdAt)}</p>
-                          <p className="mt-1">
-                            {purchase.finalizedAt
-                              ? `Finalized ${formatDateTime(purchase.finalizedAt)}`
-                              : "Draft not finalized"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                            to={`/app/purchases/${purchase.id}`}
-                          >
-                            View
-                          </Link>
-                          {purchase.status === "draft" ? (
-                            <Link
-                              className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                              to={`/app/purchases/${purchase.id}/edit`}
-                            >
-                              Edit
-                            </Link>
-                          ) : null}
-                          {purchase.status === "draft" ? (
-                            <button
-                              className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                              onClick={() => setFinalizeTarget(purchase)}
-                              type="button"
-                            >
-                              Finalize
-                            </button>
-                          ) : null}
-                          {purchase.status === "draft" ? (
-                            <button
-                              className="rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-                              onClick={() => setCancelTarget(purchase)}
-                              type="button"
-                            >
-                              Cancel
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {pagination ? (
+        <ResponsiveDataList
+          data={purchases}
+          isLoading={purchasesQuery.isLoading}
+          keyExtractor={(item) => item.id}
+          emptyState={{
+            title: "No purchases found",
+            description: "No purchases match the current filters. Start a new draft purchase or clear filters.",
+          }}
+          pagination={
+            pagination ? (
               <Pagination
                 onPageChange={setPage}
                 page={pagination.page}
@@ -585,22 +374,205 @@ export const PurchasesPage = () => {
                 totalItems={pagination.total}
                 totalPages={pagination.totalPages}
               />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState
-            action={
-              <Link
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                to="/app/purchases/new"
-              >
-                Create purchase
-              </Link>
-            }
-            description="No purchases match the current filters. Start a new draft purchase, or clear the filters to see more records."
-            title="No purchases found"
-          />
-        )}
+            ) : null
+          }
+          columns={[
+            {
+              header: "Purchase",
+              accessor: (purchase) => (
+                <div>
+                  <p className="font-semibold text-slate-950">{purchase.purchaseNumber}</p>
+                  <p className="mt-1 text-sm text-slate-600">Due {formatCurrency(purchase.dueAmount)}</p>
+                </div>
+              ),
+              className: "rounded-l-3xl px-4 py-4",
+            },
+            {
+              header: "Supplier",
+              accessor: (purchase) => (
+                <div>
+                  <p className="font-medium text-slate-900">{purchase.supplier.supplierName}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {purchase.supplier.companyName || purchase.supplier.mobileNumber}
+                  </p>
+                </div>
+              ),
+            },
+            {
+              header: "Invoice",
+              accessor: (purchase) => (
+                <div>
+                  <p>{purchase.supplierInvoiceNumber || "Not provided"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatDate(purchase.supplierInvoiceDate)}</p>
+                </div>
+              ),
+            },
+            { header: "Date", accessor: (purchase) => formatDate(purchase.purchaseDate) },
+            { header: "Status", accessor: (purchase) => <StatusBadge label={purchase.status} /> },
+            { header: "Payment", accessor: (purchase) => <StatusBadge label={purchase.paymentStatus} /> },
+            {
+              header: "Total",
+              accessor: (purchase) => formatCurrency(purchase.grandTotal),
+              className: "px-4 py-4 font-semibold text-slate-950",
+            },
+            {
+              header: "Timeline",
+              accessor: (purchase) => (
+                <div className="text-xs text-slate-500">
+                  <p>Created: {formatDateTime(purchase.createdAt)}</p>
+                  {purchase.finalizedAt && <p className="mt-1">Finalized: {formatDateTime(purchase.finalizedAt)}</p>}
+                </div>
+              ),
+            },
+            {
+              header: "Actions",
+              accessor: (purchase) => (
+                <div className="flex justify-end items-center gap-2">
+                  <Link
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white"
+                    title="View Detail"
+                    to={`/app/purchases/${purchase.id}`}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                  
+                  {purchase.status === "draft" && (
+                    <Link
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
+                      title="Edit Purchase"
+                      to={`/app/purchases/${purchase.id}/edit`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Link>
+                  )}
+
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
+                    onClick={() => setDeleteTarget(purchase)}
+                    title="Delete Purchase"
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+
+                  {purchase.status === "draft" && (
+                    <button
+                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                      onClick={() => setFinalizeTarget(purchase)}
+                      type="button"
+                    >
+                      Finalize
+                    </button>
+                  )}
+                </div>
+              ),
+              className: "rounded-r-3xl px-4 py-4 text-right",
+              headerClassName: "px-4 text-right",
+            },
+          ]}
+          renderCard={(purchase) => (
+            <article
+              className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
+              key={purchase.id}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-950">
+                      {purchase.purchaseNumber}
+                    </h3>
+                    <StatusBadge label={purchase.status} />
+                    <StatusBadge label={purchase.paymentStatus} />
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {purchase.supplier.supplierName}
+                  </p>
+                </div>
+                <p className="text-base font-semibold text-slate-950">
+                  {formatCurrency(purchase.grandTotal)}
+                </p>
+              </div>
+
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  [
+                    "Supplier invoice",
+                    purchase.supplierInvoiceNumber || "Not provided",
+                  ],
+                  ["Invoice date", formatDate(purchase.supplierInvoiceDate)],
+                  ["Purchase date", formatDate(purchase.purchaseDate)],
+                  ["Created", formatDateTime(purchase.createdAt)],
+                  [
+                    "Finalized",
+                    purchase.finalizedAt
+                      ? formatDateTime(purchase.finalizedAt)
+                      : "Not finalized",
+                  ],
+                  ["Due", formatCurrency(purchase.dueAmount)],
+                ].map(([label, value]) => (
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+                    key={label}
+                  >
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium text-slate-900">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Link
+                  className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  to={`/app/purchases/${purchase.id}`}
+                >
+                  View
+                </Link>
+                
+                {purchase.status === "draft" && (
+                  <Link
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
+                    title="Edit Purchase"
+                    to={`/app/purchases/${purchase.id}/edit`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                )}
+
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
+                  onClick={() => setDeleteTarget(purchase)}
+                  title="Delete Purchase"
+                  type="button"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+
+                {purchase.status === "draft" ? (
+                  <>
+                    <button
+                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                      onClick={() => setFinalizeTarget(purchase)}
+                      type="button"
+                    >
+                      Finalize
+                    </button>
+                    <button
+                      className="rounded-2xl border border-rose-100 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                      onClick={() => setCancelTarget(purchase)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </article>
+          )}
+        />
       </SectionCard>
 
       <ConfirmDialog
@@ -643,6 +615,21 @@ export const PurchasesPage = () => {
         }}
         open={Boolean(cancelTarget)}
         title={`Cancel ${cancelTarget?.purchaseNumber ?? "purchase"}?`}
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        confirmLabel="Delete purchase"
+        description="This will permanently remove the purchase record. If this was a finalized purchase, it will also reverse the stock postings and financial ledger entries. This action cannot be undone."
+        isLoading={deleteMutation.isPending}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.id);
+          }
+        }}
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.purchaseNumber ?? "purchase"}?`}
         tone="danger"
       />
     </div>

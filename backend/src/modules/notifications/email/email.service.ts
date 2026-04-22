@@ -12,6 +12,7 @@ export interface SendEmailInput {
 
 export interface EmailProvider {
   send(input: SendEmailInput): Promise<void>;
+  verify?(): Promise<void>;
 }
 
 class EmailService {
@@ -19,6 +20,12 @@ class EmailService {
 
   async send(input: SendEmailInput) {
     await this.provider.send(input);
+  }
+
+  async verifyConnection() {
+    if (this.provider.verify) {
+      await this.provider.verify();
+    }
   }
 
   async sendRegistrationOtp(input: {

@@ -110,6 +110,12 @@ export const updateCategory = (
     data: payload,
   });
 
+export const deleteCategory = (id: string) =>
+  apiRequest<{ id: string; success: boolean }>({
+    method: "DELETE",
+    url: `/medicines/categories/${id}`,
+  });
+
 export const listManufacturers = (params: MedicineMasterListParams) =>
   apiRequest<ManufacturersResponse>({
     method: "GET",
@@ -139,4 +145,10 @@ export const updateManufacturer = (
     method: "PATCH",
     url: `/medicines/manufacturers/${id}`,
     data: payload,
+  });
+
+export const deleteManufacturer = (id: string) =>
+  apiRequest<{ id: string; success: boolean }>({
+    method: "DELETE",
+    url: `/medicines/manufacturers/${id}`,
   });

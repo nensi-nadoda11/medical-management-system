@@ -10,4 +10,8 @@ export class ConsoleEmailProvider implements EmailProvider {
       text: input.text,
     });
   }
+
+  async verify() {
+    logger.info("Console email provider ready");
+  }
 }

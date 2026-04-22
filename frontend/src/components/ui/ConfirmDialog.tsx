@@ -35,18 +35,14 @@ export const ConfirmDialog = ({
     footer={
       <>
         <button
-          className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          className="ui-btn ui-btn--secondary"
           onClick={onClose}
           type="button"
         >
           {cancelLabel}
         </button>
         <button
-          className={
-            tone === "danger"
-              ? "rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-              : "rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          }
+          className={tone === "danger" ? "ui-btn ui-btn--danger" : "ui-btn ui-btn--primary"}
           disabled={isLoading}
           onClick={onConfirm}
           type="button"

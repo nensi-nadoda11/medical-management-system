@@ -65,7 +65,7 @@ interface StatusBadgeProps {
 export const StatusBadge = ({ label, tone = label.toLowerCase() }: StatusBadgeProps) => (
   <span
     className={cn(
-      "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+      "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]",
       toneMap[tone] ?? "bg-slate-100 text-slate-700 ring-slate-200",
     )}
   >

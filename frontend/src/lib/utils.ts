@@ -109,3 +109,25 @@ export const getDaysUntil = (value?: string | Date | null) => {
     (startOfTarget.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24),
   );
 };
+export const toSelectedCustomerSummary = (customer: {
+  id: string;
+  customerCode: string | null;
+  fullName: string;
+  mobileNumber: string;
+  city: string | null;
+  totalDueAmount: string;
+  lastPurchaseDate: string | null;
+  status: "active" | "inactive";
+}) => {
+  if (!customer) return null;
+  return {
+    id: customer.id,
+    customerCode: customer.customerCode,
+    fullName: customer.fullName,
+    mobileNumber: customer.mobileNumber,
+    city: customer.city,
+    totalDueAmount: customer.totalDueAmount,
+    lastPurchaseDate: customer.lastPurchaseDate,
+    status: customer.status,
+  };
+};

@@ -8,6 +8,7 @@ import {
   inArray,
   like,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -494,5 +495,24 @@ export class PurchaseReturnsRepository {
       .from(purchaseReturnItems)
       .where(eq(purchaseReturnItems.returnId, returnId))
       .orderBy(asc(purchaseReturnItems.createdAt), asc(purchaseReturnItems.id));
+  }
+
+  async countPurchaseReturnsByPurchaseId(
+    shopId: string,
+    purchaseId: string,
+    executor?: DbExecutor,
+  ) {
+    const [result] = await getDbExecutor(executor)
+      .select({ total: count() })
+      .from(purchaseReturns)
+      .where(
+        and(
+          eq(purchaseReturns.shopId, shopId),
+          eq(purchaseReturns.purchaseId, purchaseId),
+          ne(purchaseReturns.status, "cancelled"),
+        ),
+      );
+
+    return result?.total ?? 0;
   }
 }

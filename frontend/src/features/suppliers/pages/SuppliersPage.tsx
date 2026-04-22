@@ -2,13 +2,13 @@ import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { FilterBar } from "../../../components/ui/FilterBar";
+import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDateTime } from "../../../lib/utils";
 import type { MasterStatus } from "../../../types/medicine";
@@ -109,10 +109,6 @@ export const SuppliersPage = () => {
     },
   });
 
-  if (suppliersQuery.isLoading) {
-    return <LoadingState title="Loading suppliers" />;
-  }
-
   if (suppliersQuery.error) {
     return (
       <ErrorState
@@ -167,9 +163,23 @@ export const SuppliersPage = () => {
         ))}
       </div>
 
-      <SectionCard
+      <FilterBar
         description="Quick filters keep supplier review fast without turning the page into a cluttered admin form."
-        title="Supplier controls"
+        title="Supplier filters"
+        actions={
+          <button
+            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("all");
+              setSortBy("supplierName");
+              setPage(1);
+            }}
+            type="button"
+          >
+            Clear filters
+          </button>
+        }
       >
         <div className="grid gap-4 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
@@ -216,172 +226,22 @@ export const SuppliersPage = () => {
             </select>
           </label>
         </div>
-      </SectionCard>
+      </FilterBar>
 
       <SectionCard
         description="A polished operational view of supplier master data for day-to-day admin work."
         title="Supplier directory"
       >
-        {suppliers.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 lg:hidden">
-              {suppliers.map((supplier) => (
-                <article
-                  className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
-                  key={supplier.id}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-950">
-                          {supplier.supplierName}
-                        </h3>
-                        <StatusBadge label={supplier.status} />
-                      </div>
-                      <p className="text-sm text-slate-600">
-                        {supplier.companyName || "Independent supplier"}
-                      </p>
-                    </div>
-                    <button
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                      onClick={() => {
-                        setEditingSupplier(supplier);
-                        setIsFormOpen(true);
-                      }}
-                      type="button"
-                    >
-                      Edit
-                    </button>
-                  </div>
-
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Mobile", supplier.mobileNumber],
-                      ["Email", supplier.email || "Not added"],
-                      [
-                        "Location",
-                        [supplier.city, supplier.state]
-                          .filter(Boolean)
-                          .join(", ") || "Not added",
-                      ],
-                      ["GST", supplier.gstNumber || "Not added"],
-                      [
-                        "Opening balance",
-                        formatCurrency(supplier.openingBalance),
-                      ],
-                      ["Contact person", supplier.contactPerson || "Not added"],
-                    ].map(([label, value]) => (
-                      <div
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                        key={label}
-                      >
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {label}
-                        </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">
-                          {value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                      Updated {formatDateTime(supplier.updatedAt)}
-                    </p>
-                    <button
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                      onClick={() => setPendingStatusSupplier(supplier)}
-                      type="button"
-                    >
-                      {supplier.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Supplier</th>
-                    <th className="px-4">Company</th>
-                    <th className="px-4">Contact</th>
-                    <th className="px-4">Mobile</th>
-                    <th className="px-4">Location</th>
-                    <th className="px-4">GST</th>
-                    <th className="px-4">Opening balance</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {suppliers.map((supplier) => (
-                    <tr className="rounded-3xl bg-slate-50" key={supplier.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">
-                            {supplier.supplierName}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-600">
-                            {supplier.email || "No email added"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {supplier.companyName || "Independent"}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {supplier.contactPerson || "Not added"}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {supplier.mobileNumber}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {[supplier.city, supplier.state]
-                          .filter(Boolean)
-                          .join(", ") || "Not added"}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {supplier.gstNumber || "Not added"}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {formatCurrency(supplier.openingBalance)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={supplier.status} />
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                            onClick={() => {
-                              setEditingSupplier(supplier);
-                              setIsFormOpen(true);
-                            }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                            onClick={() => setPendingStatusSupplier(supplier)}
-                            type="button"
-                          >
-                            {supplier.status === "active"
-                              ? "Deactivate"
-                              : "Activate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {pagination ? (
+        <ResponsiveDataList
+          data={suppliers}
+          isLoading={suppliersQuery.isLoading}
+          keyExtractor={(item) => item.id}
+          emptyState={{
+            title: "No suppliers found",
+            description: "No suppliers match the current search. Try adding one if the directory is empty.",
+          }}
+          pagination={
+            pagination ? (
               <Pagination
                 onPageChange={setPage}
                 page={pagination.page}
@@ -389,26 +249,132 @@ export const SuppliersPage = () => {
                 totalItems={pagination.total}
                 totalPages={pagination.totalPages}
               />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState
-            action={
-              <button
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => {
-                  setEditingSupplier(null);
-                  setIsFormOpen(true);
-                }}
-                type="button"
-              >
-                Add first supplier
-              </button>
-            }
-            description="Start with your key supplier partners so purchase and payment workflows can grow on top of clean master data."
-            title="No suppliers found"
-          />
-        )}
+            ) : null
+          }
+          columns={[
+            {
+              header: "Supplier",
+              accessor: (supplier) => (
+                <div>
+                  <p className="font-semibold text-slate-950">{supplier.supplierName}</p>
+                  <p className="mt-1 text-sm text-slate-600">{supplier.email || "No email added"}</p>
+                </div>
+              ),
+              className: "rounded-l-3xl px-4 py-4",
+            },
+            { header: "Company", accessor: (supplier) => supplier.companyName || "Independent" },
+            { header: "Contact", accessor: (supplier) => supplier.contactPerson || "Not added" },
+            { header: "Mobile", accessor: (supplier) => supplier.mobileNumber },
+            {
+              header: "Location",
+              accessor: (supplier) =>
+                [supplier.city, supplier.state].filter(Boolean).join(", ") || "Not added",
+            },
+            { header: "GST", accessor: (supplier) => supplier.gstNumber || "Not added" },
+            { header: "Opening balance", accessor: (supplier) => formatCurrency(supplier.openingBalance) },
+            { header: "Status", accessor: (supplier) => <StatusBadge label={supplier.status} /> },
+            {
+              header: "Actions",
+              accessor: (supplier) => (
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    onClick={() => {
+                      setEditingSupplier(supplier);
+                      setIsFormOpen(true);
+                    }}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    onClick={() => setPendingStatusSupplier(supplier)}
+                    type="button"
+                  >
+                    {supplier.status === "active" ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
+              ),
+              className: "rounded-r-3xl px-4 py-4 text-right",
+              headerClassName: "px-4 text-right",
+            },
+          ]}
+          renderCard={(supplier) => (
+            <article
+              className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
+              key={supplier.id}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-950">
+                      {supplier.supplierName}
+                    </h3>
+                    <StatusBadge label={supplier.status} />
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    {supplier.companyName || "Independent supplier"}
+                  </p>
+                </div>
+                <button
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  onClick={() => {
+                    setEditingSupplier(supplier);
+                    setIsFormOpen(true);
+                  }}
+                  type="button"
+                >
+                  Edit
+                </button>
+              </div>
+
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  ["Mobile", supplier.mobileNumber],
+                  ["Email", supplier.email || "Not added"],
+                  [
+                    "Location",
+                    [supplier.city, supplier.state]
+                      .filter(Boolean)
+                      .join(", ") || "Not added",
+                  ],
+                  ["GST", supplier.gstNumber || "Not added"],
+                  [
+                    "Opening balance",
+                    formatCurrency(supplier.openingBalance),
+                  ],
+                  ["Contact person", supplier.contactPerson || "Not added"],
+                ].map(([label, value]) => (
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+                    key={label}
+                  >
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium text-slate-900">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                  Updated {formatDateTime(supplier.updatedAt)}
+                </p>
+                <button
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  onClick={() => setPendingStatusSupplier(supplier)}
+                  type="button"
+                >
+                  {supplier.status === "active" ? "Deactivate" : "Activate"}
+                </button>
+              </div>
+            </article>
+          )}
+        />
       </SectionCard>
 
       <SupplierFormModal

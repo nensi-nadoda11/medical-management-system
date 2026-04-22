@@ -9,6 +9,7 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   or,
   sql,
 } from "drizzle-orm";
@@ -403,7 +404,13 @@ export class NotificationsRepository {
         and(
           eq(notifications.shopId, shopId),
           eq(notifications.isActive, true),
-          eq(notifications.emailStatus, "pending"),
+          or(
+            eq(notifications.emailStatus, "pending"),
+            and(
+              eq(notifications.emailStatus, "failed"),
+              lt(notifications.retryCount, 3),
+            ),
+          ),
           inArray(notifications.type, [
             "low_stock",
             "near_expiry",

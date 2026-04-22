@@ -21,14 +21,14 @@ interface ActivityListProps {
 export const ActivityList = ({ items }: ActivityListProps) => {
   if (!items.length) {
     return (
-      <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+      <div className="rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.92))] px-4 py-8 text-center text-sm text-slate-500">
         No recent operational activity is available for your current access.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="ui-feed-list">
       {items.map((item) => {
         const content = (
           <div className="flex items-start justify-between gap-3">
@@ -52,7 +52,7 @@ export const ActivityList = ({ items }: ActivityListProps) => {
 
         return item.to ? (
           <Link
-            className="block rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/50 transition hover:border-slate-300"
+            className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.9))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
             key={item.id}
             to={item.to}
           >
@@ -60,7 +60,7 @@ export const ActivityList = ({ items }: ActivityListProps) => {
           </Link>
         ) : (
           <article
-            className="block rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/50 transition hover:border-slate-300"
+            className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.9))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
             key={item.id}
           >
             {content}

@@ -139,6 +139,22 @@ export class MedicinesController {
     }
   };
 
+  deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await this.medicinesService.deleteCategory(
+        getShopId(req),
+        getRouteId(req),
+      );
+
+      return res.status(200).json({
+        message: "Category deleted successfully.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   listManufacturers = async (
     req: Request,
     res: Response,
@@ -190,6 +206,26 @@ export class MedicinesController {
 
       return res.status(200).json({
         message: "Manufacturer updated successfully.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  deleteManufacturer = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const result = await this.medicinesService.deleteManufacturer(
+        getShopId(req),
+        getRouteId(req),
+      );
+
+      return res.status(200).json({
+        message: "Manufacturer deleted successfully.",
         data: result,
       });
     } catch (error) {

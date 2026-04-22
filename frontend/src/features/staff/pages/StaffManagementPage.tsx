@@ -184,7 +184,7 @@ export const StaffManagementPage = () => {
                 className={
                   activeTab === tab.id
                     ? "rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm"
-                    : "rounded-2xl px-4 py-2 text-sm font-semibold text-slate-500"
+                    : "rounded-2xl px-4 py-2 text-sm font-semibold text-slate-600"
                 }
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as StaffTab)}
@@ -211,7 +211,7 @@ export const StaffManagementPage = () => {
                     className={
                       userFilter === filter.id
                         ? "rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white"
-                        : "rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                        : "rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                     }
                     key={filter.id}
                     onClick={() => setUserFilter(filter.id as UserFilter)}
@@ -226,7 +226,7 @@ export const StaffManagementPage = () => {
                 <div className="overflow-x-auto">
               <table className="min-w-[760px] w-full border-separate border-spacing-y-3">
                 <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+<tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
                     <th className="px-4">User</th>
                     <th className="px-4">Role</th>
                     <th className="px-4">Status</th>
@@ -240,7 +240,7 @@ export const StaffManagementPage = () => {
                       <td className="rounded-l-3xl px-4 py-4">
                         <div>
                           <p className="font-semibold text-slate-950">{user.fullName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{user.email}</p>
+                          <p className="mt-1 text-sm text-slate-700">{user.email}</p>
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -249,13 +249,13 @@ export const StaffManagementPage = () => {
                       <td className="px-4 py-4">
                         <StatusBadge label={user.isActive ? "active" : "inactive"} />
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
+                      <td className="px-4 py-4 text-sm text-slate-700">
                         {formatDateTime(user.lastLoginAt)}
                       </td>
                       <td className="rounded-r-3xl px-4 py-4">
                         <div className="flex justify-end gap-2">
                           <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={user.role === "admin"}
                             onClick={() => setEditingUser(user)}
                             type="button"
@@ -263,7 +263,7 @@ export const StaffManagementPage = () => {
                             Edit
                           </button>
                           <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={user.role === "admin"}
                             onClick={() => setPendingAction({ kind: "toggle-user", user })}
                             type="button"
@@ -314,16 +314,16 @@ export const StaffManagementPage = () => {
                       <td className="rounded-l-3xl px-4 py-4">
                         <div>
                           <p className="font-semibold text-slate-950">{invitation.fullName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{invitation.email}</p>
+                          <p className="mt-1 text-sm text-slate-700">{invitation.email}</p>
                         </div>
                       </td>
                       <td className="px-4 py-4">
                         <StatusBadge label={invitation.role} tone={invitation.role} />
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
+                      <td className="px-4 py-4 text-sm text-slate-700">
                         {formatRelativeStatusDate(invitation.lastSentAt)}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
+                      <td className="px-4 py-4 text-sm text-slate-700">
                         {formatRelativeStatusDate(invitation.expiresAt)}
                       </td>
                       <td className="px-4 py-4">
@@ -332,7 +332,7 @@ export const StaffManagementPage = () => {
                       <td className="rounded-r-3xl px-4 py-4">
                         <div className="flex justify-end gap-2">
                           <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={!allowResend}
                             onClick={() => setPendingAction({ kind: "resend-invitation", invitation })}
                             type="button"
@@ -340,7 +340,7 @@ export const StaffManagementPage = () => {
                             Resend
                           </button>
                           <button
-                            className="rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-2xl border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-800 transition hover:border-rose-400 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={!allowRevoke}
                             onClick={() => setPendingAction({ kind: "revoke-invitation", invitation })}
                             type="button"

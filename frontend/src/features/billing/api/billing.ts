@@ -9,6 +9,16 @@ import type {
   SaveBillPayload,
 } from "../../../types/billing";
 
+export type {
+  BillDetail,
+  BillListParams,
+  BillingMedicineOptions,
+  BillingMedicineSearchParams,
+  BillingMedicineSearchResponse,
+  BillsResponse,
+  SaveBillPayload,
+};
+
 const cleanParams = (
   params: Record<string, string | number | boolean | undefined>,
 ) =>

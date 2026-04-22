@@ -38,7 +38,12 @@ import {
 import {
   salesReturnsQueryKeys,
   listSalesReturns,
+  type SalesReturnListItem,
 } from "../../sales-returns/api/salesReturns";
+import { type BillListItem } from "../../billing/api/billing";
+import { type PurchaseReturnListItem } from "../../purchase-returns/api/purchaseReturns";
+import { type AccountingCustomerPayment, type AccountingSupplierPayment } from "../../accounting/api/accounting";
+import { type StockTransactionListItem } from "../../inventory/api/inventory";
 import {
   cn,
   formatCurrency,
@@ -583,7 +588,7 @@ export const DashboardHomePage = () => {
   ].filter(isPresent);
 
   const activityItems: DashboardActivityItem[] = [
-    ...(billsQuery.data?.items ?? []).map((item) => ({
+    ...(billsQuery.data?.items ?? []).map((item: BillListItem) => ({
       id: `bill-${item.id}`,
       label: "completed",
       tone: item.paymentStatus,
@@ -593,7 +598,7 @@ export const DashboardHomePage = () => {
       occurredAt: item.completedAt ?? item.createdAt,
       to: `/app/billing/${item.id}`,
     })),
-    ...(salesReturnsQuery.data?.items ?? []).map((item) => ({
+    ...(salesReturnsQuery.data?.items ?? []).map((item: SalesReturnListItem) => ({
       id: `sales-return-${item.id}`,
       label: "sale_return",
       title: item.returnNumber,
@@ -602,7 +607,7 @@ export const DashboardHomePage = () => {
       occurredAt: item.completedAt ?? item.createdAt,
       to: `/app/billing/returns/${item.id}`,
     })),
-    ...(purchaseReturnsQuery.data?.items ?? []).map((item) => ({
+    ...(purchaseReturnsQuery.data?.items ?? []).map((item: PurchaseReturnListItem) => ({
       id: `purchase-return-${item.id}`,
       label: "purchase_return",
       title: item.returnNumber,
@@ -611,7 +616,7 @@ export const DashboardHomePage = () => {
       occurredAt: item.completedAt ?? item.createdAt,
       to: `/app/purchase-returns/${item.id}`,
     })),
-    ...(customerPaymentsQuery.data?.items ?? []).map((item) => ({
+    ...(customerPaymentsQuery.data?.items ?? []).map((item: AccountingCustomerPayment) => ({
       id: `customer-payment-${item.id}`,
       label: "payment_received",
       title: item.customer.fullName,
@@ -620,7 +625,7 @@ export const DashboardHomePage = () => {
       occurredAt: item.paymentDate,
       to: `/app/accounting/customers/${item.customer.id}`,
     })),
-    ...(supplierPaymentsQuery.data?.items ?? []).map((item) => ({
+    ...(supplierPaymentsQuery.data?.items ?? []).map((item: AccountingSupplierPayment) => ({
       id: `supplier-payment-${item.id}`,
       label: "payment_made",
       title: item.supplier.supplierName,
@@ -629,7 +634,7 @@ export const DashboardHomePage = () => {
       occurredAt: item.paymentDate,
       to: `/app/accounting/suppliers/${item.supplier.id}`,
     })),
-    ...(stockTransactionsQuery.data?.items ?? []).map((item) => ({
+    ...(stockTransactionsQuery.data?.items ?? []).map((item: StockTransactionListItem) => ({
       id: `stock-${item.id}`,
       label: item.transactionType,
       title: item.medicine.medicineName,
@@ -727,10 +732,11 @@ export const DashboardHomePage = () => {
         {canViewReports ? (
           <SectionCard
             title="Sales insights"
+            className="w-full"
             description="Daily sales movement for the last 7 days, with compact month-to-date context for quick review."
             action={
               <Link
-                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
                 to="/app/reports/sales"
               >
                 Open sales report
@@ -786,19 +792,22 @@ export const DashboardHomePage = () => {
           </SectionCard>
         ) : null}
 
-        <SectionCard
-          title="Alerts & notifications"
+        <div className={cn("w-full", canViewReports ? "h-[32rem] xl:h-full xl:min-h-[24rem] relative" : "")}>
+          <SectionCard
+            title="Alerts & notifications"
+            className={cn(canViewReports ? "xl:absolute xl:inset-0 xl:h-full" : "")}
+            contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
           description="Unread alerts stay visible so stock, expiry, and financial exceptions do not get buried."
           action={
             <Link
-              className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
               to="/app/notifications"
             >
               Open notifications
             </Link>
           }
         >
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid shrink-0 gap-3 sm:grid-cols-3">
             <MetricCard
               hint="Unread items in your queue"
               label="Unread"
@@ -826,16 +835,19 @@ export const DashboardHomePage = () => {
             <AlertList items={alerts.slice(0, 4)} />
           )}
         </SectionCard>
+        </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
         {canViewReports ? (
           <SectionCard
+            className="xl:h-[35rem]"
+            contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
             title="Profit insights"
             description="Track today vs month profit, margin, and the strongest profit day without opening a full report."
             action={
               <Link
-                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
                 to="/app/reports/profit"
               >
                 Open profit report
@@ -894,18 +906,20 @@ export const DashboardHomePage = () => {
 
         {canViewInventory ? (
           <SectionCard
+            className="xl:h-[35rem]"
+            contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
             title="Inventory intelligence"
             description="Low stock and near-expiry items are elevated first so urgent stock action stays obvious."
             action={
               <div className="flex flex-wrap gap-2">
                 <Link
-                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3 !py-2"
                   to="/app/inventory/low-stock"
                 >
                   Low stock
                 </Link>
                 <Link
-                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3 !py-2"
                   to="/app/inventory/expiry"
                 >
                   Expiry report
@@ -935,7 +949,7 @@ export const DashboardHomePage = () => {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-3">
+              <div className="ui-feed-list lg:!max-h-[27rem]">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Low stock medicines
                 </p>
@@ -946,7 +960,7 @@ export const DashboardHomePage = () => {
                 ) : (lowStockQuery.data?.items ?? []).length ? (
                   lowStockQuery.data!.items.map((item) => (
                     <Link
-                      className="block rounded-[20px] border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+                      className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
                       key={item.medicine.id}
                       to={`/app/inventory/${item.medicine.id}`}
                     >
@@ -974,7 +988,7 @@ export const DashboardHomePage = () => {
                 )}
               </div>
 
-              <div className="space-y-3">
+              <div className="ui-feed-list lg:!max-h-[27rem]">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Near expiry batches
                 </p>
@@ -988,7 +1002,7 @@ export const DashboardHomePage = () => {
 
                     return (
                       <Link
-                        className="block rounded-[20px] border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
                         key={item.id}
                         to={`/app/inventory/${item.medicine.id}`}
                       >
@@ -1027,9 +1041,10 @@ export const DashboardHomePage = () => {
         {canViewPayments ? (
           <SectionCard
             title="Dues & payables snapshot"
+            className="w-full"
             description="Receivables and supplier balances stay compact, accurate, and directly connected to ledger drill-downs."
           >
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-4 grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 hint={`${formatNumber(customerDueSummary.openBillCount)} open bills`}
                 label="Customer due"
@@ -1060,13 +1075,13 @@ export const DashboardHomePage = () => {
               </div>
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-3">
+                <div className="ui-feed-list lg:!max-h-[27rem]">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       Top customer dues
                     </p>
                     <Link
-                      className="text-sm font-semibold text-teal-700 hover:text-teal-800"
+                      className="ui-link-inline"
                       to="/app/accounting/customers"
                     >
                       View all
@@ -1075,7 +1090,7 @@ export const DashboardHomePage = () => {
                   {(customerDueQuery.data?.items ?? []).length ? (
                     customerDueQuery.data!.items.map((item) => (
                       <Link
-                        className="block rounded-[20px] border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
                         key={item.id}
                         to={`/app/accounting/customers/${item.id}`}
                       >
@@ -1105,13 +1120,13 @@ export const DashboardHomePage = () => {
                   )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="ui-feed-list lg:!max-h-[27rem]">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       Top supplier payables
                     </p>
                     <Link
-                      className="text-sm font-semibold text-teal-700 hover:text-teal-800"
+                      className="ui-link-inline"
                       to="/app/accounting/suppliers"
                     >
                       View all
@@ -1120,7 +1135,7 @@ export const DashboardHomePage = () => {
                   {(supplierPayableQuery.data?.items ?? []).length ? (
                     supplierPayableQuery.data!.items.map((item) => (
                       <Link
-                        className="block rounded-[20px] border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
                         key={item.id}
                         to={`/app/accounting/suppliers/${item.id}`}
                       >
@@ -1154,12 +1169,16 @@ export const DashboardHomePage = () => {
           </SectionCard>
         ) : null}
 
-        <SectionCard
-          title="Recent activity"
-          description="Latest bills, returns, payments, and stock movements available to your role are merged into one operational feed."
-        >
-          <ActivityList items={activityItems} />
-        </SectionCard>
+        <div className={cn("w-full", canViewPayments ? "h-[32rem] xl:h-full xl:min-h-[24rem] relative" : "")}>
+          <SectionCard
+            title="Recent activity"
+            className={cn(canViewPayments ? "xl:absolute xl:inset-0 xl:h-full" : "")}
+            contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
+            description="Latest bills, returns, payments, and stock movements available to your role are merged into one operational feed."
+          >
+            <ActivityList items={activityItems} />
+          </SectionCard>
+        </div>
       </div>
 
       {user.role === "admin" ? (
@@ -1193,14 +1212,14 @@ export const DashboardHomePage = () => {
             <div className="flex flex-wrap gap-2">
               {canViewInventory ? (
                 <Link
-                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
                   to="/app/inventory/low-stock"
                 >
                   Review stock
                 </Link>
               ) : null}
               <Link
-                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
                 to="/app/notifications"
               >
                 Review alerts

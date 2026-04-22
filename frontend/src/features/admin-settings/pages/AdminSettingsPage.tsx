@@ -148,13 +148,15 @@ export const AdminSettingsPage = () => {
       return;
     }
 
-    setRoleDraft({
-      admin:
-        rolePermissionsQuery.data.find((entry) => entry.role === "admin")?.permissions ?? [],
-      staff:
-        rolePermissionsQuery.data.find((entry) => entry.role === "staff")?.permissions ?? [],
-      accountant:
-        rolePermissionsQuery.data.find((entry) => entry.role === "accountant")?.permissions ?? [],
+    Promise.resolve().then(() => {
+      setRoleDraft({
+        admin:
+          rolePermissionsQuery.data!.find((entry) => entry.role === "admin")?.permissions ?? [],
+        staff:
+          rolePermissionsQuery.data!.find((entry) => entry.role === "staff")?.permissions ?? [],
+        accountant:
+          rolePermissionsQuery.data!.find((entry) => entry.role === "accountant")?.permissions ?? [],
+      });
     });
   }, [rolePermissionsQuery.data]);
 
@@ -168,7 +170,9 @@ export const AdminSettingsPage = () => {
       return;
     }
 
-    setSelectedUserId(eligibleUsers[0].id);
+    Promise.resolve().then(() => {
+      setSelectedUserId(eligibleUsers[0].id);
+    });
   }, [eligibleUsers, selectedUserId]);
 
   useEffect(() => {
@@ -176,9 +180,11 @@ export const AdminSettingsPage = () => {
       return;
     }
 
-    setOverrideDraft({
-      allow: userDetailQuery.data.overrides.allow,
-      deny: userDetailQuery.data.overrides.deny,
+    Promise.resolve().then(() => {
+      setOverrideDraft({
+        allow: userDetailQuery.data!.overrides.allow,
+        deny: userDetailQuery.data!.overrides.deny,
+      });
     });
   }, [userDetailQuery.data]);
 
@@ -187,7 +193,9 @@ export const AdminSettingsPage = () => {
       return;
     }
 
-    setSettingsDraft(toSettingsDraft(settingsQuery.data));
+    Promise.resolve().then(() => {
+      setSettingsDraft(toSettingsDraft(settingsQuery.data!));
+    });
   }, [settingsQuery.data]);
 
   const saveRolePermissionsMutation = useMutation({

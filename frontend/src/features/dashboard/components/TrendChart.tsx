@@ -28,7 +28,7 @@ export const TrendChart = ({
 
   if (!points.length) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500">
+      <div className="flex h-40 items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.92))] px-4 text-sm text-slate-500">
         {emptyLabel}
       </div>
     );
@@ -57,11 +57,12 @@ export const TrendChart = ({
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   const formatValue = (value: number) =>
     valueFormat === "currency" ? formatCurrency(value) : formatNumber(value);
-  const markerIndexes = Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]))
-    .filter((index) => index >= 0 && index < points.length);
+  const markerIndexes = Array.from(
+    new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
+  ).filter((index) => index >= 0 && index < points.length);
 
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+    <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.94))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -90,12 +91,12 @@ export const TrendChart = ({
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
             <stop
               offset="0%"
-              stopColor={color === "teal" ? "#0f766e" : "#d97706"}
+              stopColor={color === "teal" ? "#111827" : "#d97706"}
               stopOpacity="0.24"
             />
             <stop
               offset="100%"
-              stopColor={color === "teal" ? "#0f766e" : "#d97706"}
+              stopColor={color === "teal" ? "#111827" : "#d97706"}
               stopOpacity="0.02"
             />
           </linearGradient>
@@ -105,7 +106,7 @@ export const TrendChart = ({
         <path
           d={linePath}
           fill="none"
-          stroke={color === "teal" ? "#0f766e" : "#d97706"}
+          stroke={color === "teal" ? "#111827" : "#d97706"}
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="3"
@@ -118,7 +119,7 @@ export const TrendChart = ({
             fill="#ffffff"
             key={`${point.label}-${point.x}`}
             r="3.5"
-            stroke={color === "teal" ? "#0f766e" : "#d97706"}
+            stroke={color === "teal" ? "#111827" : "#d97706"}
             strokeWidth="2"
           />
         ))}
@@ -127,7 +128,9 @@ export const TrendChart = ({
       <div className="mt-3 flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
         {markerIndexes.map((index) => (
           <span
-            className={cn(index === markerIndexes[markerIndexes.length - 1] ? "text-right" : "")}
+            className={cn(
+              index === markerIndexes[markerIndexes.length - 1] ? "text-right" : "",
+            )}
             key={`${points[index]!.label}-${index}`}
           >
             {points[index]!.label}

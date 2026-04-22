@@ -16,9 +16,9 @@ import {
   humanizeLabel,
 } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
-import { billingQueryKeys, getBill } from "../api/billing";
+import { billingQueryKeys, getBill, type BillDetailItem } from "../api/billing";
 import { BillingModuleNav } from "../components/BillingModuleNav";
-import { listSalesReturns, salesReturnsQueryKeys } from "../../sales-returns/api/salesReturns";
+import { listSalesReturns, salesReturnsQueryKeys, type SalesReturnListItem } from "../../sales-returns/api/salesReturns";
 
 export const BillingDetailPage = () => {
   const { id = "" } = useParams();
@@ -173,7 +173,7 @@ export const BillingDetailPage = () => {
         {bill.items.length ? (
           <div className="space-y-4">
             <div className="grid gap-3 xl:hidden">
-              {bill.items.map((item) => (
+              {bill.items.map((item: BillDetailItem) => (
                 <article
                   className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
                   key={item.id}
@@ -284,7 +284,7 @@ export const BillingDetailPage = () => {
       >
         {relatedReturns.length ? (
           <div className="space-y-3">
-            {relatedReturns.map((item) => (
+            {relatedReturns.map((item: SalesReturnListItem) => (
               <div
                 className="flex flex-col gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 key={item.id}

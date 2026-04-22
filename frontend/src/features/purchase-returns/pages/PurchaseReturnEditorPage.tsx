@@ -143,45 +143,50 @@ export const PurchaseReturnEditorPage = () => {
 
     initializedKeyRef.current = initKey;
 
-    if (existingReturn) {
-      setNotes(existingReturn.notes ?? "");
+    Promise.resolve().then(() => {
+      if (existingReturn) {
+        setNotes(existingReturn.notes ?? "");
+        setItemDrafts(
+          Object.fromEntries(
+            returnablePurchase.items.map((item) => {
+              const existingItem = existingReturn.items.find(
+                (current) => current.purchaseItemId === item.purchaseItemId,
+              );
+
+              return [
+                item.purchaseItemId,
+                {
+                  quantity: existingItem ? String(existingItem.quantity) : "",
+                  reason: existingItem?.reason ?? "",
+                  notes: existingItem?.notes ?? "",
+                },
+              ];
+            }),
+          ),
+        );
+        return;
+      }
+
+      setNotes("");
       setItemDrafts(
         Object.fromEntries(
-          returnablePurchase.items.map((item) => {
-            const existingItem = existingReturn.items.find(
-              (current) => current.purchaseItemId === item.purchaseItemId,
-            );
-
-            return [
-              item.purchaseItemId,
-              {
-                quantity: existingItem ? String(existingItem.quantity) : "",
-                reason: existingItem?.reason ?? "",
-                notes: existingItem?.notes ?? "",
-              },
-            ];
-          }),
+          returnablePurchase.items.map((item) => [
+            item.purchaseItemId,
+            {
+              quantity: "",
+              reason: "",
+              notes: "",
+            },
+          ]),
         ),
       );
-      return;
-    }
-
-    setNotes("");
-    setItemDrafts(
-      Object.fromEntries(
-        returnablePurchase.items.map((item) => [
-          item.purchaseItemId,
-          {
-            quantity: "",
-            reason: "",
-            notes: "",
-          },
-        ]),
-      ),
-    );
+    });
   }, [activePurchaseId, existingReturnQuery.data, returnablePurchaseQuery.data]);
 
-  const activeItems = returnablePurchaseQuery.data?.items ?? [];
+  const activeItems = useMemo(
+    () => returnablePurchaseQuery.data?.items ?? [],
+    [returnablePurchaseQuery.data],
+  );
   const selectedItems = useMemo(
     () =>
       activeItems

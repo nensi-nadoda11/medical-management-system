@@ -41,6 +41,13 @@ router.patch(
   validateRequest(updateCategorySchema),
   controller.updateCategory,
 );
+router.delete(
+  "/categories/:id",
+  requireAuth,
+  requirePermission("medicines.edit"),
+  validateRequest(getMedicineByIdSchema),
+  controller.deleteCategory,
+);
 
 router.get(
   "/manufacturers",
@@ -62,6 +69,13 @@ router.patch(
   requirePermission("medicines.edit"),
   validateRequest(updateManufacturerSchema),
   controller.updateManufacturer,
+);
+router.delete(
+  "/manufacturers/:id",
+  requireAuth,
+  requirePermission("medicines.edit"),
+  validateRequest(getMedicineByIdSchema),
+  controller.deleteManufacturer,
 );
 
 router.get(

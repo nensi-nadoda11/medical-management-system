@@ -133,6 +133,22 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
     setRegistrationErrors((current) => ({ ...current, [field]: undefined }));
   };
 
+  const getOtpDeliveryFeedback = (otpDelivery?: {
+    email: string;
+    mobile: string;
+  }) => {
+    if (!otpDelivery) return "";
+    const failures = [];
+    if (otpDelivery.email === "failed") failures.push("email");
+    if (otpDelivery.mobile === "failed") failures.push("mobile number");
+
+    if (failures.length === 0) return "";
+    if (failures.length === 2)
+      return " However, we couldn't send the code to either your email or mobile. Please check your credentials.";
+
+    return ` However, the code could not be delivered to your ${failures[0]}.`;
+  };
+
   const handleOtpChange = <K extends keyof OtpValues>(
     field: K,
     value: OtpValues[K],
@@ -184,7 +200,9 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
       setOtpValues(defaultOtpValues);
       switchView("verify");
       setOtpStatus(
-        `${response.message} We sent verification codes to your email and mobile.`,
+        `${response.message} We sent verification codes to your email and mobile.${getOtpDeliveryFeedback(
+          response.verification.otpDelivery,
+        )}`,
       );
     } catch (error) {
       setRegistrationErrors((current) => ({
@@ -283,7 +301,11 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
         pendingRegistrationStorageKey,
         JSON.stringify(updatedPendingRegistration),
       );
-      setOtpStatus(response.message);
+      setOtpStatus(
+        `${response.message}${getOtpDeliveryFeedback(
+          response.verification.otpDelivery,
+        )}`,
+      );
     } catch (error) {
       setOtpErrors((current) => ({
         ...current,

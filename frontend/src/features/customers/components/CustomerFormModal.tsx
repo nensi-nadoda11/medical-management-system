@@ -195,7 +195,7 @@ export const CustomerFormModal = ({
       }
       onClose={onClose}
       open={open}
-      panelClassName="max-w-6xl"
+      panelClassName="max-w-3xl"
       title={customer ? "Edit customer" : "Add customer"}
     >
       <form

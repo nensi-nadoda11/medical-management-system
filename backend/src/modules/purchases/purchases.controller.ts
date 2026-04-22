@@ -125,4 +125,21 @@ export class PurchasesController {
       return next(error);
     }
   };
+
+  deletePurchase = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await this.purchasesService.deletePurchase(
+        getShopId(req),
+        getBranchId(req),
+        getRouteId(req),
+        getUserId(req),
+      );
+
+      return res.status(200).json({
+        message: "Purchase deleted successfully.",
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
 }

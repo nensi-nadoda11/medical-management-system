@@ -70,3 +70,9 @@ export const cancelPurchase = (id: string, payload: CancelPurchasePayload) =>
     url: `/purchases/${id}/cancel`,
     data: payload,
   });
+
+export const deletePurchase = (id: string) =>
+  apiRequest<void>({
+    method: "DELETE",
+    url: `/purchases/${id}`,
+  });

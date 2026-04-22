@@ -58,5 +58,12 @@ router.post(
   validateRequest(cancelPurchaseSchema),
   controller.cancelPurchase,
 );
+router.delete(
+  "/:id",
+  requireAuth,
+  requirePermission("purchases.create"),
+  validateRequest(getPurchaseByIdSchema),
+  controller.deletePurchase,
+);
 
 export const purchasesRoutes = router;

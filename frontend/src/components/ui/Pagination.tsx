@@ -24,18 +24,18 @@ export const Pagination = ({
 
       <div className="flex items-center gap-2">
         <button
-          className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-4 !py-2"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
           type="button"
         >
           Previous
         </button>
-        <span className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+        <span className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/50">
           Page {page} of {Math.max(totalPages, 1)}
         </span>
         <button
-          className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-4 !py-2"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
           type="button"

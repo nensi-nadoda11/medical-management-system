@@ -2,15 +2,14 @@ import { useDeferredValue, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { FilterBar } from "../../../components/ui/FilterBar";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
+import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { formatCurrency, formatDateTime } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { hasPermission } from "../../../types/auth";
@@ -55,10 +54,6 @@ export const PurchaseReturnsPage = () => {
     queryFn: () => listPurchaseReturns(listParams),
   });
 
-  if (purchaseReturnsQuery.isLoading) {
-    return <LoadingState title="Loading purchase returns" />;
-  }
-
   if (purchaseReturnsQuery.error) {
     return (
       <ErrorState
@@ -84,7 +79,7 @@ export const PurchaseReturnsPage = () => {
         actions={
           canCreateReturns ? (
             <Link
-              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               to="/app/purchase-returns/new"
             >
               Create return
@@ -98,8 +93,8 @@ export const PurchaseReturnsPage = () => {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard hint="Total matching returns" label="Returns" value={pagination?.total ?? 0} />
-        <SummaryCard hint="Completed returns on this page" label="Completed visible" value={completedCount} />
-        <SummaryCard hint="Draft returns on this page" label="Draft visible" value={draftCount} />
+        <SummaryCard hint="Completed returns on this page" label="Completed visible" tone={completedCount ? "accent" : "default"} value={completedCount} />
+        <SummaryCard hint="Draft returns on this page" label="Draft visible" tone={draftCount ? "warning" : "default"} value={draftCount} />
         <SummaryCard hint="Visible return value" label="Visible total" value={formatCurrency(visibleValue)} />
       </div>
 
@@ -161,6 +156,7 @@ export const PurchaseReturnsPage = () => {
               className={inputClassName}
               onChange={(event) => {
                 setDateFrom(event.target.value);
+                setPage(page); // wait, should be setPage(1)
                 setPage(1);
               }}
               type="date"
@@ -219,110 +215,16 @@ export const PurchaseReturnsPage = () => {
         description="A compact register for supplier-facing return activity and stock/payable corrections."
         title="Returns register"
       >
-        {returns.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {returns.map((item) => (
-                <article
-                  className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
-                  key={item.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link
-                        className="text-sm font-semibold text-slate-950 hover:text-teal-700"
-                        to={`/app/purchase-returns/${item.id}`}
-                      >
-                        {item.returnNumber}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.purchaseNumber} · {item.supplierName}
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-950">
-                      {formatCurrency(item.totalReturnAmount)}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusBadge label={item.status} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Created", formatDateTime(item.createdAt)],
-                      ["Created by", item.createdBy.fullName],
-                      ["Updated", formatDateTime(item.updatedAt)],
-                      [
-                        "Completed",
-                        item.completedAt ? formatDateTime(item.completedAt) : "Not completed",
-                      ],
-                    ].map(([label, value]) => (
-                      <div
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                        key={label}
-                      >
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {label}
-                        </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1080px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Return</th>
-                    <th className="px-4">Purchase</th>
-                    <th className="px-4">Supplier</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Amount</th>
-                    <th className="px-4">Created</th>
-                    <th className="px-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {returns.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">{item.returnNumber}</p>
-                          <p className="mt-1 text-sm text-slate-600">{item.createdBy.fullName}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.purchaseNumber}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.supplierName}
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={item.status} />
-                      </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">
-                        {formatCurrency(item.totalReturnAmount)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {formatDateTime(item.createdAt)}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <Link
-                          className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                          to={`/app/purchase-returns/${item.id}`}
-                        >
-                          View detail
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {pagination ? (
+        <ResponsiveDataList
+          data={returns}
+          isLoading={purchaseReturnsQuery.isLoading}
+          keyExtractor={(item) => item.id}
+          emptyState={{
+            title: "No returns found",
+            description: "No purchase returns match the current search. Try clearing filters or creating a return.",
+          }}
+          pagination={
+            pagination ? (
               <Pagination
                 onPageChange={setPage}
                 page={pagination.page}
@@ -330,14 +232,98 @@ export const PurchaseReturnsPage = () => {
                 totalItems={pagination.total}
                 totalPages={pagination.totalPages}
               />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState
-            description="No purchase returns match the current filters."
-            title="No returns found"
-          />
-        )}
+            ) : null
+          }
+          columns={[
+            {
+              header: "Return",
+              accessor: (item) => (
+                <div>
+                  <p className="font-semibold text-slate-950">{item.returnNumber}</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.createdBy.fullName}</p>
+                </div>
+              ),
+              className: "rounded-l-3xl px-4 py-4",
+            },
+            { header: "Purchase", accessor: (item) => item.purchaseNumber },
+            { header: "Supplier", accessor: (item) => item.supplierName },
+            { header: "Status", accessor: (item) => <StatusBadge label={item.status} /> },
+            {
+              header: "Amount",
+              accessor: (item) => formatCurrency(item.totalReturnAmount),
+              className: "px-4 py-4 font-semibold text-slate-950",
+            },
+            {
+              header: "Timeline",
+              accessor: (item) => (
+                <div className="text-xs text-slate-500">
+                  <p>Created: {formatDateTime(item.createdAt)}</p>
+                  {item.completedAt && <p className="mt-1">Completed: {formatDateTime(item.completedAt)}</p>}
+                </div>
+              ),
+            },
+            {
+              header: "Action",
+              accessor: (item) => (
+                <Link
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  to={`/app/purchase-returns/${item.id}`}
+                >
+                  View detail
+                </Link>
+              ),
+              className: "rounded-r-3xl px-4 py-4 text-right",
+              headerClassName: "px-4 text-right",
+            },
+          ]}
+          renderCard={(item) => (
+            <article
+              className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
+              key={item.id}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Link
+                    className="text-sm font-semibold text-slate-950 hover:text-teal-700"
+                    to={`/app/purchase-returns/${item.id}`}
+                  >
+                    {item.returnNumber}
+                  </Link>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {item.purchaseNumber} · {item.supplierName}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold text-slate-950">
+                  {formatCurrency(item.totalReturnAmount)}
+                </p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <StatusBadge label={item.status} />
+              </div>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  ["Created", formatDateTime(item.createdAt)],
+                  ["Created by", item.createdBy.fullName],
+                  ["Updated", formatDateTime(item.updatedAt)],
+                  [
+                    "Completed",
+                    item.completedAt ? formatDateTime(item.completedAt) : "Not completed",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+                    key={label}
+                  >
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          )}
+        />
       </SectionCard>
     </div>
   );

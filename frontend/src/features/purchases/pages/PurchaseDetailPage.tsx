@@ -149,7 +149,7 @@ export const PurchaseDetailPage = () => {
             ) : null}
             {isDraft ? (
               <button
-                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800"
                 onClick={() => setIsFinalizeOpen(true)}
                 type="button"
               >
@@ -158,7 +158,7 @@ export const PurchaseDetailPage = () => {
             ) : null}
             {!isDraft && canCreatePurchaseReturn && hasReturnableItems ? (
               <Link
-                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800"
                 to={`/app/purchase-returns/new?purchaseId=${purchase.id}`}
               >
                 Create return
@@ -171,53 +171,45 @@ export const PurchaseDetailPage = () => {
         title={purchase.purchaseNumber}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          hint={`Status: ${purchase.status}`}
-          label="Grand total"
-          value={formatCurrency(purchase.grandTotal)}
-        />
-        <SummaryCard
-          hint={`Payment: ${purchase.paymentStatus}`}
-          label="Paid amount"
-          tone={purchase.paymentStatus === "paid" ? "accent" : "default"}
-          value={formatCurrency(purchase.paidAmount)}
-        />
-        <SummaryCard
-          hint="Outstanding payable balance"
-          label="Due amount"
-          tone={Number(purchase.dueAmount) > 0 ? "warning" : "accent"}
-          value={formatCurrency(purchase.dueAmount)}
-        />
-        <SummaryCard
-          hint="Completed purchase returns against this purchase"
-          label="Returned amount"
-          value={formatCurrency(purchase.totalCompletedReturnedAmount)}
-        />
-        <SummaryCard
-          hint="Total line items in this purchase"
-          label="Item rows"
-          value={purchase.items.length}
-        />
-      </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,0.9fr)]">
         <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              hint={`Status: ${purchase.status}`}
+              label="Grand total"
+              value={formatCurrency(purchase.grandTotal)}
+            />
+            <SummaryCard
+              hint={`Payment: ${purchase.paymentStatus}`}
+              label="Paid amount"
+              tone={purchase.paymentStatus === "paid" ? "accent" : "default"}
+              value={formatCurrency(purchase.paidAmount)}
+            />
+            <SummaryCard
+              hint="Outstanding payable balance"
+              label="Due amount"
+              tone={Number(purchase.dueAmount) > 0 ? "warning" : "accent"}
+              value={formatCurrency(purchase.dueAmount)}
+            />
+            <SummaryCard
+              hint="Completed purchase returns against this purchase"
+              label="Returned amount"
+              value={formatCurrency(purchase.totalCompletedReturnedAmount)}
+            />
+          </div>
           <SectionCard
             description="Operational and supplier-facing identifiers for this purchase."
             title="Purchase overview"
           >
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {[
-                ["Purchase number", purchase.purchaseNumber],
-                ["Supplier", purchase.supplier.supplierName],
                 [
                   "Supplier invoice number",
                   purchase.supplierInvoiceNumber || "Not provided",
                 ],
                 ["Supplier invoice date", formatDate(purchase.supplierInvoiceDate)],
                 ["Purchase date", formatDate(purchase.purchaseDate)],
-                ["Created on", formatDateTime(purchase.createdAt)],
                 [
                   "Finalized on",
                   purchase.finalizedAt ? formatDateTime(purchase.finalizedAt) : "Not finalized",
@@ -421,7 +413,7 @@ export const PurchaseDetailPage = () => {
                 <div
                   className={`flex items-center justify-between rounded-2xl px-3.5 py-3 text-sm ${
                     index === 4
-                      ? "bg-slate-950 text-white"
+                      ? "bg-slate-950 !text-white"
                       : "border border-slate-200 bg-slate-50 text-slate-700"
                   }`}
                   key={label}
@@ -433,52 +425,6 @@ export const PurchaseDetailPage = () => {
             </div>
           </SectionCard>
 
-          <SectionCard
-            description="Return history tied to this finalized purchase."
-            title="Return history"
-          >
-            {purchase.returnHistory.length ? (
-              <div className="space-y-3">
-                {purchase.returnHistory.map((entry) => (
-                  <Link
-                    className="block rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 transition hover:border-slate-300 hover:bg-white"
-                    key={entry.id}
-                    to={`/app/purchase-returns/${entry.id}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">
-                          {entry.returnNumber}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {entry.createdBy.fullName} · {formatDateTime(entry.createdAt)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <StatusBadge label={entry.status} />
-                        <p className="mt-2 text-sm font-semibold text-slate-950">
-                          {formatCurrency(entry.totalReturnAmount)}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm leading-6 text-slate-600">
-                No purchase returns have been created for this purchase yet.
-              </p>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            description="Free-form operational notes saved with the purchase."
-            title="Notes"
-          >
-            <p className="text-sm leading-6 text-slate-600">
-              {purchase.notes || "No notes were added for this purchase."}
-            </p>
-          </SectionCard>
         </div>
       </div>
 

@@ -295,30 +295,6 @@ export const PurchaseForm = ({
         await onSubmit(toPayload(values), submissionIntent);
       })}
     >
-      <div className="grid gap-3 md:grid-cols-3">
-        {[
-          [
-            "1. Choose supplier",
-            "Pick the supplier, bill number, and purchase date first so the document header is clear.",
-          ],
-          [
-            "2. Add batch rows",
-            "Enter each medicine batch separately with expiry, quantity, rates, and GST details.",
-          ],
-          [
-            "3. Review and submit",
-            "Save draft if you want to continue later. Finalize only when stock should move into inventory.",
-          ],
-        ].map(([title, description]) => (
-          <article
-            className="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm shadow-slate-200/50"
-            key={title}
-          >
-            <p className="text-sm font-semibold text-slate-950">{title}</p>
-            <p className="mt-1.5 text-sm leading-5 text-slate-600">{description}</p>
-          </article>
-        ))}
-      </div>
 
       {!canSubmit ? (
         <EmptyState
@@ -448,14 +424,10 @@ export const PurchaseForm = ({
           </FormSection>
 
           <FormSection
-            description="Keep all batch-entry fields in one compact workspace so the operator can complete purchases with minimal clicks."
             title="Purchase items"
           >
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="max-w-3xl text-sm leading-5 text-slate-600">
-                  Add one row per medicine batch. If the same medicine has two different batch numbers or expiry dates, enter them as separate rows. Final calculations are still validated by the backend.
-                </div>
                 <button
                   className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                   onClick={() => append(createEmptyItem())}
@@ -853,54 +825,8 @@ export const PurchaseForm = ({
             </div>
           </FormSection>
 
-          <FormSection
-            description="Helpful checkpoints for the operator before stock is finalized."
-            title="Entry checklist"
-          >
-            <div className="grid gap-3">
-              {[
-                ["Item rows", fields.length.toString()],
-                ["Purchased quantity", totals.totalQuantity.toString()],
-                ["Free quantity", totals.totalFreeQuantity.toString()],
-                ["Current mode", mode === "create" ? "New purchase" : "Editing draft"],
-              ].map(([label, value]) => (
-                <div
-                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                  key={label}
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {label}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
-                </div>
-              ))}
-            </div>
-          </FormSection>
 
           <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
-            <p className="text-sm font-semibold text-slate-950">Choose what should happen next</p>
-            <p className="mt-1 text-sm leading-5 text-slate-600">
-              Draft keeps this document editable and does not change stock. Finalize locks the purchase and posts batch quantities into inventory.
-            </p>
-
-            <div className="mt-4 grid gap-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Save as draft
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Use this if bill entry is incomplete or you want to review the purchase later.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                  Finalize purchase
-                </p>
-                <p className="mt-1 text-sm text-emerald-900">
-                  Use this only when the batch details are correct and stock should become available in inventory.
-                </p>
-              </div>
-            </div>
 
             {errorMessage ? (
               <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -922,7 +848,7 @@ export const PurchaseForm = ({
                     : "Update draft"}
               </button>
               <button
-                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isSubmitting || !canSubmit}
                 onClick={() => setSubmissionIntent("finalize")}
                 type="submit"

@@ -7,6 +7,7 @@ import {
   exists,
   gte,
   inArray,
+  like,
   lte,
   ne,
   or,
@@ -696,5 +697,86 @@ export class InventoryRepository {
       .where(and(...filters));
 
     return result?.total ?? 0;
+  }
+
+  async getBatchesByIds(
+    shopId: string,
+    branchId: string,
+    batchIds: string[],
+    executor?: DbExecutor,
+  ) {
+    if (!batchIds.length) {
+      return [];
+    }
+
+    return getDbExecutor(executor)
+      .select()
+      .from(medicineBatches)
+      .where(
+        and(
+          eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
+          inArray(medicineBatches.id, batchIds),
+        ),
+      );
+  }
+
+  async deletePurchaseStockRecords(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    executor: DbExecutor,
+  ) {
+    const database = getDbExecutor(executor);
+
+    // 1. Find all transactions related to this purchase items
+    const transactions = await database
+      .select()
+      .from(stockTransactions)
+      .where(
+        and(
+          eq(stockTransactions.shopId, shopId),
+          eq(stockTransactions.branchId, branchId),
+          eq(stockTransactions.referenceType, "purchase_item"),
+          like(stockTransactions.notes, `%purchase ${purchaseId}%`),
+        ),
+      );
+
+    for (const tx of transactions) {
+      // 2. Revert batch quantities
+      await database
+        .update(medicineBatches)
+        .set({
+          quantityReceived: sql`${medicineBatches.quantityReceived} - ${tx.quantityIn}`,
+          quantityAvailable: sql`${medicineBatches.quantityAvailable} - ${tx.quantityIn}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(medicineBatches.id, tx.batchId));
+    }
+
+    // 3. Delete transactions
+    await database
+      .delete(stockTransactions)
+      .where(
+        and(
+          eq(stockTransactions.shopId, shopId),
+          eq(stockTransactions.branchId, branchId),
+          eq(stockTransactions.referenceType, "purchase_item"),
+          like(stockTransactions.notes, `%purchase ${purchaseId}%`),
+        ),
+      );
+
+    // 4. Cleanup: Delete batches that now have 0 quantity received (if they were created solely by this purchase)
+    // Actually, we might want to keep them if they were previously there, but the upsert logic adds.
+    // If quantityReceived is now 0, it's safe to delete.
+    await database
+      .delete(medicineBatches)
+      .where(
+        and(
+          eq(medicineBatches.shopId, shopId),
+          eq(medicineBatches.branchId, branchId),
+          eq(medicineBatches.quantityReceived, 0),
+        ),
+      );
   }
 }

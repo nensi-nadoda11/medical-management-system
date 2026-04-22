@@ -11,22 +11,22 @@ interface AlertListProps {
 export const AlertList = ({ items }: AlertListProps) => {
   if (!items.length) {
     return (
-      <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+      <div className="rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.92))] px-4 py-8 text-center text-sm text-slate-500">
         No active alerts need attention right now.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="ui-feed-list !max-h-[28rem]">
       {items.map((item) => {
         const className = cn(
-          "block rounded-[20px] border p-4 shadow-sm shadow-slate-200/50 transition",
+          "block rounded-[22px] border p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition",
           item.severity === "critical"
-            ? "border-rose-200 bg-rose-50/70 hover:border-rose-300"
+            ? "border-rose-200 bg-[linear-gradient(180deg,rgba(255,241,242,0.96),rgba(255,255,255,0.94))] hover:border-rose-300"
             : item.severity === "warning"
-              ? "border-amber-200 bg-amber-50/70 hover:border-amber-300"
-              : "border-slate-200 bg-white hover:border-slate-300",
+              ? "border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.96),rgba(255,255,255,0.94))] hover:border-amber-300"
+              : "border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.9))] hover:border-slate-300 hover:bg-white",
         );
         const content = (
           <>

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -77,10 +77,9 @@ export const CustomerPaymentModal = ({
     register,
     handleSubmit,
     formState: { errors },
-    watch,
   } = form;
 
-  const selectedSaleId = watch("saleId");
+  const selectedSaleId = useWatch({ control: form.control, name: "saleId" });
   const selectedBill = dueBills.find((bill) => bill.id === selectedSaleId);
 
   return (

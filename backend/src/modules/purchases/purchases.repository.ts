@@ -361,4 +361,9 @@ export class PurchasesRepository {
       })
       .where(eq(purchaseItems.id, purchaseItemId));
   }
+
+  async deletePurchase(purchaseId: string, executor: DbExecutor) {
+    const database = getDbExecutor(executor);
+    await database.delete(purchases).where(eq(purchases.id, purchaseId));
+  }
 }

@@ -573,17 +573,22 @@ export class AlertsService {
 
         await this.notificationsRepository.updateNotification(notification.id, shopId, {
           emailStatus: "sent",
+          retryCount: 0,
+          lastError: null,
         });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
         logger.error("Failed to send inventory alert email", {
           shopId,
           notificationId: notification.id,
           type: notification.type,
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: errorMessage,
         });
 
         await this.notificationsRepository.updateNotification(notification.id, shopId, {
           emailStatus: "failed",
+          retryCount: (notification.retryCount ?? 0) + 1,
+          lastError: errorMessage,
         });
       }
     }

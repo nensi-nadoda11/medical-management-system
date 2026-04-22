@@ -11,7 +11,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime, humanizeLabel } from "../../../lib/utils";
-import { billingQueryKeys, listBills } from "../../billing/api/billing";
+import { billingQueryKeys, listBills, type BillListItem } from "../../billing/api/billing";
 import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
@@ -154,54 +154,59 @@ export const SalesReturnEditorPage = () => {
 
     initializedKeyRef.current = initKey;
 
-    if (existingReturn) {
-      setRefundAmount(existingReturn.refundAmount);
-      setRefundMethod(existingReturn.refundMethod ?? "");
-      setRefundStatus(existingReturn.refundStatus);
-      setNotes(existingReturn.notes ?? "");
+    Promise.resolve().then(() => {
+      if (existingReturn) {
+        setRefundAmount(existingReturn.refundAmount);
+        setRefundMethod(existingReturn.refundMethod ?? "");
+        setRefundStatus(existingReturn.refundStatus);
+        setNotes(existingReturn.notes ?? "");
+        setItemDrafts(
+          Object.fromEntries(
+            returnableSale.items.map((item) => {
+              const existingItem = existingReturn.items.find(
+                (current) => current.saleItemId === item.saleItemId,
+              );
+              const quantity = existingItem
+                ? Math.min(existingItem.quantity, item.remainingReturnableQuantity)
+                : 0;
+
+              return [
+                item.saleItemId,
+                {
+                  quantity: quantity ? String(quantity) : "",
+                  reason: existingItem?.reason ?? "",
+                  notes: existingItem?.notes ?? "",
+                },
+              ];
+            }),
+          ),
+        );
+        return;
+      }
+
+      setRefundAmount("0");
+      setRefundMethod("");
+      setRefundStatus("not_required");
+      setNotes("");
       setItemDrafts(
         Object.fromEntries(
-          returnableSale.items.map((item) => {
-            const existingItem = existingReturn.items.find(
-              (current) => current.saleItemId === item.saleItemId,
-            );
-            const quantity = existingItem
-              ? Math.min(existingItem.quantity, item.remainingReturnableQuantity)
-              : 0;
-
-            return [
-              item.saleItemId,
-              {
-                quantity: quantity ? String(quantity) : "",
-                reason: existingItem?.reason ?? "",
-                notes: existingItem?.notes ?? "",
-              },
-            ];
-          }),
+          returnableSale.items.map((item) => [
+            item.saleItemId,
+            {
+              quantity: "",
+              reason: "",
+              notes: "",
+            },
+          ]),
         ),
       );
-      return;
-    }
-
-    setRefundAmount("0");
-    setRefundMethod("");
-    setRefundStatus("not_required");
-    setNotes("");
-    setItemDrafts(
-      Object.fromEntries(
-        returnableSale.items.map((item) => [
-          item.saleItemId,
-          {
-            quantity: "",
-            reason: "",
-            notes: "",
-          },
-        ]),
-      ),
-    );
+    });
   }, [activeSaleId, existingReturnQuery.data, returnableSaleQuery.data]);
 
-  const activeItems = returnableSaleQuery.data?.items ?? [];
+  const activeItems = useMemo(
+    () => returnableSaleQuery.data?.items ?? [],
+    [returnableSaleQuery.data],
+  );
   const selectedItems = useMemo(() => {
     return activeItems
       .map((item) => {
@@ -475,7 +480,7 @@ export const SalesReturnEditorPage = () => {
               />
             ) : completedBillsQuery.data?.items.length ? (
               <div className="grid gap-3 lg:grid-cols-2">
-                {completedBillsQuery.data.items.map((bill) => (
+                {completedBillsQuery.data.items.map((bill: BillListItem) => (
                   <article
                     className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
                     key={bill.id}

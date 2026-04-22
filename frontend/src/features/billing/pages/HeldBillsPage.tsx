@@ -55,8 +55,8 @@ export const HeldBillsPage = () => {
 
   const bills = billsQuery.data?.items ?? [];
   const pagination = billsQuery.data?.pagination;
-  const heldValue = bills.reduce((sum, bill) => sum + Number(bill.grandTotal), 0);
-  const dueValue = bills.reduce((sum, bill) => sum + Number(bill.dueAmount), 0);
+  const heldValue = bills.reduce((sum: number, bill: BillListItem) => sum + Number(bill.grandTotal), 0);
+  const dueValue = bills.reduce((sum: number, bill: BillListItem) => sum + Number(bill.dueAmount), 0);
 
   return (
     <div className="space-y-6">

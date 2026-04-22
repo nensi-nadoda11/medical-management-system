@@ -193,6 +193,20 @@ export class MedicinesRepository {
     return category ?? null;
   }
 
+  async deleteCategory(shopId: string, categoryId: string) {
+    const [deleted] = await db
+      .delete(medicineCategories)
+      .where(
+        and(
+          eq(medicineCategories.id, categoryId),
+          eq(medicineCategories.shopId, shopId),
+        ),
+      )
+      .returning();
+
+    return deleted ?? null;
+  }
+
   async listManufacturers(shopId: string, query: ListMasterDataQuery) {
     const orderBy =
       query.sortBy === "createdAt"
@@ -304,6 +318,20 @@ export class MedicinesRepository {
       .returning();
 
     return manufacturer ?? null;
+  }
+
+  async deleteManufacturer(shopId: string, manufacturerId: string) {
+    const [deleted] = await db
+      .delete(manufacturers)
+      .where(
+        and(
+          eq(manufacturers.id, manufacturerId),
+          eq(manufacturers.shopId, shopId),
+        ),
+      )
+      .returning();
+
+    return deleted ?? null;
   }
 
   async listMedicines(shopId: string, query: ListMedicinesQuery) {

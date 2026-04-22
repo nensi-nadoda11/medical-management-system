@@ -26,9 +26,12 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const toastStyles: Record<ToastVariant, string> = {
-  success: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  error: "border-rose-200 bg-rose-50 text-rose-900",
-  info: "border-slate-200 bg-white text-slate-900",
+  success:
+    "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,250,0.96),rgba(255,255,255,0.94))] text-emerald-900",
+  error:
+    "border-rose-200 bg-[linear-gradient(180deg,rgba(255,241,242,0.96),rgba(255,255,255,0.94))] text-rose-900",
+  info:
+    "border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] text-slate-900",
 };
 
 export const ToastProvider = ({ children }: PropsWithChildren) => {
@@ -60,7 +63,7 @@ export const ToastProvider = ({ children }: PropsWithChildren) => {
         {toasts.map((toast) => (
           <div
             className={cn(
-              "pointer-events-auto rounded-2xl border px-4 py-3 shadow-lg shadow-slate-200/70 backdrop-blur",
+              "pointer-events-auto rounded-[24px] border px-4 py-3.5 shadow-[0_24px_60px_-34px_rgba(15,23,42,0.42)] backdrop-blur-xl",
               toastStyles[toast.variant],
             )}
             key={toast.id}

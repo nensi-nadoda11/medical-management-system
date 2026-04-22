@@ -15,8 +15,8 @@ export const ErrorState = ({
   onRetry,
   action,
 }: ErrorStateProps) => (
-  <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,#fff7f8_0%,#fff2f4_100%)] px-6 py-12 text-center shadow-sm shadow-rose-200/60">
-    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-700 shadow-sm">
+  <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[28px] border border-rose-200 bg-[linear-gradient(180deg,rgba(255,247,248,0.98),rgba(255,242,244,0.96))] px-6 py-12 text-center shadow-[0_26px_58px_-44px_rgba(190,24,93,0.28)]">
+    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 shadow-sm">
       <span className="text-xl font-semibold">!</span>
     </div>
     <h2 className="mt-5 text-lg font-semibold text-slate-950">{title}</h2>
@@ -27,7 +27,7 @@ export const ErrorState = ({
       <div className="mt-5">{action}</div>
     ) : onRetry ? (
       <button
-        className="mt-5 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+        className="ui-btn ui-btn--primary mt-5"
         onClick={onRetry}
         type="button"
       >

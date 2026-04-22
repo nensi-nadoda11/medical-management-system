@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { FilterBar } from "../../../components/ui/FilterBar";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
@@ -49,9 +48,11 @@ export const BillingHistoryPage = () => {
     queryFn: () => listBills(listParams),
   });
 
-  if (billsQuery.isLoading) {
-    return <LoadingState title="Loading billing history" />;
-  }
+  const bills = billsQuery.data?.items ?? [];
+  const pagination = billsQuery.data?.pagination;
+  const completedCount = bills.filter((bill: BillListItem) => bill.status === "completed").length;
+  const heldCount = bills.filter((bill: BillListItem) => bill.status === "held").length;
+  const visibleValue = bills.reduce((sum: number, bill: BillListItem) => sum + Number(bill.grandTotal), 0);
 
   if (billsQuery.error) {
     return (
@@ -62,12 +63,6 @@ export const BillingHistoryPage = () => {
       />
     );
   }
-
-  const bills = billsQuery.data?.items ?? [];
-  const pagination = billsQuery.data?.pagination;
-  const completedCount = bills.filter((bill) => bill.status === "completed").length;
-  const heldCount = bills.filter((bill) => bill.status === "held").length;
-  const visibleValue = bills.reduce((sum, bill) => sum + Number(bill.grandTotal), 0);
 
   return (
     <div className="space-y-6">
@@ -244,6 +239,7 @@ export const BillingHistoryPage = () => {
           emptyTitle="No bills found"
           onPageChange={setPage}
           pagination={pagination}
+          isLoading={billsQuery.isLoading}
         />
       </SectionCard>
     </div>

@@ -21,7 +21,7 @@ export class SmtpEmailProvider implements EmailProvider {
     this.transporter = nodemailer.createTransport({
       host: options.host,
       port: options.port,
-      secure: options.secure,
+      secure: options.secure || options.port === 465,
       auth: {
         user: options.user,
         pass: options.pass,
@@ -29,6 +29,10 @@ export class SmtpEmailProvider implements EmailProvider {
     });
     this.fromAddress = options.fromAddress;
     this.fromName = options.fromName;
+  }
+
+  async verify() {
+    await this.transporter.verify();
   }
 
   async send(input: SendEmailInput) {

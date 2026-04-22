@@ -375,4 +375,22 @@ export class AccountingLedgerService {
       executor,
     );
   }
+
+  async deletePurchaseFinancials(shopId: string, purchaseId: string, executor: DbExecutor) {
+    // Find the purchase to get supplierId before it's deleted
+    const computation = await this.accountingRepository.getPurchasePaymentComputation(
+      shopId,
+      purchaseId,
+      executor,
+    );
+
+    if (!computation) {
+      return;
+    }
+
+    // After deleting the purchase (handled by the caller), we rebuild the supplier ledger
+    // We should probably do this AFTER the deletion is committed, or inside the same transaction
+    // listSupplierLedgerSources should not include the deleted purchase.
+    await this.rebuildSupplierLedger(shopId, computation.purchase.supplierId, executor);
+  }
 }

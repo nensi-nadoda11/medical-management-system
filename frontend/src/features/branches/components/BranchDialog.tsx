@@ -1,10 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Modal } from "../../../components/ui/Modal";
 import type { BranchFormPayload, BranchRecord } from "../../../types/branch";
+import { getShopProfile, shopQueryKeys } from "../../shop/api/shop";
 
 const branchSchema = z.object({
   name: z.string().trim().min(2, "Branch name is required.").max(160),
@@ -70,14 +72,40 @@ export const BranchDialog = ({
   open,
   branch,
 }: BranchDialogProps) => {
+  const shopProfileQuery = useQuery({
+    queryKey: shopQueryKeys.profile,
+    queryFn: getShopProfile,
+    enabled: open && !!branch?.isDefault,
+  });
+
   const form = useForm<BranchDialogFormInput, unknown, BranchDialogValues>({
     resolver: zodResolver(branchSchema),
     defaultValues: toFormValues(branch) as BranchDialogFormInput,
   });
 
   useEffect(() => {
-    form.reset(toFormValues(branch) as BranchDialogFormInput);
-  }, [branch, form, open]);
+    const baseValues = toFormValues(branch) as BranchDialogFormInput;
+    const shopProfile = shopProfileQuery.data;
+
+    if (branch?.isDefault && shopProfile) {
+      baseValues.name = shopProfile.name || baseValues.name;
+      baseValues.contactNumber = shopProfile.phone || baseValues.contactNumber;
+      
+      const shopAddressParts = [
+        shopProfile.addressLine1,
+        shopProfile.addressLine2,
+        shopProfile.city,
+        shopProfile.state,
+        shopProfile.pincode,
+      ].filter(Boolean);
+      
+      const shopAddress = shopAddressParts.join(", ");
+      baseValues.address = shopAddress || baseValues.address;
+      baseValues.invoicePrefix = shopProfile.invoicePrefix || baseValues.invoicePrefix;
+    }
+
+    form.reset(baseValues);
+  }, [branch, form, open, shopProfileQuery.data]);
 
   const {
     register,

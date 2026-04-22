@@ -583,6 +583,8 @@ export const notifications = pgTable(
         onDelete: "set null",
       },
     ),
+    retryCount: integer("retry_count").notNull().default(0),
+    lastError: text("last_error"),
     isActive: boolean("is_active").notNull().default(true),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

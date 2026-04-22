@@ -2,13 +2,13 @@ import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { FilterBar } from "../../../components/ui/FilterBar";
+import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { useToast } from "../../../hooks/use-toast";
 import { formatDateTime } from "../../../lib/utils";
 import type {
@@ -127,13 +127,22 @@ export const MedicinesPage = () => {
     },
   });
 
-  const isLoading =
-    medicinesQuery.isLoading ||
-    categoriesQuery.isLoading ||
-    manufacturersQuery.isLoading;
-
   const activeError =
     medicinesQuery.error ?? categoriesQuery.error ?? manufacturersQuery.error;
+
+  if (activeError) {
+    return (
+      <ErrorState
+        description={activeError.message}
+        onRetry={() => {
+          medicinesQuery.refetch();
+          categoriesQuery.refetch();
+          manufacturersQuery.refetch();
+        }}
+        title="Unable to load medicine catalog"
+      />
+    );
+  }
 
   const medicines = medicinesQuery.data?.items ?? [];
   const categories = categoriesQuery.data?.items ?? [];
@@ -149,24 +158,6 @@ export const MedicinesPage = () => {
     prescriptionFlagged: medicines.filter((item) => item.prescriptionRequired)
       .length,
   };
-
-  if (isLoading) {
-    return <LoadingState title="Loading medicine master" />;
-  }
-
-  if (activeError) {
-    return (
-      <ErrorState
-        description={activeError.message}
-        onRetry={() => {
-          medicinesQuery.refetch();
-          categoriesQuery.refetch();
-          manufacturersQuery.refetch();
-        }}
-        title="Unable to load medicine catalog"
-      />
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -225,9 +216,25 @@ export const MedicinesPage = () => {
         ))}
       </div>
 
-      <SectionCard
+      <FilterBar
         description="Search, filter, and sort the medicine catalog without losing screen space."
-        title="Catalog controls"
+        title="Catalog filters"
+        actions={
+          <button
+            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("all");
+              setCategoryFilter("");
+              setManufacturerFilter("");
+              setSortBy("medicineName");
+              setPage(1);
+            }}
+            type="button"
+          >
+            Clear filters
+          </button>
+        }
       >
         <div className="grid gap-4 xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
@@ -318,181 +325,22 @@ export const MedicinesPage = () => {
             </select>
           </label>
         </div>
-      </SectionCard>
+      </FilterBar>
 
       <SectionCard
         description="A business-friendly view of your medicine catalog with fast access to editing and status control."
         title="Medicine catalog"
       >
-        {medicines.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 lg:hidden">
-              {medicines.map((medicine) => (
-                <article
-                  className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
-                  key={medicine.id}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-950">
-                          {medicine.medicineName}
-                        </h3>
-                        <StatusBadge label={medicine.status} />
-                      </div>
-                      <p className="text-sm text-slate-600">
-                        {medicine.genericName}
-                      </p>
-                    </div>
-                    <button
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                      onClick={() => {
-                        setEditingMedicine(medicine);
-                        setIsFormOpen(true);
-                      }}
-                      type="button"
-                    >
-                      Edit
-                    </button>
-                  </div>
-
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Form / Unit", `${medicine.form} / ${medicine.unit}`],
-                      ["Category", medicine.category.name],
-                      ["Manufacturer", medicine.manufacturer.name],
-                      ["GST", `${medicine.gstPercent}%`],
-                      ["Reorder", medicine.reorderLevel.toString()],
-                      [
-                        "Prescription",
-                        medicine.prescriptionRequired
-                          ? "Required"
-                          : "Not required",
-                      ],
-                    ].map(([label, value]) => (
-                      <div
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                        key={label}
-                      >
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {label}
-                        </dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">
-                          {value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                      Updated {formatDateTime(medicine.updatedAt)}
-                    </p>
-                    <button
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                      onClick={() => setPendingStatusMedicine(medicine)}
-                      type="button"
-                    >
-                      {medicine.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Medicine</th>
-                    <th className="px-4">Form</th>
-                    <th className="px-4">Category</th>
-                    <th className="px-4">Manufacturer</th>
-                    <th className="px-4">GST</th>
-                    <th className="px-4">Reorder</th>
-                    <th className="px-4">Prescription</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Updated</th>
-                    <th className="px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {medicines.map((medicine) => (
-                    <tr className="rounded-3xl bg-slate-50" key={medicine.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">
-                            {medicine.medicineName}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-600">
-                            {medicine.genericName}
-                            {medicine.strength ? ` • ${medicine.strength}` : ""}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {medicine.form} / {medicine.unit}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {medicine.category.name}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {medicine.manufacturer.name}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {medicine.gstPercent}%
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {medicine.reorderLevel}
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge
-                          label={
-                            medicine.prescriptionRequired
-                              ? "Required"
-                              : "Open sale"
-                          }
-                          tone={
-                            medicine.prescriptionRequired ? "pending" : "active"
-                          }
-                        />
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={medicine.status} />
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
-                        {formatDateTime(medicine.updatedAt)}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                            onClick={() => {
-                              setEditingMedicine(medicine);
-                              setIsFormOpen(true);
-                            }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                            onClick={() => setPendingStatusMedicine(medicine)}
-                            type="button"
-                          >
-                            {medicine.status === "active"
-                              ? "Deactivate"
-                              : "Activate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {pagination ? (
+        <ResponsiveDataList
+          data={medicines}
+          isLoading={medicinesQuery.isLoading}
+          keyExtractor={(item) => item.id}
+          emptyState={{
+            title: "No medicines found",
+            description: "No medicines match the current search. Try adding one if the catalog is empty.",
+          }}
+          pagination={
+            pagination ? (
               <Pagination
                 onPageChange={setPage}
                 page={pagination.page}
@@ -500,26 +348,148 @@ export const MedicinesPage = () => {
                 totalItems={pagination.total}
                 totalPages={pagination.totalPages}
               />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState
-            action={
-              <button
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => {
-                  setEditingMedicine(null);
-                  setIsFormOpen(true);
-                }}
-                type="button"
-              >
-                Add first medicine
-              </button>
-            }
-            description="Start your catalog with a few core medicines so later purchase, inventory, and billing modules have a stable master."
-            title="No medicines found"
-          />
-        )}
+            ) : null
+          }
+          columns={[
+            {
+              header: "Medicine",
+              accessor: (medicine) => (
+                <div>
+                  <p className="font-semibold text-slate-950">
+                    {medicine.medicineName}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {medicine.genericName}
+                    {medicine.strength ? ` • ${medicine.strength}` : ""}
+                  </p>
+                </div>
+              ),
+              className: "rounded-l-3xl px-4 py-4",
+            },
+            {
+              header: "Form",
+              accessor: (medicine) => `${medicine.form} / ${medicine.unit}`,
+            },
+            { header: "Category", accessor: (medicine) => medicine.category.name },
+            {
+              header: "Manufacturer",
+              accessor: (medicine) => medicine.manufacturer.name,
+            },
+            { header: "GST", accessor: (medicine) => `${medicine.gstPercent}%` },
+            { header: "Reorder", accessor: (medicine) => medicine.reorderLevel },
+            {
+              header: "Prescription",
+              accessor: (medicine) => (
+                <StatusBadge
+                  label={medicine.prescriptionRequired ? "Required" : "Open sale"}
+                  tone={medicine.prescriptionRequired ? "pending" : "active"}
+                />
+              ),
+            },
+            {
+              header: "Status",
+              accessor: (medicine) => <StatusBadge label={medicine.status} />,
+            },
+            {
+              header: "Updated",
+              accessor: (medicine) => formatDateTime(medicine.updatedAt),
+              className: "px-4 py-4 text-sm text-slate-600",
+            },
+            {
+              header: "Actions",
+              accessor: (medicine) => (
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    onClick={() => {
+                      setEditingMedicine(medicine);
+                      setIsFormOpen(true);
+                    }}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    onClick={() => setPendingStatusMedicine(medicine)}
+                    type="button"
+                  >
+                    {medicine.status === "active" ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
+              ),
+              className: "rounded-r-3xl px-4 py-4 text-right",
+              headerClassName: "px-4 text-right",
+            },
+          ]}
+          renderCard={(medicine) => (
+            <article
+              className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
+              key={medicine.id}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-950">
+                      {medicine.medicineName}
+                    </h3>
+                    <StatusBadge label={medicine.status} />
+                  </div>
+                  <p className="text-sm text-slate-600">{medicine.genericName}</p>
+                </div>
+                <button
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  onClick={() => {
+                    setEditingMedicine(medicine);
+                    setIsFormOpen(true);
+                  }}
+                  type="button"
+                >
+                  Edit
+                </button>
+              </div>
+
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  ["Form / Unit", `${medicine.form} / ${medicine.unit}`],
+                  ["Category", medicine.category.name],
+                  ["Manufacturer", medicine.manufacturer.name],
+                  ["GST", `${medicine.gstPercent}%`],
+                  ["Reorder", medicine.reorderLevel.toString()],
+                  [
+                    "Prescription",
+                    medicine.prescriptionRequired ? "Required" : "Not required",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+                    key={label}
+                  >
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium text-slate-900">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                  Updated {formatDateTime(medicine.updatedAt)}
+                </p>
+                <button
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  onClick={() => setPendingStatusMedicine(medicine)}
+                  type="button"
+                >
+                  {medicine.status === "active" ? "Deactivate" : "Activate"}
+                </button>
+              </div>
+            </article>
+          )}
+        />
       </SectionCard>
 
       <MedicineFormModal

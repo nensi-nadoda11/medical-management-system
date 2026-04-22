@@ -560,4 +560,22 @@ export class InventoryStockService {
       lowStockEvents: [],
     };
   }
+
+  async getBatchesByIds(shopId: string, branchId: string, batchIds: string[]) {
+    return this.inventoryRepository.getBatchesByIds(shopId, branchId, batchIds);
+  }
+
+  async deletePurchaseStock(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    executor: DbExecutor,
+  ) {
+    await this.inventoryRepository.deletePurchaseStockRecords(
+      shopId,
+      branchId,
+      purchaseId,
+      executor,
+    );
+  }
 }

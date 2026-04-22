@@ -1,13 +1,23 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { pool } from "./db/client";
+import { emailService } from "./modules/notifications/email/email.service";
 import { logger } from "./shared/logger";
 
-const server = app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, async () => {
   logger.info("Backend server started", {
     port: env.PORT,
     environment: env.NODE_ENV,
   });
+
+  try {
+    await emailService.verifyConnection();
+    logger.info("Email provider verified successfully");
+  } catch (error) {
+    logger.error("Email provider verification failed", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 });
 
 const shutdown = async (signal: string) => {

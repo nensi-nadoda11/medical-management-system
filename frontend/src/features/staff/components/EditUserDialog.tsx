@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -97,10 +97,9 @@ export const EditUserDialog = ({ open, user, onClose }: EditUserDialogProps) => 
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = form;
-  const selectedBranchIds = watch("branchIds");
+  const selectedBranchIds = useWatch({ control: form.control, name: "branchIds" }) ?? [];
   const availableBranches = (branchesQuery.data?.items ?? []).filter(
     (branch) => branch.status === "active",
   );
