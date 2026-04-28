@@ -167,7 +167,7 @@ export const PurchasesPage = () => {
       <PageHeader
         actions={
           <Link
-            className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"
             to="/app/purchases/new"
           >
             Create purchase

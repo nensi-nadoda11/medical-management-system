@@ -210,7 +210,7 @@ export const CustomerFormModal = ({
             description="Core customer identity used across billing, search, and repeat-buyer visibility."
             title="Customer profile"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Full name
                 <input className={inputClassName} {...register("fullName")} />
@@ -276,7 +276,7 @@ export const CustomerFormModal = ({
             description="Address and status fields keep customer records ready for follow-up and operational review."
             title="Address and status"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Address line 1
                 <input className={inputClassName} {...register("addressLine1")} />

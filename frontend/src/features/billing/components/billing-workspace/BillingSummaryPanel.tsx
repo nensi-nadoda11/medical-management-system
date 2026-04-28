@@ -50,7 +50,6 @@ export const BillingSummaryPanel = ({
 }: BillingSummaryPanelProps) => {
   return (
     <SectionCard
-      description="Capture walk-in details, payment, and totals without leaving the billing screen."
       title="Bill summary"
     >
       <div className="space-y-4">
@@ -60,9 +59,6 @@ export const BillingSummaryPanel = ({
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Customer selection
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Select a saved customer or continue with a walk-in bill.
                 </p>
               </div>
               <button

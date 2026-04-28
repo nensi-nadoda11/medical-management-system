@@ -109,35 +109,6 @@ export const InventoryDetailPage = () => {
         />
       </div>
 
-      <SectionCard
-        description="Use this view when you need to understand one medicine fully: stock position, batch health, and recent movement history."
-        title="How To Read This Page"
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            [
-              "Summary cards",
-              "Show current stock, reorder level, active batches, and whether the medicine needs refill attention.",
-            ],
-            [
-              "Batch stock",
-              "Shows exactly which batch numbers are available, exhausted, or expired.",
-            ],
-            [
-              "Recent transactions",
-              "Shows stock increases and decreases so you can trace what changed recently.",
-            ],
-          ].map(([title, description]) => (
-            <article
-              className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5"
-              key={title}
-            >
-              <p className="text-sm font-semibold text-slate-950">{title}</p>
-              <p className="mt-1.5 text-sm leading-5 text-slate-600">{description}</p>
-            </article>
-          ))}
-        </div>
-      </SectionCard>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
         <div className="space-y-5">

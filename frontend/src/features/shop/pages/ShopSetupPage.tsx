@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Pencil } from "lucide-react";
 import { z } from "zod";
 
 import { ApiError } from "../../../lib/api";
@@ -271,7 +272,7 @@ export const ShopSetupPage = () => {
                     onClick={() => setIsEditing(true)}
                     type="button"
                   >
-                    Edit profile
+                    <Pencil className="h-4 w-4" />
                   </button>
                 ) : (
                   <>

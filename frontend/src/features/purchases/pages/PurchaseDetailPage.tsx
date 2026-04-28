@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -135,7 +136,7 @@ export const PurchaseDetailPage = () => {
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 to={`/app/purchases/${purchase.id}/edit`}
               >
-                Edit draft
+                <Pencil className="h-4 w-4" />
               </Link>
             ) : null}
             {isDraft ? (

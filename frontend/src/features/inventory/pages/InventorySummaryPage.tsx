@@ -175,35 +175,6 @@ export const InventorySummaryPage = () => {
         />
       </div>
 
-      <SectionCard
-        description="This page helps you understand what is safe, what needs refill, and where corrections may be required."
-        title="How To Use Inventory"
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            [
-              "Available stock",
-              "Only active, non-expired quantity is counted as available stock.",
-            ],
-            [
-              "Low stock alert",
-              "A medicine is low stock when available quantity is at or below its reorder level.",
-            ],
-            [
-              "Adjustment flow",
-              "Use stock adjustment only for controlled corrections like damaged or manually corrected stock.",
-            ],
-          ].map(([title, description]) => (
-            <article
-              className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5"
-              key={title}
-            >
-              <p className="text-sm font-semibold text-slate-950">{title}</p>
-              <p className="mt-1.5 text-sm leading-5 text-slate-600">{description}</p>
-            </article>
-          ))}
-        </div>
-      </SectionCard>
 
       <FilterBar
         actions={

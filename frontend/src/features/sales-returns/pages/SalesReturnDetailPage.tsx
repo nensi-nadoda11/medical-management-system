@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -124,7 +125,7 @@ export const SalesReturnDetailPage = () => {
                 className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 to={`/app/billing/returns/${salesReturn.id}/edit`}
               >
-                Edit draft
+                <Pencil className="h-4 w-4" />
               </Link>
             ) : null}
             {canManageReturns && salesReturn.status === "draft" ? (

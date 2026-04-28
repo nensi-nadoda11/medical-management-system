@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
@@ -167,7 +168,7 @@ export const BranchesPage = () => {
                           }}
                           type="button"
                         >
-                          Edit
+                          <Pencil className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>
@@ -211,7 +212,7 @@ export const BranchesPage = () => {
                     }}
                     type="button"
                   >
-                    Edit branch
+                    <Pencil className="h-4 w-4" />
                   </button>
                 </article>
               ))}

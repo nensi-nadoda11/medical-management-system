@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 
 import { ApiError } from "../../../lib/api";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -260,7 +261,7 @@ export const StaffManagementPage = () => {
                             onClick={() => setEditingUser(user)}
                             type="button"
                           >
-                            Edit
+                            <Pencil className="h-4 w-4" />
                           </button>
                           <button
                             className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"

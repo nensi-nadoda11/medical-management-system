@@ -1,5 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { ErrorState } from "../../../components/ui/ErrorState";
@@ -285,7 +286,7 @@ export const SuppliersPage = () => {
                     }}
                     type="button"
                   >
-                    Edit
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
@@ -325,7 +326,7 @@ export const SuppliersPage = () => {
                   }}
                   type="button"
                 >
-                  Edit
+                  <Pencil className="h-4 w-4" />
                 </button>
               </div>
 

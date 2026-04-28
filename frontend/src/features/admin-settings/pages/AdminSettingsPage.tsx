@@ -661,27 +661,28 @@ export const AdminSettingsPage = () => {
         }
       >
         <div className="overflow-x-auto">
-          <table className="min-w-[760px] w-full border-separate border-spacing-y-2">
-            <thead>
-              <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                <th className="px-4">Permission</th>
-                {roleOrder.map((role) => (
-                  <th className="px-4 text-center" key={role}>
-                    {humanizeLabel(role)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <div className="min-w-[760px] space-y-4">
+            {/* Matrix Header */}
+            <div className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div>Permission</div>
+              {roleOrder.map((role) => (
+                <div className="text-center" key={role}>
+                  {humanizeLabel(role)}
+                </div>
+              ))}
+            </div>
+
+            {/* Matrix Body */}
+            <div className="space-y-6">
               {groupedCatalog.map((group) => (
-                <tr key={group.group}>
-                  <td colSpan={4}>
-                    <div className="mb-1 mt-3 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      {humanizeLabel(group.group)}
-                    </div>
+                <div key={group.group}>
+                  <div className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {humanizeLabel(group.group)}
+                  </div>
+                  <div className="space-y-2">
                     {group.items.map((permission) => (
                       <div
-                        className="mb-2 grid min-w-[760px] grid-cols-[minmax(260px,1fr)_120px_120px_120px] items-center rounded-3xl border border-slate-200 bg-slate-50"
+                        className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] items-center rounded-3xl border border-slate-200 bg-slate-50"
                         key={permission.key}
                       >
                         <div className="px-4 py-3">
@@ -702,11 +703,11 @@ export const AdminSettingsPage = () => {
                         ))}
                       </div>
                     ))}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       </SectionCard>
 

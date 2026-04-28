@@ -26,7 +26,6 @@ export const BillingCartPanel = ({
 }: BillingCartPanelProps) => {
   return (
     <SectionCard
-      description="Keep the cart compact and accurate. Each line stays tied to a real batch before the bill is saved."
       title="Bill cart"
       action={
         items.length ? (

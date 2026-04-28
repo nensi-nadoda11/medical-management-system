@@ -372,6 +372,7 @@ a {
   margin: 12mm;
 }
 
+
 @media print {
   html,
   body,
@@ -394,4 +395,17 @@ a {
     box-shadow: none !important;
     border-color: #e2e8f0 !important;
   }
+}
+
+/* Global Number Input Overrides */
+/* Hide spin buttons in Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide spin buttons in Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
 }

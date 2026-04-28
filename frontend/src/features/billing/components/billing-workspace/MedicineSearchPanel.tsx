@@ -38,7 +38,6 @@ export const MedicineSearchPanel = ({
 
   return (
     <SectionCard
-      description="Search by medicine, generic name, or barcode and add sellable stock in one click."
       title="Medicine search"
       action={
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">

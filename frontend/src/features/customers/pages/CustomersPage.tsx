@@ -1,5 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -306,7 +307,7 @@ export const CustomersPage = () => {
                         }}
                         type="button"
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" />
                       </button>
                     ) : null}
                     {canUpdateStatus ? (
@@ -381,7 +382,7 @@ export const CustomersPage = () => {
                               }}
                               type="button"
                             >
-                              Edit
+                              <Pencil className="h-4 w-4" />
                             </button>
                           ) : null}
                           {canUpdateStatus ? (
