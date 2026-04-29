@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 
 import { ToastProvider } from "../../hooks/use-toast";
+import { RealtimeQueryBridge } from "./RealtimeQueryBridge";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +17,10 @@ const queryClient = new QueryClient({
 export const AppProviders = ({ children }: PropsWithChildren) => (
   <QueryClientProvider client={queryClient}>
     <ToastProvider>
-      <BrowserRouter>{children}</BrowserRouter>
+      <BrowserRouter>
+        <RealtimeQueryBridge />
+        {children}
+      </BrowserRouter>
     </ToastProvider>
   </QueryClientProvider>
 );

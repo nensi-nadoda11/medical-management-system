@@ -2,7 +2,7 @@ import axios from "axios";
 import { getStoredBranchId } from "./branch-context";
 import { resolveApiBaseUrl } from "./api-config";
 
-const API_BASE_URL = resolveApiBaseUrl(
+export const API_BASE_URL = resolveApiBaseUrl(
   import.meta.env as {
     VITE_API_BASE_URL?: string;
     VITE_BACKEND_URL?: string;

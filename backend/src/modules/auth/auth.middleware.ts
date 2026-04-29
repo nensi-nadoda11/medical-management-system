@@ -35,7 +35,11 @@ export const requireAuth = async (
 
     req.authSession = session;
     req.authenticatedUser = session.user;
-    const requestedBranchId = req.header("x-branch-id");
+    const queryBranchId =
+      typeof req.query.branchId === "string" && req.query.branchId.length
+        ? req.query.branchId
+        : undefined;
+    const requestedBranchId = req.header("x-branch-id") ?? queryBranchId;
     const branchAccess = await branchesService.resolveRequestBranchContext({
       shopId: session.user.shopId,
       userId: session.user.id,

@@ -118,16 +118,23 @@ export const buildExcelReport = async (input: BuildExportInput) => {
 
   worksheet.mergeCells(1, 1, 1, input.columns.length);
   worksheet.getCell(1, 1).value = input.title;
-  worksheet.getCell(1, 1).font = { size: 16, bold: true, color: { argb: "10293A" } };
+  worksheet.getCell(1, 1).font = {
+    size: 16,
+    bold: true,
+    color: { argb: "10293A" },
+  };
 
   worksheet.mergeCells(2, 1, 2, input.columns.length);
-  worksheet.getCell(2, 1).value = `${input.shopName} • ${input.subtitle}`;
+  worksheet.getCell(2, 1).value = `${input.shopName} - ${input.subtitle}`;
   worksheet.getCell(2, 1).font = { size: 10, color: { argb: "475569" } };
 
   let summaryRow = 4;
   input.summary.forEach((metric) => {
     worksheet.getCell(summaryRow, 1).value = metric.label;
-    worksheet.getCell(summaryRow, 1).font = { bold: true, color: { argb: "334155" } };
+    worksheet.getCell(summaryRow, 1).font = {
+      bold: true,
+      color: { argb: "334155" },
+    };
     worksheet.getCell(summaryRow, 2).value = metric.value;
     worksheet.getCell(summaryRow, 2).font = { color: { argb: "0F172A" } };
     summaryRow += 1;
@@ -147,6 +154,7 @@ export const buildExcelReport = async (input: BuildExportInput) => {
     cell.alignment = {
       vertical: "middle",
       horizontal: column.align ?? "left",
+      wrapText: true,
     };
   });
 
@@ -157,10 +165,16 @@ export const buildExcelReport = async (input: BuildExportInput) => {
       ),
     );
 
+    addedRow.alignment = {
+      vertical: "middle",
+      wrapText: true,
+    };
+
     input.columns.forEach((column, index) => {
       addedRow.getCell(index + 1).alignment = {
         vertical: "middle",
         horizontal: column.align ?? "left",
+        wrapText: true,
       };
       addedRow.getCell(index + 1).border = {
         bottom: { style: "thin", color: { argb: "E2E8F0" } },
@@ -227,7 +241,7 @@ export const buildPdfReport = async (input: BuildExportInput) =>
 
     const drawTableHeader = () => {
       let cursorX = doc.page.margins.left;
-      const headerHeight = 24;
+      const headerHeight = 26;
 
       doc
         .save()
@@ -251,10 +265,28 @@ export const buildPdfReport = async (input: BuildExportInput) =>
       cursorY += headerHeight + 6;
     };
 
+    const getRowHeight = (row: Record<string, ExportCellValue>) => {
+      let maxHeight = 0;
+
+      input.columns.forEach((column, index) => {
+        const width = normalizedWidths[index] ?? 0;
+
+        doc.font("Helvetica").fontSize(8);
+        const height = doc.heightOfString(formatCellValue(row[column.key]), {
+          width: Math.max(width - 12, 24),
+          align: column.align ?? "left",
+        });
+
+        maxHeight = Math.max(maxHeight, height);
+      });
+
+      return Math.max(22, Math.ceil(maxHeight) + 10);
+    };
+
     drawTableHeader();
 
     input.rows.forEach((row, rowIndex) => {
-      const rowHeight = 22;
+      const rowHeight = getRowHeight(row);
 
       if (cursorY + rowHeight > doc.page.height - 58) {
         doc.addPage();
@@ -278,10 +310,9 @@ export const buildPdfReport = async (input: BuildExportInput) =>
           .fillColor("#0f172a")
           .font("Helvetica")
           .fontSize(8)
-          .text(formatCellValue(row[column.key]), cursorX + 6, cursorY + 7, {
+          .text(formatCellValue(row[column.key]), cursorX + 6, cursorY + 6, {
             width: width - 12,
             align: column.align ?? "left",
-            ellipsis: true,
           });
 
         cursorX += width;

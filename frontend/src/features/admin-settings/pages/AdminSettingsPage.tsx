@@ -518,7 +518,7 @@ export const AdminSettingsPage = () => {
 
       <SectionCard
         title="Billing and notification behavior"
-        description="Control invoice behavior, billing flexibility, and future-ready notification defaults."
+        description="Control invoice behavior, billing flexibility, and notification delivery defaults."
       >
         <div className="grid gap-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -589,20 +589,64 @@ export const AdminSettingsPage = () => {
 
           <div className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">Notification channels</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Email is active now. WhatsApp remains reserved for a future integration.
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">Notification channels</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Admin alerts use active admin accounts, while supplier reorder alerts use the latest purchase-linked supplier contact automatically.
+                  </p>
+                </div>
+              <span
+                className={
+                  settingsQuery.data.notificationChannels.whatsapp.enabled
+                    ? "rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                    : "rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"
+                }
+              >
+                {settingsQuery.data.notificationChannels.whatsapp.enabled
+                  ? "WhatsApp active"
+                  : settingsQuery.data.notificationChannels.whatsapp.recipientMode ===
+                      "provider_only"
+                    ? "WhatsApp waiting for admin mobile numbers"
+                    : "WhatsApp disabled"}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Email
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-950">
+                  {settingsQuery.data.notificationChannels.email.enabled
+                    ? "Ready for alerts"
+                    : "No admin email recipients"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Low stock: {settingsQuery.data.notificationChannels.email.lowStockEnabled ? "On" : "Off"} | Expiry:{" "}
+                  {settingsQuery.data.notificationChannels.email.expiryEnabled ? "On" : "Off"}
                 </p>
               </div>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                WhatsApp future-ready
-              </span>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  WhatsApp
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-950">
+                  {settingsQuery.data.notificationChannels.whatsapp.enabled
+                    ? "Ready for alerts"
+                    : settingsQuery.data.notificationChannels.whatsapp.recipientMode ===
+                        "provider_only"
+                      ? "Provider ready, recipients missing"
+                      : "Provider disabled"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Low stock: {settingsQuery.data.notificationChannels.whatsapp.lowStockEnabled ? "On" : "Off"} | Expiry:{" "}
+                  {settingsQuery.data.notificationChannels.whatsapp.expiryEnabled ? "On" : "Off"}
+                </p>
+              </div>
             </div>
             <div className="mt-4 grid gap-2">
               {(settingsQuery.data.primaryAlertRecipients.length
                 ? settingsQuery.data.primaryAlertRecipients
-                : [{ id: "none", fullName: "No active admin recipients", email: "" }]
+                : [{ id: "none", fullName: "No active admin recipients", email: "", mobileNumber: null }]
               ).map((recipient) => (
                 <div
                   className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
@@ -611,6 +655,9 @@ export const AdminSettingsPage = () => {
                   <p className="text-sm font-medium text-slate-950">{recipient.fullName}</p>
                   {recipient.email ? (
                     <p className="text-xs text-slate-500">{recipient.email}</p>
+                  ) : null}
+                  {recipient.mobileNumber ? (
+                    <p className="text-xs text-slate-500">{recipient.mobileNumber}</p>
                   ) : null}
                 </div>
               ))}

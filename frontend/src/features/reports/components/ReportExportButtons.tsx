@@ -1,10 +1,12 @@
 interface ReportExportButtonsProps {
   onExport: (format: "xlsx" | "pdf") => void;
+  onPrint?: () => void;
   isLoading?: boolean;
 }
 
 export const ReportExportButtons = ({
   onExport,
+  onPrint,
   isLoading = false,
 }: ReportExportButtonsProps) => (
   <div className="flex flex-wrap items-center gap-2">
@@ -24,5 +26,15 @@ export const ReportExportButtons = ({
     >
       Export PDF
     </button>
+    {onPrint ? (
+      <button
+        className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isLoading}
+        onClick={onPrint}
+        type="button"
+      >
+        Print
+      </button>
+    ) : null}
   </div>
 );

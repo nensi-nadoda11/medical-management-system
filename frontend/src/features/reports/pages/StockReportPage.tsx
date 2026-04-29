@@ -24,6 +24,7 @@ import { ReportsNav } from "../components/ReportsNav";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const reportRefreshIntervalMs = 300000;
 
 export const StockReportPage = () => {
   const { pushToast } = useToast();
@@ -72,6 +73,7 @@ export const StockReportPage = () => {
     queryKey: reportsQueryKeys.stock(params),
     queryFn: () => getStockReport(params),
     enabled: Boolean(role),
+    refetchInterval: reportRefreshIntervalMs,
   });
 
   const categoriesQuery = useQuery({
@@ -108,21 +110,16 @@ export const StockReportPage = () => {
     enabled: Boolean(role),
   });
 
-  const activeError =
-    stockQuery.error ?? categoriesQuery.error ?? manufacturersQuery.error;
-
-  if (!role || stockQuery.isLoading || categoriesQuery.isLoading || manufacturersQuery.isLoading) {
+  if (!role || stockQuery.isLoading) {
     return <LoadingState title="Loading stock report" />;
   }
 
-  if (activeError) {
+  if (stockQuery.error) {
     return (
       <ErrorState
-        description={activeError.message}
+        description={stockQuery.error.message}
         onRetry={() => {
           stockQuery.refetch();
-          categoriesQuery.refetch();
-          manufacturersQuery.refetch();
         }}
         title="Unable to load stock report"
       />
@@ -132,7 +129,7 @@ export const StockReportPage = () => {
   const report = stockQuery.data!;
 
   return (
-    <div className="space-y-6">
+    <div className="print-report-page space-y-6">
       <PageHeader
         actions={
           <>
@@ -158,6 +155,7 @@ export const StockReportPage = () => {
                   )
                   .finally(() => setIsExporting(false));
               }}
+              onPrint={() => window.print()}
             />
           </>
         }
@@ -182,7 +180,11 @@ export const StockReportPage = () => {
         />
       </div>
 
-      <FilterBar description="Filter by product master and batch state." title="Stock filters">
+      <FilterBar
+        className="print-hidden"
+        description="Filter by product master and batch state."
+        title="Stock filters"
+      >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
@@ -192,7 +194,7 @@ export const StockReportPage = () => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search medicine, generic, or batch"
+              placeholder="Search medicine, generic, batch, or barcode"
               value={search}
             />
           </label>
@@ -318,6 +320,11 @@ export const StockReportPage = () => {
                       <p className="mt-1 text-sm text-slate-600">
                         {item.medicine.genericName} / {humanizeLabel(item.medicine.form)} / {humanizeLabel(item.medicine.unit)}
                       </p>
+                      {item.medicine.barcode ? (
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Barcode: {item.medicine.barcode}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>
                     <td className="px-4 py-4 text-sm text-slate-700">{item.manufacturer.name}</td>
@@ -342,6 +349,11 @@ export const StockReportPage = () => {
                   <div>
                     <p className="text-sm font-semibold text-slate-950">{item.medicine.medicineName}</p>
                     <p className="mt-1 text-sm text-slate-600">{item.batch.batchNumber}</p>
+                    {item.medicine.barcode ? (
+                      <p className="mt-1 text-xs font-medium text-slate-500">
+                        Barcode: {item.medicine.barcode}
+                      </p>
+                    ) : null}
                   </div>
                   <StatusBadge label={item.batch.status} />
                 </div>
@@ -363,13 +375,15 @@ export const StockReportPage = () => {
               </article>
             ))}
           </div>
-          <Pagination
-            onPageChange={setPage}
-            page={report.rows.pagination.page}
-            pageSize={report.rows.pagination.pageSize}
-            totalItems={report.rows.pagination.total}
-            totalPages={report.rows.pagination.totalPages}
-          />
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
         </div>
       </SectionCard>
     </div>

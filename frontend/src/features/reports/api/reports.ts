@@ -15,6 +15,8 @@ import type {
   StockReportParams,
   SupplierReport,
   SupplierReportParams,
+  UsageReport,
+  UsageReportParams,
 } from "../../../types/report";
 
 const cleanParams = (params: object) =>
@@ -42,6 +44,7 @@ export const reportsQueryKeys = {
   expiry: (params: ExpiryReportParams) => [...reportsQueryKeys.all, "expiry", params] as const,
   suppliers: (params: SupplierReportParams) =>
     [...reportsQueryKeys.all, "suppliers", params] as const,
+  usage: (params: UsageReportParams) => [...reportsQueryKeys.all, "usage", params] as const,
 };
 
 export const getReportsDashboardSummary = (params: DashboardSummaryParams) =>
@@ -124,3 +127,13 @@ export const exportSupplierReport = (
     { ...params, format },
     `supplier-report.${format}`,
   );
+
+export const getUsageReport = (params: UsageReportParams) =>
+  apiRequest<UsageReport>({
+    method: "GET",
+    url: "/reports/usage",
+    params: cleanParams(params),
+  });
+
+export const exportUsageReport = (params: UsageReportParams, format: "xlsx" | "pdf") =>
+  downloadReportExport("/reports/usage/export", { ...params, format }, `usage-report.${format}`);

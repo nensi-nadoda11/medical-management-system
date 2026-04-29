@@ -27,6 +27,7 @@ import { documentsRoutes } from "./modules/documents/documents.routes";
 import { dataManagementRoutes } from "./modules/data-management/data-management.routes";
 import { branchesRoutes } from "./modules/branches/branches.routes";
 import { stockTransfersRoutes } from "./modules/stock-transfers/stock-transfers.routes";
+import { realtimeRoutes } from "./modules/realtime/realtime.routes";
 
 export const app = express();
 
@@ -86,6 +87,7 @@ app.use("/api/v1/documents", documentsRoutes);
 app.use("/api/v1/data-management", dataManagementRoutes);
 app.use("/api/v1/branches", branchesRoutes);
 app.use("/api/v1/stock-transfers", stockTransfersRoutes);
+app.use("/api/v1/realtime", realtimeRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

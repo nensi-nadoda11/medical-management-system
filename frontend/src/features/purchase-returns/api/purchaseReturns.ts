@@ -2,11 +2,22 @@ import { apiRequest } from "../../../lib/api";
 import type {
   CreatePurchaseReturnPayload,
   PurchaseReturnDetail,
+  PurchaseReturnListItem,
   PurchaseReturnListParams,
   PurchaseReturnsResponse,
   ReturnablePurchaseDetail,
   UpdatePurchaseReturnPayload,
 } from "../../../types/purchase-return";
+
+export type {
+  CreatePurchaseReturnPayload,
+  PurchaseReturnDetail,
+  PurchaseReturnListItem,
+  PurchaseReturnListParams,
+  PurchaseReturnsResponse,
+  ReturnablePurchaseDetail,
+  UpdatePurchaseReturnPayload,
+};
 
 const cleanParams = (
   params: Record<string, string | number | boolean | undefined>,

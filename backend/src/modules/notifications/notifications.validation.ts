@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const NOTIFICATION_TYPES = [
   "low_stock",
+  "supplier_reorder",
   "near_expiry",
   "expired_stock",
   "customer_due",

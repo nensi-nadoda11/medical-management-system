@@ -19,6 +19,7 @@ import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 
 export type NotificationType =
   | "low_stock"
+  | "supplier_reorder"
   | "near_expiry"
   | "expired_stock"
   | "customer_due"
@@ -173,6 +174,26 @@ export class NotificationsRepository {
           eq(notifications.shopId, shopId),
           eq(notifications.isActive, true),
           inArray(notifications.type, types),
+        ),
+      )
+      .orderBy(desc(notifications.createdAt), desc(notifications.id));
+  }
+
+  async listActiveConditionKeysByPrefix(
+    shopId: string,
+    prefix: string,
+    executor?: DbExecutor,
+  ) {
+    return getDbExecutor(executor)
+      .select({
+        conditionKey: notifications.conditionKey,
+      })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.shopId, shopId),
+          eq(notifications.isActive, true),
+          like(notifications.conditionKey, `${prefix}%`),
         ),
       )
       .orderBy(desc(notifications.createdAt), desc(notifications.id));
@@ -413,6 +434,7 @@ export class NotificationsRepository {
           ),
           inArray(notifications.type, [
             "low_stock",
+            "supplier_reorder",
             "near_expiry",
             "expired_stock",
           ]),

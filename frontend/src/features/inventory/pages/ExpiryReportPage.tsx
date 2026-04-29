@@ -20,6 +20,7 @@ import { inventoryQueryKeys, listExpiryReport } from "../api/inventory";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const inventoryRefreshIntervalMs = 300000;
 
 const getExpiryBadge = (status: string) => {
   if (status === "expired") {
@@ -55,6 +56,7 @@ export const ExpiryReportPage = () => {
   const expiryQuery = useQuery({
     queryKey: inventoryQueryKeys.expiry(params),
     queryFn: () => listExpiryReport(params),
+    refetchInterval: inventoryRefreshIntervalMs,
   });
 
   if (expiryQuery.isLoading) {
@@ -125,7 +127,7 @@ export const ExpiryReportPage = () => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search medicine or batch number"
+              placeholder="Search medicine, batch number, or barcode"
               value={search}
             />
           </label>

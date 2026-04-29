@@ -399,4 +399,63 @@ export class ReportsController {
       return next(error);
     }
   };
+
+  getUsageReport = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
+      const result = await this.reportsService.getUsageReport(
+        auth.shopId,
+        branchIds,
+        {
+          userId: auth.userId,
+          role: auth.role,
+        },
+        query as never,
+      );
+
+      return res.status(200).json({ data: result });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  exportUsageReport = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const auth = getAuthContext(req);
+      const query = (req.validatedQuery ?? req.query) as {
+        branchId?: string;
+        combineBranches?: boolean;
+      };
+      const branchIds = await this.resolveBranchIds(req, query);
+      const exportResult = await this.reportsService.exportUsageReport(
+        auth.shopId,
+        branchIds,
+        auth.shopName,
+        {
+          userId: auth.userId,
+          role: auth.role,
+        },
+        query as never,
+      );
+
+      res.setHeader("Content-Type", exportResult.contentType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${exportResult.fileName}"`,
+      );
+
+      return res.status(200).send(exportResult.buffer);
+    } catch (error) {
+      return next(error);
+    }
+  };
 }

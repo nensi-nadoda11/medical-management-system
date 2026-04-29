@@ -29,6 +29,7 @@ export const InventoryDetailPage = () => {
     queryKey: inventoryQueryKeys.detail(medicineId, true),
     queryFn: () => getInventoryMedicineDetail(medicineId, true),
     enabled: Boolean(medicineId),
+    refetchInterval: 300000,
   });
 
   if (detailQuery.isLoading) {
@@ -352,6 +353,7 @@ export const InventoryDetailPage = () => {
             <div className="space-y-3">
               {[
                 ["Generic name", detail.medicine.genericName],
+                ["Barcode", detail.medicine.barcode ?? "Not set"],
                 ["Category", detail.category.name],
                 ["Manufacturer", detail.manufacturer.name],
                 ["Form / Unit", `${detail.medicine.form} / ${detail.medicine.unit}`],

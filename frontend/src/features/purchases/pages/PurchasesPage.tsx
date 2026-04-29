@@ -22,6 +22,7 @@ import {
 import { listSuppliers, suppliersQueryKeys } from "../../suppliers/api/suppliers";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import {
+  approvePurchaseOrder,
   cancelPurchase,
   deletePurchase,
   finalizePurchase,
@@ -32,6 +33,24 @@ import type { PurchaseListItem } from "../../../types/purchase";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+
+const getPurchaseStatusLabel = (status: PurchaseListItem["status"]) =>
+  status === "draft" ? "open" : status === "finalized" ? "received" : "cancelled";
+
+const getPurchaseWorkflowLabel = (workflowStage: PurchaseListItem["workflowStage"]) => {
+  switch (workflowStage) {
+    case "approved":
+      return "approved";
+    case "supplier_notified":
+      return "supplier notified";
+    case "received":
+      return "received";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "draft purchase order";
+  }
+};
 
 export const PurchasesPage = () => {
   const queryClient = useQueryClient();
@@ -97,11 +116,23 @@ export const PurchasesPage = () => {
         queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.all }),
       ]);
       pushToast({
-        title: "Purchase finalized",
-        description: "Draft purchase has been finalized and stock is updated.",
+        title: "Purchase order received",
+        description: "Draft purchase order has been finalized and stock is updated.",
         variant: "success",
       });
       setFinalizeTarget(null);
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (purchaseId: string) => approvePurchaseOrder(purchaseId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all });
+      pushToast({
+        title: "Purchase order approved",
+        description: "The purchase order is now ready to share with the supplier.",
+        variant: "success",
+      });
     },
   });
 
@@ -113,8 +144,8 @@ export const PurchasesPage = () => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all });
       pushToast({
-        title: "Purchase cancelled",
-        description: "The draft purchase has been cancelled safely.",
+        title: "Purchase order cancelled",
+        description: "The draft purchase order has been cancelled safely.",
         variant: "success",
       });
       setCancelTarget(null);
@@ -170,29 +201,29 @@ export const PurchasesPage = () => {
             className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"
             to="/app/purchases/new"
           >
-            Create purchase
+            Create purchase order
           </Link>
         }
-        description="Manage draft, finalized, and cancelled purchase documents with strong visibility into supplier invoices, payment status, and totals."
+        description="Manage draft purchase orders, received stock postings, and cancelled supplier documents with clear visibility into invoices, payment status, and totals."
         eyebrow="Purchase management"
-        title="Purchases"
+        title="Purchase Orders & Receipts"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           hint="Total matching purchase records"
-          label="Purchases"
+          label="Documents"
           value={pagination?.total ?? 0}
         />
         <SummaryCard
-          hint="Draft purchases on this screen"
-          label="Drafts visible"
+          hint="Draft purchase orders on this screen"
+          label="Open POs visible"
           tone={draftCount > 0 ? "warning" : "default"}
           value={draftCount}
         />
         <SummaryCard
-          hint="Finalized purchases on this screen"
-          label="Finalized visible"
+          hint="Received purchases on this screen"
+          label="Received visible"
           tone={finalizedCount > 0 ? "accent" : "default"}
           value={finalizedCount}
         />
@@ -224,7 +255,7 @@ export const PurchasesPage = () => {
           </button>
         }
         description="Keep high-use filters visible without crowding the main purchase table."
-        title="Purchase filters"
+        title="Purchase order filters"
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
@@ -270,8 +301,8 @@ export const PurchasesPage = () => {
               value={status}
             >
               <option value="">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="finalized">Finalized</option>
+              <option value="draft">Draft purchase order</option>
+              <option value="finalized">Received</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </label>
@@ -355,15 +386,15 @@ export const PurchasesPage = () => {
 
       <SectionCard
         description="Compact purchase visibility for everyday procurement operations."
-        title="Purchase register"
+        title="Purchase order register"
       >
         <ResponsiveDataList
           data={purchases}
           isLoading={purchasesQuery.isLoading}
           keyExtractor={(item) => item.id}
           emptyState={{
-            title: "No purchases found",
-            description: "No purchases match the current filters. Start a new draft purchase or clear filters.",
+            title: "No purchase orders found",
+            description: "No purchase documents match the current filters. Start a new draft purchase order or clear filters.",
           }}
           pagination={
             pagination ? (
@@ -408,7 +439,24 @@ export const PurchasesPage = () => {
               ),
             },
             { header: "Date", accessor: (purchase) => formatDate(purchase.purchaseDate) },
-            { header: "Status", accessor: (purchase) => <StatusBadge label={purchase.status} /> },
+            {
+              header: "Workflow",
+              accessor: (purchase) => (
+                <StatusBadge
+                  label={getPurchaseWorkflowLabel(purchase.workflowStage)}
+                  tone={purchase.workflowStage}
+                />
+              ),
+            },
+            {
+              header: "Status",
+              accessor: (purchase) => (
+                <StatusBadge
+                  label={getPurchaseStatusLabel(purchase.status)}
+                  tone={purchase.status}
+                />
+              ),
+            },
             { header: "Payment", accessor: (purchase) => <StatusBadge label={purchase.paymentStatus} /> },
             {
               header: "Total",
@@ -420,7 +468,7 @@ export const PurchasesPage = () => {
               accessor: (purchase) => (
                 <div className="text-xs text-slate-500">
                   <p>Created: {formatDateTime(purchase.createdAt)}</p>
-                  {purchase.finalizedAt && <p className="mt-1">Finalized: {formatDateTime(purchase.finalizedAt)}</p>}
+                  {purchase.finalizedAt && <p className="mt-1">Received: {formatDateTime(purchase.finalizedAt)}</p>}
                 </div>
               ),
             },
@@ -436,7 +484,18 @@ export const PurchasesPage = () => {
                     <Eye className="h-4 w-4" />
                   </Link>
                   
-                  {purchase.status === "draft" && (
+                  {purchase.workflowStage === "draft" && (
+                    <button
+                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                      disabled={approveMutation.isPending}
+                      onClick={() => approveMutation.mutate(purchase.id)}
+                      type="button"
+                    >
+                      Approve
+                    </button>
+                  )}
+
+                  {purchase.workflowStage === "draft" && (
                     <Link
                       className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
                       title="Edit Purchase"
@@ -461,7 +520,7 @@ export const PurchasesPage = () => {
                       onClick={() => setFinalizeTarget(purchase)}
                       type="button"
                     >
-                      Finalize
+                      Receive
                     </button>
                   )}
                 </div>
@@ -481,7 +540,14 @@ export const PurchasesPage = () => {
                     <h3 className="text-base font-semibold text-slate-950">
                       {purchase.purchaseNumber}
                     </h3>
-                    <StatusBadge label={purchase.status} />
+                    <StatusBadge
+                      label={getPurchaseWorkflowLabel(purchase.workflowStage)}
+                      tone={purchase.workflowStage}
+                    />
+                    <StatusBadge
+                      label={getPurchaseStatusLabel(purchase.status)}
+                      tone={purchase.status}
+                    />
                     <StatusBadge label={purchase.paymentStatus} />
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
@@ -532,7 +598,18 @@ export const PurchasesPage = () => {
                   View
                 </Link>
                 
-                {purchase.status === "draft" && (
+                {purchase.workflowStage === "draft" && (
+                  <button
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    disabled={approveMutation.isPending}
+                    onClick={() => approveMutation.mutate(purchase.id)}
+                    type="button"
+                  >
+                    Approve
+                  </button>
+                )}
+
+                {purchase.workflowStage === "draft" && (
                   <Link
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
                     title="Edit Purchase"
@@ -558,7 +635,7 @@ export const PurchasesPage = () => {
                       onClick={() => setFinalizeTarget(purchase)}
                       type="button"
                     >
-                      Finalize
+                      Receive
                     </button>
                     <button
                       className="rounded-2xl border border-rose-100 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
@@ -576,8 +653,8 @@ export const PurchasesPage = () => {
       </SectionCard>
 
       <ConfirmDialog
-        confirmLabel="Finalize purchase"
-        description="This will post the draft batches into inventory and lock the purchase from further editing."
+        confirmLabel="Receive purchase"
+        description="This will post the purchase-order batches into inventory and lock the document from further editing."
         isLoading={finalizeMutation.isPending}
         onClose={() => setFinalizeTarget(null)}
         onConfirm={() => {
@@ -586,7 +663,7 @@ export const PurchasesPage = () => {
           }
         }}
         open={Boolean(finalizeTarget)}
-        title={`Finalize ${finalizeTarget?.purchaseNumber ?? "purchase"}?`}
+        title={`Receive ${finalizeTarget?.purchaseNumber ?? "purchase"}?`}
       />
 
       <ConfirmDialog

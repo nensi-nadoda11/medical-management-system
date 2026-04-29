@@ -206,6 +206,7 @@ export const NotificationCenterPage = () => {
             >
               <option value="">All types</option>
               <option value="low_stock">Low stock</option>
+              <option value="supplier_reorder">Supplier reorder</option>
               <option value="near_expiry">Near expiry</option>
               <option value="expired_stock">Expired stock</option>
               <option value="customer_due">Customer due</option>

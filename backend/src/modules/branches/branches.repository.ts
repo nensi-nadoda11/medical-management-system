@@ -52,6 +52,18 @@ export class BranchesRepository {
       .orderBy(desc(branches.isDefault), asc(branches.name), asc(branches.id));
   }
 
+  async listActiveBranches(executor?: DbExecutor) {
+    return getDbExecutor(executor)
+      .select({
+        id: branches.id,
+        shopId: branches.shopId,
+        name: branches.name,
+      })
+      .from(branches)
+      .where(eq(branches.status, "active"))
+      .orderBy(asc(branches.shopId), desc(branches.isDefault), asc(branches.name), asc(branches.id));
+  }
+
   async listAssignedBranchesForUser(
     shopId: string,
     userId: string,

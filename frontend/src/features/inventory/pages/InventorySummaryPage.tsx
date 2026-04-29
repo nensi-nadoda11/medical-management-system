@@ -22,6 +22,7 @@ import { StockAdjustmentModal } from "../components/StockAdjustmentModal";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const inventoryRefreshIntervalMs = 300000;
 
 export const InventorySummaryPage = () => {
   const [search, setSearch] = useState("");
@@ -55,6 +56,7 @@ export const InventorySummaryPage = () => {
   const inventoryQuery = useQuery({
     queryKey: inventoryQueryKeys.summary(params),
     queryFn: () => listInventorySummary(params),
+    refetchInterval: inventoryRefreshIntervalMs,
   });
 
   const categoriesQuery = useQuery({
@@ -208,7 +210,7 @@ export const InventorySummaryPage = () => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search medicine or generic name"
+              placeholder="Search medicine, generic name, or barcode"
               value={search}
             />
           </label>
@@ -359,6 +361,11 @@ export const InventorySummaryPage = () => {
                       <p className="mt-1 text-sm text-slate-600">
                         {item.medicine.genericName}
                       </p>
+                      {item.medicine.barcode ? (
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Barcode: {item.medicine.barcode}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="text-base font-semibold text-slate-950">
                       {formatNumber(item.availableQuantity)}
@@ -433,6 +440,11 @@ export const InventorySummaryPage = () => {
                           <p className="mt-1 text-sm text-slate-600">
                             {item.medicine.genericName}
                           </p>
+                          {item.medicine.barcode ? (
+                            <p className="mt-1 text-xs font-medium text-slate-500">
+                              Barcode: {item.medicine.barcode}
+                            </p>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>

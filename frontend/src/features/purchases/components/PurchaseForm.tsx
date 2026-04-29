@@ -298,8 +298,8 @@ export const PurchaseForm = ({
 
       {!canSubmit ? (
         <EmptyState
-          description="You need at least one supplier and one medicine in the master data before creating a purchase."
-          title="Purchase setup is incomplete"
+          description="You need at least one supplier and one medicine in the master data before creating a purchase order."
+          title="Purchase order setup is incomplete"
         />
       ) : null}
 
@@ -307,7 +307,7 @@ export const PurchaseForm = ({
         <div className="space-y-5">
           <FormSection
             description="Capture the header information once, then keep line entry fast and easy to scan."
-            title="Purchase header"
+            title="Purchase order header"
           >
             <div className="grid gap-3.5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
@@ -329,6 +329,9 @@ export const PurchaseForm = ({
                 ) : null}
                 <span className="text-xs text-slate-500">
                   Choose the supplier whose invoice you are recording for this purchase.
+                </span>
+                <span className="text-xs text-slate-500">
+                  Draft saves act as purchase orders; finalizing receives the stock into inventory.
                 </span>
               </label>
 
@@ -424,7 +427,7 @@ export const PurchaseForm = ({
           </FormSection>
 
           <FormSection
-            title="Purchase items"
+            title="Purchase order items"
           >
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -794,7 +797,7 @@ export const PurchaseForm = ({
 
         <div className="space-y-5">
           <FormSection
-            description="Review quantity, tax, and payable values before saving the draft or posting stock."
+            description="Review quantity, tax, and payable values before saving the draft purchase order or receiving stock."
             title="Billing summary"
           >
             <div className="space-y-3">
@@ -844,8 +847,8 @@ export const PurchaseForm = ({
                 {isSubmitting
                   ? "Saving..."
                   : mode === "create"
-                    ? "Save as draft"
-                    : "Update draft"}
+                    ? "Save as purchase order"
+                    : "Update purchase order"}
               </button>
               <button
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -856,8 +859,8 @@ export const PurchaseForm = ({
                 {isSubmitting
                   ? "Processing..."
                   : mode === "create"
-                    ? "Save and finalize purchase"
-                    : "Update and finalize purchase"}
+                    ? "Save and receive stock"
+                    : "Update and receive stock"}
               </button>
             </div>
           </div>

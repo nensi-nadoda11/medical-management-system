@@ -356,8 +356,8 @@ export const AppLayout = () => {
   const unreadCount = notificationsSummaryQuery.data?.unreadCount ?? 0;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.08),transparent_30%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.08),transparent_24%),linear-gradient(180deg,#f7f8fa_0%,#edf1f4_100%)] text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-[1680px] gap-4 px-3 py-3 lg:px-5 lg:py-5">
+    <div className="app-shell min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.08),transparent_30%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.08),transparent_24%),linear-gradient(180deg,#f7f8fa_0%,#edf1f4_100%)] text-slate-900">
+      <div className="app-frame mx-auto flex min-h-screen max-w-[1680px] gap-4 px-3 py-3 lg:px-5 lg:py-5">
         <div
           aria-hidden="true"
           className={cn(
@@ -371,7 +371,7 @@ export const AppLayout = () => {
 
         <aside
           className={cn(
-            "fixed inset-y-3 left-3 z-40 flex w-[min(18.5rem,calc(100vw-1.5rem))] flex-col rounded-[32px] border border-white/10 bg-[#090d13]/96 p-4 text-slate-100 shadow-[0_38px_88px_-42px_rgba(15,23,42,0.9)] transition duration-200 lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[260px] lg:translate-x-0",
+            "app-sidebar print-hidden fixed inset-y-3 left-3 z-40 flex w-[min(18.5rem,calc(100vw-1.5rem))] flex-col rounded-[32px] border border-white/10 bg-[#090d13]/96 p-4 text-slate-100 shadow-[0_38px_88px_-42px_rgba(15,23,42,0.9)] transition duration-200 lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[260px] lg:translate-x-0",
             isMobileNavigationOpen
               ? "translate-x-0 opacity-100"
               : "-translate-x-[108%] opacity-0 lg:opacity-100",
@@ -457,7 +457,7 @@ export const AppLayout = () => {
 
         <div className="min-w-0 flex-1">
           <div className="flex min-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[32px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(247,249,251,0.94))] shadow-[0_34px_80px_-46px_rgba(15,23,42,0.46)] backdrop-blur-xl">
-            <header className="shrink-0 border-b border-slate-200/80 px-4 py-4 lg:px-6">
+            <header className="app-header print-hidden shrink-0 border-b border-slate-200/80 px-4 py-4 lg:px-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex items-center gap-3">
                   <button
@@ -693,7 +693,7 @@ export const AppLayout = () => {
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-6">
+            <div className="app-content min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-6">
               <WorkspaceErrorBoundary
                 resetKey={`${location.pathname}${location.search}${location.hash}`}
               >

@@ -1,3 +1,5 @@
+import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import { BranchesService } from "../branches/branches.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { ReportsRepository } from "./reports.repository";
 import {
@@ -12,6 +14,7 @@ import type {
   SalesReportQuery,
   StockReportQuery,
   SupplierReportQuery,
+  UsageReportQuery,
 } from "./reports.validation";
 
 const buildPaginatedResponse = <T>(
@@ -91,6 +94,8 @@ export class ReportsService {
   constructor(
     private readonly reportsRepository = new ReportsRepository(),
     private readonly inventoryRepository = new InventoryRepository(),
+    private readonly adminSettingsService = new AdminSettingsService(),
+    private readonly branchesService = new BranchesService(),
   ) {}
 
   async getDashboardSummary(
@@ -102,21 +107,33 @@ export class ReportsService {
     await Promise.all(
       branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
     );
+    const branchThresholds = await Promise.all(
+      branchIds.map((branchId) =>
+        this.branchesService
+          .getResolvedBranchSettings(shopId, branchId)
+          .then((settings) => settings.defaultLowStockThreshold),
+      ),
+    );
 
     const [todaySales, monthlySales, lowStockCount, expirySummary, monthlyProfit] =
       await Promise.all([
         this.reportsRepository.getTodaySalesSummary(shopId, branchIds, accessScope),
         this.reportsRepository.getMonthlySalesSummary(shopId, branchIds, accessScope),
         Promise.all(
-          branchIds.map((branchId) =>
-            this.inventoryRepository.countInventorySummary(shopId, branchId, {
-              page: 1,
-              pageSize: 1,
-              sortBy: "availableQuantity",
-              sortOrder: "asc",
-              search: undefined,
-              lowStockOnly: true,
-            }),
+          branchIds.map((branchId, index) =>
+            this.inventoryRepository.countInventorySummary(
+              shopId,
+              branchId,
+              {
+                page: 1,
+                pageSize: 1,
+                sortBy: "availableQuantity",
+                sortOrder: "asc",
+                search: undefined,
+                lowStockOnly: true,
+              },
+              branchThresholds[index] ?? 10,
+            ),
           ),
         ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
         this.reportsRepository.getExpirySummary(shopId, branchIds),
@@ -340,26 +357,38 @@ export class ReportsService {
       ...query,
       search: normalizeSearch(query.search),
     };
+    const branchThresholds = await Promise.all(
+      branchIds.map((branchId) =>
+        this.branchesService
+          .getResolvedBranchSettings(shopId, branchId)
+          .then((settings) => settings.defaultLowStockThreshold),
+      ),
+    );
 
     const [summary, lowStockCount, rows, total] = await Promise.all([
       this.reportsRepository.getStockSummary(shopId, branchIds, normalizedQuery),
       Promise.all(
-        branchIds.map((branchId) =>
-          this.inventoryRepository.countInventorySummary(shopId, branchId, {
-            page: 1,
-            pageSize: 1,
-            sortBy: "availableQuantity",
-            sortOrder: "asc",
-            lowStockOnly: true,
-            search: normalizedQuery.search,
-            ...(normalizedQuery.categoryId
-              ? { categoryId: normalizedQuery.categoryId }
-              : {}),
-            ...(normalizedQuery.manufacturerId
-              ? { manufacturerId: normalizedQuery.manufacturerId }
-              : {}),
-            ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
-          }),
+        branchIds.map((branchId, index) =>
+          this.inventoryRepository.countInventorySummary(
+            shopId,
+            branchId,
+            {
+              page: 1,
+              pageSize: 1,
+              sortBy: "availableQuantity",
+              sortOrder: "asc",
+              lowStockOnly: true,
+              search: normalizedQuery.search,
+              ...(normalizedQuery.categoryId
+                ? { categoryId: normalizedQuery.categoryId }
+                : {}),
+              ...(normalizedQuery.manufacturerId
+                ? { manufacturerId: normalizedQuery.manufacturerId }
+                : {}),
+              ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
+            },
+            branchThresholds[index] ?? 10,
+          ),
         ),
       ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
       this.reportsRepository.listStockRows(shopId, branchIds, normalizedQuery),
@@ -406,11 +435,36 @@ export class ReportsService {
       ...query,
       search: normalizeSearch(query.search),
     };
+    const defaultThreshold =
+      branchIds.length === 1
+        ? (
+            await this.branchesService.getResolvedBranchSettings(
+              shopId,
+              branchIds[0]!,
+            )
+          ).defaultLowStockThreshold
+        : (await this.adminSettingsService.getResolvedShopSettings(shopId))
+            .defaultLowStockThreshold;
 
     const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getLowStockSummary(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.listLowStockRows(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.countLowStockRows(shopId, branchIds, normalizedQuery),
+      this.reportsRepository.getLowStockSummary(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        defaultThreshold,
+      ),
+      this.reportsRepository.listLowStockRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        defaultThreshold,
+      ),
+      this.reportsRepository.countLowStockRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        defaultThreshold,
+      ),
     ]);
 
     return {
@@ -420,11 +474,14 @@ export class ReportsService {
       },
       rows: buildPaginatedResponse(
         rows.map((record) => ({
-          medicine: record.medicine,
+          medicine: {
+            ...record.medicine,
+            reorderLevel: Number(record.reorderLevel ?? 0),
+          },
           category: record.category,
           manufacturer: record.manufacturer,
           availableQuantity: Number(record.availableQuantity ?? 0),
-          reorderLevel: record.medicine.reorderLevel,
+          reorderLevel: Number(record.reorderLevel ?? 0),
           shortage: Number(record.shortage ?? 0),
         })),
         total,
@@ -512,6 +569,100 @@ export class ReportsService {
           totalPaid: record.totalPaid,
           totalDue: record.totalDue,
         })),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
+      ),
+    };
+  }
+
+  async getUsageReport(
+    shopId: string,
+    branchIds: string[],
+    accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
+    query: UsageReportQuery,
+  ) {
+    const normalizedQuery = normalizeRange<UsageReportQuery>(
+      { ...query, search: normalizeSearch(query.search) },
+      true,
+    );
+
+    const [summary, trend, rows, total] = await Promise.all([
+      this.reportsRepository.getUsageSummary(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.getUsageTrend(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.listUsageRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+      this.reportsRepository.countUsageRows(
+        shopId,
+        branchIds,
+        normalizedQuery,
+        accessScope,
+      ),
+    ]);
+
+    const revenue = toMoneyNumber(summary?.revenue);
+    const profit = toMoneyNumber(summary?.profit);
+
+    return {
+      filters: {
+        dateRangeLabel: formatDateRangeLabel(
+          normalizedQuery.dateFrom,
+          normalizedQuery.dateTo,
+        ),
+        groupBy: normalizedQuery.groupBy,
+      },
+      summary: {
+        totalUnitsSold: summary?.totalUnitsSold ?? 0,
+        uniqueMedicines: summary?.uniqueMedicines ?? 0,
+        revenue: summary?.revenue ?? "0.00",
+        cost: summary?.cost ?? "0.00",
+        profit: summary?.profit ?? "0.00",
+        profitPercent: toPercentString(profit, revenue),
+      },
+      trend: trend.map((item) => {
+        const periodRevenue = toMoneyNumber(item.revenue);
+        const periodProfit = toMoneyNumber(item.profit);
+
+        return {
+          periodStart: item.periodStart,
+          totalUnitsSold: item.totalUnitsSold,
+          revenue: item.revenue,
+          cost: item.cost,
+          profit: item.profit,
+          profitPercent: toPercentString(periodProfit, periodRevenue),
+        };
+      }),
+      rows: buildPaginatedResponse(
+        rows.map((record) => {
+          const rowRevenue = toMoneyNumber(record.revenue);
+          const rowProfit = toMoneyNumber(record.profit);
+
+          return {
+            medicine: record.medicine,
+            category: record.category,
+            manufacturer: record.manufacturer,
+            quantitySold: Number(record.quantitySold ?? 0),
+            revenue: record.revenue,
+            cost: record.cost,
+            profit: record.profit,
+            profitPercent: toPercentString(rowProfit, rowRevenue),
+            lastSoldAt: record.lastSoldAt,
+          };
+        }),
         total,
         normalizedQuery.page,
         normalizedQuery.pageSize,
@@ -779,6 +930,56 @@ export class ReportsService {
         totalDue: item.totalDue,
       })),
       "supplier-report",
+    );
+  }
+
+  async exportUsageReport(
+    shopId: string,
+    branchIds: string[],
+    shopName: string,
+    accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
+    query: UsageReportQuery & { format: "xlsx" | "pdf" },
+  ) {
+    const report = await this.getUsageReport(shopId, branchIds, accessScope, {
+      ...query,
+      page: 1,
+      pageSize: 2000,
+    });
+
+    return this.buildReportExport(
+      query.format,
+      shopName,
+      "Medicine Usage Report",
+      report.filters.dateRangeLabel,
+      [
+        { label: "Units sold", value: String(report.summary.totalUnitsSold) },
+        { label: "Medicines used", value: String(report.summary.uniqueMedicines) },
+        { label: "Revenue", value: report.summary.revenue },
+        { label: "Profit", value: report.summary.profit },
+      ],
+      [
+        { header: "Medicine", key: "medicineName", width: 24 },
+        { header: "Category", key: "categoryName", width: 18 },
+        { header: "Manufacturer", key: "manufacturerName", width: 18 },
+        { header: "Qty Sold", key: "quantitySold", width: 12, align: "right" },
+        { header: "Revenue", key: "revenue", width: 16, align: "right" },
+        { header: "Cost", key: "cost", width: 16, align: "right" },
+        { header: "Profit", key: "profit", width: 16, align: "right" },
+        { header: "Last Sold", key: "lastSoldAt", width: 16 },
+      ],
+      report.rows.items.map((item) => ({
+        medicineName: item.medicine.medicineName,
+        categoryName: item.category.name,
+        manufacturerName: item.manufacturer.name,
+        quantitySold: item.quantitySold,
+        revenue: item.revenue,
+        cost: item.cost,
+        profit: item.profit,
+        lastSoldAt: item.lastSoldAt
+          ? item.lastSoldAt.toISOString().slice(0, 10)
+          : "",
+      })),
+      "usage-report",
     );
   }
 

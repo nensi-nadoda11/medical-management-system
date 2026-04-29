@@ -118,6 +118,62 @@ const buildBaseFooter = () => [
   "Signature / stamp can be added where business policy requires it.",
 ];
 
+const resolvePurchaseWorkflowStage = (purchase: {
+  status: "draft" | "finalized" | "cancelled";
+  purchaseOrderApprovedAt: Date | null;
+  supplierNotifiedAt: Date | null;
+}) => {
+  if (purchase.status === "cancelled") {
+    return "cancelled" as const;
+  }
+
+  if (purchase.status === "finalized") {
+    return "received" as const;
+  }
+
+  if (purchase.supplierNotifiedAt) {
+    return "supplier_notified" as const;
+  }
+
+  if (purchase.purchaseOrderApprovedAt) {
+    return "approved" as const;
+  }
+
+  return "draft" as const;
+};
+
+const buildPurchaseDocumentConfig = (stage: ReturnType<typeof resolvePurchaseWorkflowStage>) => {
+  if (stage === "received") {
+    return {
+      title: "Purchase Receipt",
+      subtitle: "Received supplier purchase with batch and tax detail.",
+      filePrefix: "purchase-receipt",
+    };
+  }
+
+  if (stage === "supplier_notified") {
+    return {
+      title: "Supplier Purchase Order",
+      subtitle: "Approved purchase order already shared with the supplier.",
+      filePrefix: "supplier-purchase-order",
+    };
+  }
+
+  if (stage === "approved") {
+    return {
+      title: "Approved Purchase Order",
+      subtitle: "Approved purchase order awaiting supplier confirmation or stock receipt.",
+      filePrefix: "approved-purchase-order",
+    };
+  }
+
+  return {
+    title: "Draft Purchase Order",
+    subtitle: "Draft supplier purchase order ready for review, print, or supplier sharing.",
+    filePrefix: "draft-purchase-order",
+  };
+};
+
 export class DocumentsService {
   constructor(private readonly documentsRepository = new DocumentsRepository()) {}
 
@@ -247,21 +303,27 @@ export class DocumentsService {
       throw buildAppError(404, "PURCHASE_NOT_FOUND", "Purchase not found.");
     }
 
-    if (record.purchase.status !== "finalized") {
+    if (record.purchase.status === "cancelled") {
       throw buildAppError(
         400,
         "PURCHASE_DOCUMENT_UNAVAILABLE",
-        "Only finalized purchases can be generated.",
+        "Cancelled purchase documents cannot be generated.",
       );
     }
+
+    const workflowStage = resolvePurchaseWorkflowStage(record.purchase);
+    const documentConfig = buildPurchaseDocumentConfig(workflowStage);
 
     return {
       kind: "purchase_document",
       variant: "a4",
-      title: "Purchase Document",
-      subtitle: "Finalized supplier purchase with batch and tax detail.",
+      title: documentConfig.title,
+      subtitle: documentConfig.subtitle,
       documentNumber: record.purchase.purchaseNumber,
-      pdfFileName: buildPdfFileName("purchase", record.purchase.purchaseNumber),
+      pdfFileName: buildPdfFileName(
+        documentConfig.filePrefix,
+        record.purchase.purchaseNumber,
+      ),
       generatedAt: `Generated on ${formatDateTime(new Date())}`,
       shop: {
         name: shop.name,
@@ -270,7 +332,11 @@ export class DocumentsService {
         contactLine: toContactLine(shop),
         complianceLine: toComplianceLine(shop),
       },
-      badges: [humanize(record.purchase.status), humanize(record.purchase.paymentStatus)],
+      badges: [
+        humanize(workflowStage),
+        humanize(record.purchase.status),
+        humanize(record.purchase.paymentStatus),
+      ],
       metadata: [
         {
           label: "Purchase No",
@@ -302,7 +368,13 @@ export class DocumentsService {
           lines: [
             record.createdBy.fullName,
             humanize(record.createdBy.role),
-            `Finalized ${formatDateTime(record.purchase.finalizedAt)}`,
+            workflowStage === "received"
+              ? `Received ${formatDateTime(record.purchase.finalizedAt)}`
+              : workflowStage === "supplier_notified"
+                ? `Supplier notified ${formatDateTime(record.purchase.supplierNotifiedAt)}`
+                : workflowStage === "approved"
+                  ? `Approved ${formatDateTime(record.purchase.purchaseOrderApprovedAt)}`
+                  : `Drafted ${formatDateTime(record.purchase.createdAt)}`,
           ],
         },
       ],

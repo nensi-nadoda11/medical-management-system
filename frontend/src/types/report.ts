@@ -132,6 +132,7 @@ export interface StockReportRow {
     id: string;
     medicineName: string;
     genericName: string;
+    barcode?: string | null;
     form: string;
     unit: string;
     reorderLevel: number;
@@ -163,6 +164,7 @@ export interface LowStockReportRow {
     id: string;
     medicineName: string;
     genericName: string;
+    barcode?: string | null;
     form: string;
     unit: string;
     reorderLevel: number;
@@ -198,6 +200,7 @@ export interface ExpiryReportRow {
     id: string;
     medicineName: string;
     genericName: string;
+    barcode?: string | null;
     reorderLevel: number;
   };
   expiryStatus: "expired" | "next_30_days" | "next_60_days" | "next_90_days" | "safe";
@@ -238,6 +241,57 @@ export interface SupplierReport {
     totalDue: string;
   };
   rows: PaginatedResponse<SupplierReportRow>;
+}
+
+export interface UsageTrendRow {
+  periodStart: string;
+  totalUnitsSold: number;
+  revenue: string;
+  cost: string;
+  profit: string;
+  profitPercent: string;
+}
+
+export interface UsageReportRow {
+  medicine: {
+    id: string;
+    medicineName: string;
+    genericName: string;
+    barcode?: string | null;
+    form: string;
+    unit: string;
+  };
+  category: {
+    id: string;
+    name: string;
+  };
+  manufacturer: {
+    id: string;
+    name: string;
+  };
+  quantitySold: number;
+  revenue: string;
+  cost: string;
+  profit: string;
+  profitPercent: string;
+  lastSoldAt: string | null;
+}
+
+export interface UsageReport {
+  filters: {
+    dateRangeLabel: string;
+    groupBy: "day" | "month";
+  };
+  summary: {
+    totalUnitsSold: number;
+    uniqueMedicines: number;
+    revenue: string;
+    cost: string;
+    profit: string;
+    profitPercent: string;
+  };
+  trend: UsageTrendRow[];
+  rows: PaginatedResponse<UsageReportRow>;
 }
 
 export interface SalesReportParams extends ReportDateFilters, ReportBranchFilters {
@@ -296,6 +350,17 @@ export interface SupplierReportParams extends ReportDateFilters, ReportBranchFil
   page?: number;
   pageSize?: number;
   sortBy?: "supplierName" | "totalPurchase" | "totalDue" | "purchaseCount";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface UsageReportParams extends ReportDateFilters, ReportBranchFilters {
+  search?: string;
+  categoryId?: string;
+  manufacturerId?: string;
+  groupBy?: "day" | "month";
+  page?: number;
+  pageSize?: number;
+  sortBy?: "medicineName" | "quantitySold" | "revenue" | "profit" | "lastSoldAt";
   sortOrder?: "asc" | "desc";
 }
 

@@ -173,6 +173,61 @@ class EmailService {
       text,
     });
   }
+
+  async sendSupplierReorderAlert(input: {
+    to: string;
+    recipientName: string;
+    shopName: string;
+    supplierName: string;
+    medicineName: string;
+    currentAvailableQuantity: number;
+    reorderLevel: number;
+  }) {
+    const shortage = Math.max(
+      input.reorderLevel - input.currentAvailableQuantity,
+      0,
+    );
+    const subject = `Reorder request: ${input.medicineName}`;
+    const text = [
+      `Hello ${input.recipientName},`,
+      "",
+      `${input.shopName} needs a reorder for ${input.medicineName}.`,
+      `Current stock: ${input.currentAvailableQuantity}`,
+      `Reorder level: ${input.reorderLevel}`,
+      `Suggested replenishment gap: ${shortage}`,
+      "",
+      `Please confirm availability and share the reorder timeline with ${input.shopName}.`,
+    ].join("\n");
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <p>Hello ${input.recipientName},</p>
+        <p>
+          <strong>${input.shopName}</strong> needs a reorder for
+          <strong>${input.medicineName}</strong>.
+        </p>
+        <p>
+          Current stock: <strong>${input.currentAvailableQuantity}</strong><br />
+          Reorder level: <strong>${input.reorderLevel}</strong><br />
+          Suggested replenishment gap: <strong>${shortage}</strong>
+        </p>
+        <p>
+          Please confirm availability and share the reorder timeline with
+          <strong>${input.shopName}</strong>.
+        </p>
+        <p style="margin-top: 16px; color: #475569;">
+          Supplier reference: ${input.supplierName}
+        </p>
+      </div>
+    `;
+
+    await this.provider.send({
+      to: input.to,
+      subject,
+      html,
+      text,
+    });
+  }
 }
 
 const emailProvider =

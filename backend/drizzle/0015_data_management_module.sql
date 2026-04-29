@@ -1,11 +1,70 @@
-CREATE TYPE import_job_status AS ENUM ('validated', 'processing', 'completed', 'failed');
-CREATE TYPE import_type AS ENUM ('medicines', 'suppliers', 'customers');
-CREATE TYPE import_duplicate_mode AS ENUM ('skip_duplicates', 'update_existing', 'fail_duplicates', 'upsert');
-CREATE TYPE import_row_status AS ENUM ('valid', 'invalid', 'duplicate', 'skipped', 'imported', 'failed');
-CREATE TYPE backup_record_status AS ENUM ('ready', 'restored', 'failed');
-CREATE TYPE backup_record_type AS ENUM ('shop_snapshot');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'import_job_status'
+  ) THEN
+    CREATE TYPE import_job_status AS ENUM ('validated', 'processing', 'completed', 'failed');
+  END IF;
+END $$;
 
-CREATE TABLE import_jobs (
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'import_type'
+  ) THEN
+    CREATE TYPE import_type AS ENUM ('medicines', 'suppliers', 'customers');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'import_duplicate_mode'
+  ) THEN
+    CREATE TYPE import_duplicate_mode AS ENUM ('skip_duplicates', 'update_existing', 'fail_duplicates', 'upsert');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'import_row_status'
+  ) THEN
+    CREATE TYPE import_row_status AS ENUM ('valid', 'invalid', 'duplicate', 'skipped', 'imported', 'failed');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'backup_record_status'
+  ) THEN
+    CREATE TYPE backup_record_status AS ENUM ('ready', 'restored', 'failed');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'backup_record_type'
+  ) THEN
+    CREATE TYPE backup_record_type AS ENUM ('shop_snapshot');
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS import_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   import_type import_type NOT NULL,
@@ -29,13 +88,13 @@ CREATE TABLE import_jobs (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX import_jobs_shop_id_idx ON import_jobs(shop_id);
-CREATE INDEX import_jobs_import_type_idx ON import_jobs(import_type);
-CREATE INDEX import_jobs_status_idx ON import_jobs(status);
-CREATE INDEX import_jobs_created_by_user_id_idx ON import_jobs(created_by_user_id);
-CREATE INDEX import_jobs_created_at_idx ON import_jobs(created_at);
+CREATE INDEX IF NOT EXISTS import_jobs_shop_id_idx ON import_jobs(shop_id);
+CREATE INDEX IF NOT EXISTS import_jobs_import_type_idx ON import_jobs(import_type);
+CREATE INDEX IF NOT EXISTS import_jobs_status_idx ON import_jobs(status);
+CREATE INDEX IF NOT EXISTS import_jobs_created_by_user_id_idx ON import_jobs(created_by_user_id);
+CREATE INDEX IF NOT EXISTS import_jobs_created_at_idx ON import_jobs(created_at);
 
-CREATE TABLE import_job_rows (
+CREATE TABLE IF NOT EXISTS import_job_rows (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   job_id uuid NOT NULL REFERENCES import_jobs(id) ON DELETE CASCADE,
   shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
@@ -53,11 +112,11 @@ CREATE TABLE import_job_rows (
   CONSTRAINT import_job_rows_job_row_number_unique_idx UNIQUE(job_id, row_number)
 );
 
-CREATE INDEX import_job_rows_job_id_idx ON import_job_rows(job_id);
-CREATE INDEX import_job_rows_shop_id_idx ON import_job_rows(shop_id);
-CREATE INDEX import_job_rows_status_idx ON import_job_rows(status);
+CREATE INDEX IF NOT EXISTS import_job_rows_job_id_idx ON import_job_rows(job_id);
+CREATE INDEX IF NOT EXISTS import_job_rows_shop_id_idx ON import_job_rows(shop_id);
+CREATE INDEX IF NOT EXISTS import_job_rows_status_idx ON import_job_rows(status);
 
-CREATE TABLE backup_records (
+CREATE TABLE IF NOT EXISTS backup_records (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   type backup_record_type NOT NULL DEFAULT 'shop_snapshot',
@@ -72,7 +131,7 @@ CREATE TABLE backup_records (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX backup_records_shop_id_idx ON backup_records(shop_id);
-CREATE INDEX backup_records_status_idx ON backup_records(status);
-CREATE INDEX backup_records_created_by_user_id_idx ON backup_records(created_by_user_id);
-CREATE INDEX backup_records_created_at_idx ON backup_records(created_at);
+CREATE INDEX IF NOT EXISTS backup_records_shop_id_idx ON backup_records(shop_id);
+CREATE INDEX IF NOT EXISTS backup_records_status_idx ON backup_records(status);
+CREATE INDEX IF NOT EXISTS backup_records_created_by_user_id_idx ON backup_records(created_by_user_id);
+CREATE INDEX IF NOT EXISTS backup_records_created_at_idx ON backup_records(created_at);

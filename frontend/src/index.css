@@ -395,6 +395,63 @@ a {
     box-shadow: none !important;
     border-color: #e2e8f0 !important;
   }
+
+  .app-frame,
+  .app-shell,
+  .app-content {
+    display: block !important;
+    min-height: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    overflow: visible !important;
+  }
+
+  .print-report-page {
+    display: block !important;
+    background: #fff !important;
+  }
+
+  .print-report-page > * {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .print-report-page table {
+    min-width: 100% !important;
+  }
+
+  .print-report-page [class*="overflow-x-auto"] {
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+  }
+
+  .print-report-page [class*="rounded-"] {
+    border-radius: 0 !important;
+  }
+
+  .print-report-page section,
+  .print-report-page > div,
+  .print-report-page > article {
+    border-color: #dbe3ec !important;
+    background: #fff !important;
+  }
+
+  .print-report-page thead tr,
+  .print-report-page tbody tr {
+    box-shadow: none !important;
+  }
+
+  .print-report-page tbody td,
+  .print-report-page tbody th {
+    background: #fff !important;
+    border-color: #dbe3ec !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 /* Global Number Input Overrides */

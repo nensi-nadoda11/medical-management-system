@@ -1,4 +1,5 @@
 import { db } from "../../db/client";
+import { env } from "../../config/env";
 import { AppError } from "../../shared/errors/app-error";
 import type { DbExecutor } from "../../shared/db/executor";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
@@ -63,22 +64,23 @@ export type ResolvedShopSettings = ShopSettingsDefaults & {
   shopId: string;
   notificationChannels: {
     email: {
-      enabled: true;
+      enabled: boolean;
       recipientMode: "shop_admins";
       lowStockEnabled: boolean;
       expiryEnabled: boolean;
     };
     whatsapp: {
-      enabled: false;
-      recipientMode: "future";
-      lowStockEnabled: false;
-      expiryEnabled: false;
+      enabled: boolean;
+      recipientMode: "shop_admins" | "provider_only" | "disabled";
+      lowStockEnabled: boolean;
+      expiryEnabled: boolean;
     };
   };
   primaryAlertRecipients: Array<{
     id: string;
     fullName: string;
     email: string;
+    mobileNumber: string | null;
   }>;
   updatedAt?: Date;
   createdAt?: Date;
@@ -416,16 +418,22 @@ export class AdminSettingsService {
   }
 
   async getResolvedShopSettings(shopId: string, executor?: DbExecutor) {
-    const [shop, settings] = await Promise.all([
+    const [shop, settings, recipients] = await Promise.all([
       this.adminSettingsRepository.findShopById(shopId, executor),
       this.adminSettingsRepository.findShopSettings(shopId, executor),
+      this.adminSettingsRepository.listAdminEmailRecipients(shopId, executor),
     ]);
 
     if (!shop) {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
     }
 
-    return this.buildResolvedShopSettings(shopId, shop.invoicePrefix, settings, []);
+    return this.buildResolvedShopSettings(
+      shopId,
+      shop.invoicePrefix,
+      settings,
+      recipients,
+    );
   }
 
   async updateShopSettings(
@@ -550,6 +558,17 @@ export class AdminSettingsService {
     settings: Awaited<ReturnType<AdminSettingsRepository["findShopSettings"]>>,
     recipients: Awaited<ReturnType<AdminSettingsRepository["listAdminEmailRecipients"]>>,
   ): ResolvedShopSettings {
+    const emailChannelEnabled = recipients.some((recipient) => Boolean(recipient.email));
+    const whatsappProviderEnabled = env.WHATSAPP_PROVIDER === "console" || Boolean(env.TWILIO_WHATSAPP_FROM_NUMBER);
+    const whatsappRecipientEnabled = recipients.some((recipient) => Boolean(recipient.mobileNumber));
+    const whatsappChannelEnabled = whatsappProviderEnabled && whatsappRecipientEnabled;
+    const lowStockExternalAlertsEnabled =
+      settings?.lowStockEmailAlertsEnabled ??
+      SHOP_SETTINGS_DEFAULTS.lowStockEmailAlertsEnabled;
+    const expiryExternalAlertsEnabled =
+      settings?.expiryEmailAlertsEnabled ??
+      SHOP_SETTINGS_DEFAULTS.expiryEmailAlertsEnabled;
+
     return {
       shopId,
       defaultLowStockThreshold:
@@ -589,20 +608,20 @@ export class AdminSettingsService {
       preferFefo: settings?.preferFefo ?? SHOP_SETTINGS_DEFAULTS.preferFefo,
       notificationChannels: {
         email: {
-          enabled: true,
+          enabled: emailChannelEnabled,
           recipientMode: "shop_admins",
-          lowStockEnabled:
-            settings?.lowStockEmailAlertsEnabled ??
-            SHOP_SETTINGS_DEFAULTS.lowStockEmailAlertsEnabled,
-          expiryEnabled:
-            settings?.expiryEmailAlertsEnabled ??
-            SHOP_SETTINGS_DEFAULTS.expiryEmailAlertsEnabled,
+          lowStockEnabled: emailChannelEnabled && lowStockExternalAlertsEnabled,
+          expiryEnabled: emailChannelEnabled && expiryExternalAlertsEnabled,
         },
         whatsapp: {
-          enabled: false,
-          recipientMode: "future",
-          lowStockEnabled: false,
-          expiryEnabled: false,
+          enabled: whatsappChannelEnabled,
+          recipientMode: whatsappChannelEnabled
+            ? "shop_admins"
+            : whatsappProviderEnabled
+              ? "provider_only"
+              : "disabled",
+          lowStockEnabled: whatsappChannelEnabled && lowStockExternalAlertsEnabled,
+          expiryEnabled: whatsappChannelEnabled && expiryExternalAlertsEnabled,
         },
       },
       primaryAlertRecipients: recipients,

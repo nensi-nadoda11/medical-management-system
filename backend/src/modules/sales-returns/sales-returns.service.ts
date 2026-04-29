@@ -13,6 +13,7 @@ import { AccountingLedgerService } from "../accounting/accounting-ledger.service
 import { AdminSettingsService } from "../admin-settings/admin-settings.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
+import { realtimeService } from "../realtime/realtime.service";
 import { SalesReturnsRepository } from "./sales-returns.repository";
 import type {
   CreateSalesReturnInput,
@@ -596,6 +597,23 @@ export class SalesReturnsService {
         });
       }
     }
+
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      reason: "sales_return_completed",
+      metadata: {
+        returnId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      reason: "sales_return_completed",
+      metadata: {
+        returnId,
+      },
+    });
 
     return this.getSalesReturnById(shopId, returnId);
   }

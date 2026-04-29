@@ -137,6 +137,24 @@ export const exportSupplierReportSchema = z.object({
   }),
 });
 
+export const listUsageReportSchema = z.object({
+  query: paginationQuerySchema.merge(dateRangeQuerySchema).merge(branchScopeQuerySchema).extend({
+    search: optionalSearch,
+    categoryId: z.string().uuid().optional(),
+    manufacturerId: z.string().uuid().optional(),
+    groupBy: z.enum(["day", "month"]).default("day"),
+    sortBy: z
+      .enum(["medicineName", "quantitySold", "revenue", "profit", "lastSoldAt"])
+      .default("quantitySold"),
+  }),
+});
+
+export const exportUsageReportSchema = z.object({
+  query: listUsageReportSchema.shape.query.extend({
+    format: exportFormatSchema,
+  }),
+});
+
 export type DashboardSummaryQuery = z.infer<
   typeof getDashboardSummarySchema
 >["query"];
@@ -167,4 +185,8 @@ export type SupplierReportQuery = z.infer<
 >["query"];
 export type SupplierReportExportQuery = z.infer<
   typeof exportSupplierReportSchema
+>["query"];
+export type UsageReportQuery = z.infer<typeof listUsageReportSchema>["query"];
+export type UsageReportExportQuery = z.infer<
+  typeof exportUsageReportSchema
 >["query"];

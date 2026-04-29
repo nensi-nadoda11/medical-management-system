@@ -83,16 +83,16 @@ export interface UserPermissionDetail {
 
 export interface NotificationChannelsSummary {
   email: {
-    enabled: true;
+    enabled: boolean;
     recipientMode: "shop_admins";
     lowStockEnabled: boolean;
     expiryEnabled: boolean;
   };
   whatsapp: {
-    enabled: false;
-    recipientMode: "future";
-    lowStockEnabled: false;
-    expiryEnabled: false;
+    enabled: boolean;
+    recipientMode: "shop_admins" | "provider_only" | "disabled";
+    lowStockEnabled: boolean;
+    expiryEnabled: boolean;
   };
 }
 
@@ -116,6 +116,7 @@ export interface AdminShopSettings {
     id: string;
     fullName: string;
     email: string;
+    mobileNumber: string | null;
   }>;
   createdAt?: string;
   updatedAt?: string;

@@ -18,6 +18,7 @@ export interface InventoryMedicineSummary {
   medicineName: string;
   genericName: string;
   brandName?: string | null;
+  barcode?: string | null;
   form: string;
   unit: string;
   reorderLevel: number;
@@ -109,6 +110,7 @@ export interface ExpiryReportItem extends InventoryBatch {
     id: string;
     medicineName: string;
     genericName: string;
+    barcode?: string | null;
     reorderLevel: number;
   };
   expiryStatus: "expired" | "next_30_days" | "next_60_days" | "next_90_days" | "safe";

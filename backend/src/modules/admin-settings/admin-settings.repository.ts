@@ -264,6 +264,7 @@ export class AdminSettingsRepository {
         id: users.id,
         fullName: users.fullName,
         email: users.email,
+        mobileNumber: users.mobileNumber,
       })
       .from(users)
       .where(

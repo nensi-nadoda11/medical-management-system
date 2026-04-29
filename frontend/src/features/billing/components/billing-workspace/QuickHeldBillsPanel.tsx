@@ -3,10 +3,10 @@ import { EmptyState } from "../../../../components/ui/EmptyState";
 import { SectionCard } from "../../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "../../../../lib/utils";
-import type { BillDetail } from "../../api/billing";
+import type { BillListItem } from "../../api/billing";
 
 interface QuickHeldBillsPanelProps {
-  heldBills: BillDetail[];
+  heldBills: BillListItem[];
   isLoading: boolean;
 }
 

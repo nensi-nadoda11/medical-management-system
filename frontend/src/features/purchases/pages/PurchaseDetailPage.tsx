@@ -22,11 +22,38 @@ import { useSessionQuery } from "../../auth/hooks/use-session";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import { hasPermission } from "../../../types/auth";
 import {
+  approvePurchaseOrder,
   cancelPurchase,
   finalizePurchase,
   getPurchase,
+  markPurchaseOrderSupplierNotified,
   purchasesQueryKeys,
 } from "../api/purchases";
+
+const getPurchaseStatusLabel = (status: "draft" | "finalized" | "cancelled") =>
+  status === "draft" ? "open" : status === "finalized" ? "received" : "cancelled";
+
+const getPurchaseWorkflowLabel = (
+  workflowStage:
+    | "draft"
+    | "approved"
+    | "supplier_notified"
+    | "received"
+    | "cancelled",
+) => {
+  switch (workflowStage) {
+    case "approved":
+      return "approved";
+    case "supplier_notified":
+      return "supplier notified";
+    case "received":
+      return "received";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "draft purchase order";
+  }
+};
 
 export const PurchaseDetailPage = () => {
   const { id = "" } = useParams();
@@ -59,10 +86,45 @@ export const PurchaseDetailPage = () => {
       ]);
       pushToast({
         title: "Purchase finalized",
-        description: "Inventory has been updated with the finalized batch stock.",
+        description: "Inventory has been updated with the received batch stock.",
         variant: "success",
       });
       setIsFinalizeOpen(false);
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (purchaseId: string) => approvePurchaseOrder(purchaseId),
+    onSuccess: async (purchase) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all }),
+        queryClient.invalidateQueries({
+          queryKey: purchasesQueryKeys.detail(purchase.id),
+        }),
+      ]);
+      pushToast({
+        title: "Purchase order approved",
+        description: "The purchase order is now locked for review and ready to share with the supplier.",
+        variant: "success",
+      });
+    },
+  });
+
+  const supplierNotifiedMutation = useMutation({
+    mutationFn: (purchaseId: string) =>
+      markPurchaseOrderSupplierNotified(purchaseId),
+    onSuccess: async (purchase) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all }),
+        queryClient.invalidateQueries({
+          queryKey: purchasesQueryKeys.detail(purchase.id),
+        }),
+      ]);
+      pushToast({
+        title: "Supplier stage updated",
+        description: "The purchase order is now marked as shared with the supplier.",
+        variant: "success",
+      });
     },
   });
 
@@ -80,7 +142,7 @@ export const PurchaseDetailPage = () => {
       ]);
       pushToast({
         title: "Purchase cancelled",
-        description: "The draft purchase has been cancelled safely.",
+        description: "The draft purchase order has been cancelled safely.",
         variant: "success",
       });
       setIsCancelOpen(false);
@@ -113,6 +175,9 @@ export const PurchaseDetailPage = () => {
 
   const purchase = purchaseQuery.data;
   const isDraft = purchase.status === "draft";
+  const canEditDraft = purchase.workflowStage === "draft";
+  const canApprove = purchase.workflowStage === "draft";
+  const canMarkSupplierNotified = purchase.workflowStage === "approved";
   const hasReturnableItems = purchase.items.some(
     (item) => item.remainingReturnableQuantity > 0,
   );
@@ -126,12 +191,12 @@ export const PurchaseDetailPage = () => {
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               to="/app/purchases"
             >
-              Back to purchases
+              Back to purchase orders
             </Link>
-            {purchase.status === "finalized" ? (
+            {purchase.status !== "cancelled" ? (
               <DocumentActionGroup id={purchase.id} kind="purchase" />
             ) : null}
-            {isDraft ? (
+            {canEditDraft ? (
               <Link
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 to={`/app/purchases/${purchase.id}/edit`}
@@ -139,13 +204,33 @@ export const PurchaseDetailPage = () => {
                 <Pencil className="h-4 w-4" />
               </Link>
             ) : null}
+            {canApprove ? (
+              <button
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                disabled={approveMutation.isPending}
+                onClick={() => approveMutation.mutate(purchase.id)}
+                type="button"
+              >
+                Approve purchase order
+              </button>
+            ) : null}
+            {canMarkSupplierNotified ? (
+              <button
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                disabled={supplierNotifiedMutation.isPending}
+                onClick={() => supplierNotifiedMutation.mutate(purchase.id)}
+                type="button"
+              >
+                Mark supplier notified
+              </button>
+            ) : null}
             {isDraft ? (
               <button
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 onClick={() => setIsCancelOpen(true)}
                 type="button"
               >
-                Cancel purchase
+                Cancel purchase order
               </button>
             ) : null}
             {isDraft ? (
@@ -154,7 +239,7 @@ export const PurchaseDetailPage = () => {
                 onClick={() => setIsFinalizeOpen(true)}
                 type="button"
               >
-                Finalize purchase
+                Receive into stock
               </button>
             ) : null}
             {!isDraft && canCreatePurchaseReturn && hasReturnableItems ? (
@@ -167,7 +252,7 @@ export const PurchaseDetailPage = () => {
             ) : null}
           </>
         }
-        description="Review supplier, batch, financial, and posting information in one clean purchase detail view."
+        description="Review supplier, batch, financial, and stock receipt information in one clean purchase document view."
         eyebrow="Purchase management"
         title={purchase.purchaseNumber}
       />
@@ -177,7 +262,7 @@ export const PurchaseDetailPage = () => {
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              hint={`Status: ${purchase.status}`}
+              hint={getPurchaseWorkflowLabel(purchase.workflowStage)}
               label="Grand total"
               value={formatCurrency(purchase.grandTotal)}
             />
@@ -200,8 +285,8 @@ export const PurchaseDetailPage = () => {
             />
           </div>
           <SectionCard
-            description="Operational and supplier-facing identifiers for this purchase."
-            title="Purchase overview"
+            description="Operational and supplier-facing identifiers for this purchase order or received stock document."
+            title="Document overview"
           >
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {[
@@ -212,8 +297,22 @@ export const PurchaseDetailPage = () => {
                 ["Supplier invoice date", formatDate(purchase.supplierInvoiceDate)],
                 ["Purchase date", formatDate(purchase.purchaseDate)],
                 [
+                  "Approved on",
+                  purchase.purchaseOrderApprovedAt
+                    ? formatDateTime(purchase.purchaseOrderApprovedAt)
+                    : "Not approved",
+                ],
+                [
+                  "Supplier notified on",
+                  purchase.supplierNotifiedAt
+                    ? formatDateTime(purchase.supplierNotifiedAt)
+                    : "Not marked",
+                ],
+                [
                   "Finalized on",
-                  purchase.finalizedAt ? formatDateTime(purchase.finalizedAt) : "Not finalized",
+                  purchase.finalizedAt
+                    ? formatDateTime(purchase.finalizedAt)
+                    : "Not received",
                 ],
                 [
                   "Cancelled on",
@@ -232,10 +331,17 @@ export const PurchaseDetailPage = () => {
               ))}
               <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Status
+                  Workflow
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <StatusBadge label={purchase.status} />
+                  <StatusBadge
+                    label={getPurchaseWorkflowLabel(purchase.workflowStage)}
+                    tone={purchase.workflowStage}
+                  />
+                  <StatusBadge
+                    label={getPurchaseStatusLabel(purchase.status)}
+                    tone={purchase.status}
+                  />
                   <StatusBadge label={purchase.paymentStatus} />
                 </div>
               </div>
@@ -430,13 +536,13 @@ export const PurchaseDetailPage = () => {
       </div>
 
       <ConfirmDialog
-        confirmLabel="Finalize purchase"
-        description="This will post all purchase item batches into live stock and lock the purchase against further editing."
+        confirmLabel="Receive stock"
+        description="This will receive all purchase-order items into live stock and lock the document against further editing."
         isLoading={finalizeMutation.isPending}
         onClose={() => setIsFinalizeOpen(false)}
         onConfirm={() => finalizeMutation.mutate(purchase.id)}
         open={isFinalizeOpen}
-        title="Finalize this draft purchase?"
+        title="Receive this purchase order?"
       />
 
       <ConfirmDialog

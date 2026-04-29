@@ -78,7 +78,7 @@ export const PurchaseEditPage = () => {
   const activeError = purchaseQuery.error ?? suppliersQuery.error ?? medicinesQuery.error;
 
   if (purchaseQuery.isLoading || suppliersQuery.isLoading || medicinesQuery.isLoading) {
-    return <LoadingState title="Opening purchase draft" />;
+    return <LoadingState title="Opening purchase order draft" />;
   }
 
   if (activeError) {
@@ -90,7 +90,7 @@ export const PurchaseEditPage = () => {
           suppliersQuery.refetch();
           medicinesQuery.refetch();
         }}
-        title="Unable to open purchase draft"
+        title="Unable to open purchase order draft"
       />
     );
   }
@@ -115,7 +115,7 @@ export const PurchaseEditPage = () => {
             View purchase
           </Link>
         }
-        description="Only draft purchases can be edited. This purchase is already locked for changes."
+        description="Only draft purchase orders can be edited. This document is already locked for changes."
         title="Purchase is no longer editable"
       />
     );
@@ -132,7 +132,7 @@ export const PurchaseEditPage = () => {
             View detail
           </Link>
         }
-        description="Adjust a draft purchase safely before it posts stock into live inventory."
+        description="Adjust a draft purchase order safely before it posts stock into live inventory."
         eyebrow="Purchase management"
         title={`Edit ${purchaseQuery.data.purchaseNumber}`}
       />
@@ -166,7 +166,7 @@ export const PurchaseEditPage = () => {
 
               pushToast({
                 title: "Purchase finalized",
-                description: "The updated draft has been finalized and posted to stock.",
+                description: "The updated purchase order has been received and posted to stock.",
                 variant: "success",
               });
               navigate(`/app/purchases/${finalizedPurchase.id}`);
@@ -182,7 +182,7 @@ export const PurchaseEditPage = () => {
 
             pushToast({
               title: "Draft updated",
-              description: "Your purchase draft has been updated successfully.",
+              description: "Your purchase order draft has been updated successfully.",
               variant: "success",
             });
             navigate(`/app/purchases/${updatedPurchase.id}`);
@@ -190,7 +190,7 @@ export const PurchaseEditPage = () => {
             setSubmissionError(
               error instanceof Error
                 ? error.message
-                : "Unable to update the purchase draft right now.",
+                : "Unable to update the purchase order draft right now.",
             );
           }
         }}

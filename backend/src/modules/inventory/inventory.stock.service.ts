@@ -571,11 +571,20 @@ export class InventoryStockService {
     purchaseId: string,
     executor: DbExecutor,
   ) {
-    await this.inventoryRepository.deletePurchaseStockRecords(
+    const result = await this.inventoryRepository.deletePurchaseStockRecords(
       shopId,
       branchId,
       purchaseId,
       executor,
     );
+
+    for (const medicineId of result.touchedMedicineIds) {
+      await this.alertsService.syncMedicineAlerts(
+        shopId,
+        branchId,
+        medicineId,
+        executor,
+      );
+    }
   }
 }

@@ -87,6 +87,18 @@ export const finalizePurchaseSchema = z.object({
   }),
 });
 
+export const approvePurchaseOrderSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+});
+
+export const markPurchaseOrderSupplierNotifiedSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+});
+
 export const cancelPurchaseSchema = z.object({
   params: z.object({
     id: z.string().uuid(),

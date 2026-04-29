@@ -1,6 +1,15 @@
-CREATE TYPE audit_log_severity AS ENUM ('normal', 'important', 'critical');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'audit_log_severity'
+  ) THEN
+    CREATE TYPE audit_log_severity AS ENUM ('normal', 'important', 'critical');
+  END IF;
+END $$;
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   actor_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -18,10 +27,10 @@ CREATE TABLE audit_logs (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX audit_logs_shop_id_idx ON audit_logs(shop_id);
-CREATE INDEX audit_logs_actor_user_id_idx ON audit_logs(actor_user_id);
-CREATE INDEX audit_logs_module_idx ON audit_logs(module);
-CREATE INDEX audit_logs_action_idx ON audit_logs(action);
-CREATE INDEX audit_logs_entity_idx ON audit_logs(entity_type, entity_id);
-CREATE INDEX audit_logs_severity_idx ON audit_logs(severity);
-CREATE INDEX audit_logs_created_at_idx ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS audit_logs_shop_id_idx ON audit_logs(shop_id);
+CREATE INDEX IF NOT EXISTS audit_logs_actor_user_id_idx ON audit_logs(actor_user_id);
+CREATE INDEX IF NOT EXISTS audit_logs_module_idx ON audit_logs(module);
+CREATE INDEX IF NOT EXISTS audit_logs_action_idx ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS audit_logs_entity_idx ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS audit_logs_severity_idx ON audit_logs(severity);
+CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at);

@@ -2,9 +2,17 @@ import type { PaginatedResponse } from "./common";
 
 export const PURCHASE_STATUSES = ["draft", "finalized", "cancelled"] as const;
 export const PURCHASE_PAYMENT_STATUSES = ["unpaid", "partial", "paid"] as const;
+export const PURCHASE_WORKFLOW_STAGES = [
+  "draft",
+  "approved",
+  "supplier_notified",
+  "received",
+  "cancelled",
+] as const;
 
 export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
 export type PurchasePaymentStatus = (typeof PURCHASE_PAYMENT_STATUSES)[number];
+export type PurchaseWorkflowStage = (typeof PURCHASE_WORKFLOW_STAGES)[number];
 
 export interface PurchaseSupplierSummary {
   id: string;
@@ -31,10 +39,13 @@ export interface PurchaseListItem {
   grandTotal: string;
   paidAmount: string;
   dueAmount: string;
+  purchaseOrderApprovedAt: string | null;
+  supplierNotifiedAt: string | null;
   finalizedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
+  workflowStage: PurchaseWorkflowStage;
   supplier: PurchaseSupplierSummary;
 }
 
@@ -88,6 +99,8 @@ export interface PurchaseDetail extends PurchaseListItem {
   notes: string | null;
   createdByUserId: string;
   updatedByUserId: string;
+  purchaseOrderApprovedByUserId: string | null;
+  supplierNotifiedByUserId: string | null;
   supplier: PurchaseSupplierSummary;
   items: PurchaseDetailItem[];
   returnHistory: PurchaseReturnHistoryItem[];

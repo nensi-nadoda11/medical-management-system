@@ -34,6 +34,7 @@ import {
 } from "../../shared/utils/strings";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { BranchesRepository } from "../branches/branches.repository";
+import { BranchesService } from "../branches/branches.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { DataManagementRepository } from "./data-management.repository";
 import type {
@@ -712,6 +713,7 @@ export class DataManagementService {
     private readonly auditLogsService = new AuditLogsService(),
     private readonly inventoryRepository = new InventoryRepository(),
     private readonly branchesRepository = new BranchesRepository(),
+    private readonly branchesService = new BranchesService(),
   ) {}
 
   async downloadTemplate(auth: AuthContext, query: DownloadTemplateQuery) {
@@ -3101,6 +3103,9 @@ export class DataManagementService {
     }
 
     await this.inventoryRepository.syncBatchStatuses(shopId, defaultBranch.id);
+    const defaultThreshold = (
+      await this.branchesService.getResolvedBranchSettings(shopId, defaultBranch.id)
+    ).defaultLowStockThreshold;
     const pageSize = 500;
     const inventoryQuery = {
       search: query.search,
@@ -3112,21 +3117,26 @@ export class DataManagementService {
       ...(query.status ? { medicineStatus: query.status } : {}),
     };
 
-    const count = await this.inventoryRepository.countInventorySummary(shopId, defaultBranch.id, {
-      page: 1,
-      pageSize: 1,
-      search: inventoryQuery.search,
-      sortBy: "medicineName",
-      sortOrder: "asc",
-      ...(inventoryQuery.categoryId ? { categoryId: inventoryQuery.categoryId } : {}),
-      ...(inventoryQuery.manufacturerId
-        ? { manufacturerId: inventoryQuery.manufacturerId }
-        : {}),
-      ...(inventoryQuery.lowStockOnly ? { lowStockOnly: true } : {}),
-      ...(inventoryQuery.medicineStatus
-        ? { medicineStatus: inventoryQuery.medicineStatus }
-        : {}),
-    });
+    const count = await this.inventoryRepository.countInventorySummary(
+      shopId,
+      defaultBranch.id,
+      {
+        page: 1,
+        pageSize: 1,
+        search: inventoryQuery.search,
+        sortBy: "medicineName",
+        sortOrder: "asc",
+        ...(inventoryQuery.categoryId ? { categoryId: inventoryQuery.categoryId } : {}),
+        ...(inventoryQuery.manufacturerId
+          ? { manufacturerId: inventoryQuery.manufacturerId }
+          : {}),
+        ...(inventoryQuery.lowStockOnly ? { lowStockOnly: true } : {}),
+        ...(inventoryQuery.medicineStatus
+          ? { medicineStatus: inventoryQuery.medicineStatus }
+          : {}),
+      },
+      defaultThreshold,
+    );
 
     const pages = Math.max(1, Math.ceil(count / pageSize));
     const items: Awaited<
@@ -3134,11 +3144,16 @@ export class DataManagementService {
     > = [];
 
     for (let page = 1; page <= pages; page += 1) {
-      const chunk = await this.inventoryRepository.listInventorySummary(shopId, defaultBranch.id, {
-        page,
-        pageSize,
-        ...inventoryQuery,
-      });
+      const chunk = await this.inventoryRepository.listInventorySummary(
+        shopId,
+        defaultBranch.id,
+        {
+          page,
+          pageSize,
+          ...inventoryQuery,
+        },
+        defaultThreshold,
+      );
       items.push(...chunk);
     }
 
@@ -3162,9 +3177,10 @@ export class DataManagementService {
         categoryName: item.category.name,
         manufacturerName: item.manufacturer.name,
         availableQuantity: Number(item.availableQuantity ?? 0),
-        reorderLevel: item.medicine.reorderLevel,
+        reorderLevel: Number(item.effectiveReorderLevel ?? 0),
         activeBatchCount: Number(item.activeBatchCount ?? 0),
-        isLowStock: Number(item.availableQuantity ?? 0) <= item.medicine.reorderLevel,
+        isLowStock:
+          Number(item.availableQuantity ?? 0) <= Number(item.effectiveReorderLevel ?? 0),
         status: item.medicine.status,
       })),
     };

@@ -1,4 +1,5 @@
 const BRANCH_STORAGE_KEY = "mms.activeBranchId";
+export const BRANCH_CHANGED_EVENT = "mms:branch-changed";
 
 const canUseStorage = () => typeof window !== "undefined";
 
@@ -18,10 +19,24 @@ export const setStoredBranchId = (branchId: string | null | undefined) => {
 
   if (branchId) {
     window.localStorage.setItem(BRANCH_STORAGE_KEY, branchId);
+    window.dispatchEvent(
+      new CustomEvent(BRANCH_CHANGED_EVENT, {
+        detail: {
+          branchId,
+        },
+      }),
+    );
     return;
   }
 
   window.localStorage.removeItem(BRANCH_STORAGE_KEY);
+  window.dispatchEvent(
+    new CustomEvent(BRANCH_CHANGED_EVENT, {
+      detail: {
+        branchId: null,
+      },
+    }),
+  );
 };
 
 export const syncStoredBranchId = (allowedBranchIds: string[], fallbackBranchId: string) => {

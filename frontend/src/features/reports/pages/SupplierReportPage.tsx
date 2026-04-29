@@ -20,24 +20,31 @@ import {
 } from "../api/reports";
 import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
+import { ReportPeriodControl } from "../components/ReportPeriodControl";
 import { ReportsNav } from "../components/ReportsNav";
+import {
+  resolveReportDateRange,
+  toLocalDateInputValue,
+  toMonthInputValue,
+  type ReportPeriodMode,
+} from "../lib/report-period";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
-const defaultDateFrom = () => {
-  const value = new Date();
-  value.setDate(1);
-  return value.toISOString().slice(0, 10);
-};
-
 export const SupplierReportPage = () => {
   const { pushToast } = useToast();
   const role = useSessionQuery().data?.user.role;
+  const today = useMemo(() => new Date(), []);
   const [search, setSearch] = useState("");
   const [supplierId, setSupplierId] = useState("");
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom);
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
+  const [periodMode, setPeriodMode] = useState<ReportPeriodMode>("monthly");
+  const [selectedDate, setSelectedDate] = useState(toLocalDateInputValue(today));
+  const [selectedMonth, setSelectedMonth] = useState(toMonthInputValue(today));
+  const [customDateFrom, setCustomDateFrom] = useState(
+    `${toMonthInputValue(today)}-01`,
+  );
+  const [customDateTo, setCustomDateTo] = useState(toLocalDateInputValue(today));
   const [branchId, setBranchId] = useState("");
   const [combineBranches, setCombineBranches] = useState(false);
   const [sortBy, setSortBy] = useState<
@@ -47,13 +54,24 @@ export const SupplierReportPage = () => {
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const deferredSearch = useDeferredValue(search);
+  const dateRange = useMemo(
+    () =>
+      resolveReportDateRange({
+        mode: periodMode,
+        selectedDate,
+        selectedMonth,
+        customDateFrom,
+        customDateTo,
+      }),
+    [customDateFrom, customDateTo, periodMode, selectedDate, selectedMonth],
+  );
 
   const params = useMemo(
     () => ({
       search: deferredSearch || undefined,
       supplierId: supplierId || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
+      dateFrom: dateRange.dateFrom,
+      dateTo: dateRange.dateTo,
       branchId: branchId || undefined,
       combineBranches: combineBranches || undefined,
       sortBy,
@@ -61,7 +79,17 @@ export const SupplierReportPage = () => {
       page,
       pageSize: 10,
     }),
-    [branchId, combineBranches, dateFrom, dateTo, deferredSearch, page, sortBy, sortOrder, supplierId],
+    [
+      branchId,
+      combineBranches,
+      dateRange.dateFrom,
+      dateRange.dateTo,
+      deferredSearch,
+      page,
+      sortBy,
+      sortOrder,
+      supplierId,
+    ],
   );
 
   const reportQuery = useQuery({
@@ -87,19 +115,16 @@ export const SupplierReportPage = () => {
     enabled: Boolean(role),
   });
 
-  const activeError = reportQuery.error ?? suppliersQuery.error;
-
-  if (!role || reportQuery.isLoading || suppliersQuery.isLoading) {
+  if (!role || reportQuery.isLoading) {
     return <LoadingState title="Loading supplier report" />;
   }
 
-  if (activeError) {
+  if (reportQuery.error) {
     return (
       <ErrorState
-        description={activeError.message}
+        description={reportQuery.error.message}
         onRetry={() => {
           reportQuery.refetch();
-          suppliersQuery.refetch();
         }}
         title="Unable to load supplier report"
       />
@@ -109,7 +134,7 @@ export const SupplierReportPage = () => {
   const report = reportQuery.data!;
 
   return (
-    <div className="space-y-6">
+    <div className="print-report-page space-y-6">
       <PageHeader
         actions={
           <>
@@ -135,6 +160,7 @@ export const SupplierReportPage = () => {
                   )
                   .finally(() => setIsExporting(false));
               }}
+              onPrint={() => window.print()}
             />
           </>
         }
@@ -168,8 +194,40 @@ export const SupplierReportPage = () => {
         />
       </div>
 
-      <FilterBar description="Filter supplier liabilities by range and supplier master." title="Supplier filters">
+      <FilterBar
+        className="print-hidden"
+        description="Filter supplier liabilities by daily, monthly, or custom range and supplier master."
+        title="Supplier filters"
+      >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ReportPeriodControl
+            customDateFrom={customDateFrom}
+            customDateTo={customDateTo}
+            inputClassName={inputClassName}
+            mode={periodMode}
+            onCustomDateFromChange={(value) => {
+              setCustomDateFrom(value);
+              setPage(1);
+            }}
+            onCustomDateToChange={(value) => {
+              setCustomDateTo(value);
+              setPage(1);
+            }}
+            onModeChange={(value) => {
+              setPeriodMode(value);
+              setPage(1);
+            }}
+            onSelectedDateChange={(value) => {
+              setSelectedDate(value);
+              setPage(1);
+            }}
+            onSelectedMonthChange={(value) => {
+              setSelectedMonth(value);
+              setPage(1);
+            }}
+            selectedDate={selectedDate}
+            selectedMonth={selectedMonth}
+          />
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
@@ -180,30 +238,6 @@ export const SupplierReportPage = () => {
               }}
               placeholder="Search supplier or company"
               value={search}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date from
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setPage(1);
-              }}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date to
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setPage(1);
-              }}
-              type="date"
-              value={dateTo}
             />
           </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -348,13 +382,15 @@ export const SupplierReportPage = () => {
             )}
           </div>
 
-          <Pagination
-            onPageChange={setPage}
-            page={report.rows.pagination.page}
-            pageSize={report.rows.pagination.pageSize}
-            totalItems={report.rows.pagination.total}
-            totalPages={report.rows.pagination.totalPages}
-          />
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
         </div>
       </SectionCard>
     </div>

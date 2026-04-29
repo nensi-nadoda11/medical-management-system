@@ -33,6 +33,7 @@ const toneMap: Record<string, string> = {
   purchase_return: "bg-amber-50 text-amber-700 ring-amber-200",
   payment_made: "bg-slate-100 text-slate-700 ring-slate-200",
   low_stock: "bg-rose-50 text-rose-700 ring-rose-200",
+  supplier_reorder: "bg-indigo-50 text-indigo-700 ring-indigo-200",
   expired_stock: "bg-rose-50 text-rose-700 ring-rose-200",
   customer_due: "bg-amber-50 text-amber-700 ring-amber-200",
   supplier_payable: "bg-sky-50 text-sky-700 ring-sky-200",

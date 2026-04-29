@@ -72,7 +72,7 @@ export const PurchaseCreatePage = () => {
   const activeError = suppliersQuery.error ?? medicinesQuery.error;
 
   if (suppliersQuery.isLoading || medicinesQuery.isLoading) {
-    return <LoadingState title="Preparing purchase workspace" />;
+    return <LoadingState title="Preparing purchase order workspace" />;
   }
 
   if (activeError) {
@@ -83,7 +83,7 @@ export const PurchaseCreatePage = () => {
           suppliersQuery.refetch();
           medicinesQuery.refetch();
         }}
-        title="Unable to load purchase setup"
+        title="Unable to load purchase order setup"
       />
     );
   }
@@ -91,9 +91,9 @@ export const PurchaseCreatePage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Create supplier purchases in a compact data-entry workflow with backend-aligned draft and finalization behavior."
+        description="Create supplier purchase orders in a compact data-entry workflow, then receive them into stock when ready."
         eyebrow="Purchase management"
-        title="Create Purchase"
+        title="Create Purchase Order"
       />
 
       <PurchaseForm
@@ -124,7 +124,7 @@ export const PurchaseCreatePage = () => {
                 pushToast({
                   title: "Purchase finalized",
                   description:
-                    "The purchase was saved and stock has been posted successfully.",
+                    "The purchase order was saved, received, and stock has been posted successfully.",
                   variant: "success",
                 });
                 navigate(`/app/purchases/${finalizedPurchase.id}`);
@@ -154,7 +154,7 @@ export const PurchaseCreatePage = () => {
             pushToast({
               title: "Purchase draft saved",
               description:
-                "The purchase has been saved as a draft and can be finalized later.",
+                "The purchase order has been saved as a draft and can be received later.",
               variant: "success",
             });
             navigate(`/app/purchases/${createdPurchase.id}`);
@@ -162,7 +162,7 @@ export const PurchaseCreatePage = () => {
             setSubmissionError(
               error instanceof Error
                 ? error.message
-                : "Unable to save the purchase right now.",
+                : "Unable to save the purchase order right now.",
             );
           }
         }}

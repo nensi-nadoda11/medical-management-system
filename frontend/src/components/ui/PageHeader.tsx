@@ -32,7 +32,7 @@ export const PageHeader = ({
         </div>
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-center gap-2.5 md:justify-end">
+        <div className="print-hidden flex flex-wrap items-center gap-2.5 md:justify-end">
           {actions}
         </div>
       ) : null}

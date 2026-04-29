@@ -24,6 +24,7 @@ import { ReportsNav } from "../components/ReportsNav";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const reportRefreshIntervalMs = 300000;
 
 export const ExpiryReportPage = () => {
   const { pushToast } = useToast();
@@ -58,6 +59,7 @@ export const ExpiryReportPage = () => {
     queryKey: reportsQueryKeys.expiry(params),
     queryFn: () => getExpiryReport(params),
     enabled: Boolean(role),
+    refetchInterval: reportRefreshIntervalMs,
   });
 
   const medicinesQuery = useQuery({
@@ -79,19 +81,16 @@ export const ExpiryReportPage = () => {
     enabled: Boolean(role),
   });
 
-  const activeError = reportQuery.error ?? medicinesQuery.error;
-
-  if (!role || reportQuery.isLoading || medicinesQuery.isLoading) {
+  if (!role || reportQuery.isLoading) {
     return <LoadingState title="Loading expiry report" />;
   }
 
-  if (activeError) {
+  if (reportQuery.error) {
     return (
       <ErrorState
-        description={activeError.message}
+        description={reportQuery.error.message}
         onRetry={() => {
           reportQuery.refetch();
-          medicinesQuery.refetch();
         }}
         title="Unable to load expiry report"
       />
@@ -101,7 +100,7 @@ export const ExpiryReportPage = () => {
   const report = reportQuery.data!;
 
   return (
-    <div className="space-y-6">
+    <div className="print-report-page space-y-6">
       <PageHeader
         actions={
           <>
@@ -127,6 +126,7 @@ export const ExpiryReportPage = () => {
                   )
                   .finally(() => setIsExporting(false));
               }}
+              onPrint={() => window.print()}
             />
           </>
         }
@@ -161,7 +161,11 @@ export const ExpiryReportPage = () => {
         />
       </div>
 
-      <FilterBar description="Focus by medicine, expiry window, and sort order." title="Expiry filters">
+      <FilterBar
+        className="print-hidden"
+        description="Focus by medicine, expiry window, and sort order."
+        title="Expiry filters"
+      >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
@@ -171,7 +175,7 @@ export const ExpiryReportPage = () => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search medicine or batch"
+              placeholder="Search medicine, batch, or barcode"
               value={search}
             />
           </label>
@@ -273,6 +277,11 @@ export const ExpiryReportPage = () => {
                       <td className="rounded-l-3xl px-4 py-4">
                         <p className="font-semibold text-slate-950">{item.medicine.medicineName}</p>
                         <p className="mt-1 text-sm text-slate-600">{item.medicine.genericName}</p>
+                        {item.medicine.barcode ? (
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            Barcode: {item.medicine.barcode}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">{item.batchNumber}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{formatDate(item.expiryDate)}</td>
@@ -304,6 +313,11 @@ export const ExpiryReportPage = () => {
                     <div>
                       <p className="text-sm font-semibold text-slate-950">{item.medicine.medicineName}</p>
                       <p className="mt-1 text-sm text-slate-600">{item.batchNumber}</p>
+                      {item.medicine.barcode ? (
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Barcode: {item.medicine.barcode}
+                        </p>
+                      ) : null}
                     </div>
                     <StatusBadge label={item.expiryStatus} />
                   </div>
@@ -331,13 +345,15 @@ export const ExpiryReportPage = () => {
             )}
           </div>
 
-          <Pagination
-            onPageChange={setPage}
-            page={report.rows.pagination.page}
-            pageSize={report.rows.pagination.pageSize}
-            totalItems={report.rows.pagination.total}
-            totalPages={report.rows.pagination.totalPages}
-          />
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
         </div>
       </SectionCard>
     </div>

@@ -2,6 +2,7 @@ import type { PaginatedResponse } from "./common";
 
 export type NotificationType =
   | "low_stock"
+  | "supplier_reorder"
   | "near_expiry"
   | "expired_stock"
   | "customer_due"

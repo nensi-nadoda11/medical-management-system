@@ -8,10 +8,12 @@ import { BranchesService } from "../branches/branches.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { NotificationsRepository } from "../notifications/notifications.repository";
 import { emailService } from "../notifications/email/email.service";
+import { whatsappService } from "../notifications/whatsapp/whatsapp.service";
 import { AlertsRepository } from "./alerts.repository";
 
 const STOCK_NOTIFICATION_TYPES = [
   "low_stock",
+  "supplier_reorder",
   "near_expiry",
   "expired_stock",
 ] as const;
@@ -63,6 +65,35 @@ const getFinancialSeverity = (amount: number) => {
   return "info" as const;
 };
 
+const buildLowStockConditionKey = (branchId: string, medicineId: string) =>
+  `low_stock:${branchId}:${medicineId}`;
+
+const buildSupplierReorderConditionKey = (
+  branchId: string,
+  medicineId: string,
+  supplierId: string,
+) => `supplier_reorder:${branchId}:${medicineId}:${supplierId}`;
+
+const buildInventoryDeliveryChannels = (
+  input: {
+    inApp?: boolean;
+    emailEnabled?: boolean;
+    whatsappEnabled?: boolean;
+  } = {},
+): DeliveryChannel[] => {
+  const channels: DeliveryChannel[] = input.inApp === false ? [] : ["in_app"];
+
+  if (input.emailEnabled) {
+    channels.push("email");
+  }
+
+  if (input.whatsappEnabled) {
+    channels.push("whatsapp");
+  }
+
+  return channels;
+};
+
 export class AlertsService {
   constructor(
     private readonly alertsRepository = new AlertsRepository(),
@@ -88,6 +119,7 @@ export class AlertsService {
       shopId,
       branchId,
       medicineId,
+      settings.defaultLowStockThreshold,
       executor,
     );
 
@@ -96,11 +128,14 @@ export class AlertsService {
     }
 
     const currentAvailableQuantity = Number(detail.availableQuantity ?? 0);
-    const reorderLevel =
-      detail.medicine.reorderLevel > 0
-        ? detail.medicine.reorderLevel
-        : settings.defaultLowStockThreshold;
-    const isLowStock = currentAvailableQuantity <= reorderLevel;
+    const currentOnHandQuantity = detail.batches.reduce(
+      (sum, batch) => sum + Math.max(Number(batch.quantityAvailable ?? 0), 0),
+      0,
+    );
+    const reorderLevel = Number(detail.effectiveReorderLevel ?? settings.defaultLowStockThreshold);
+    const isLowStock =
+      currentAvailableQuantity <= reorderLevel &&
+      !(currentAvailableQuantity === 0 && currentOnHandQuantity > 0);
     const now = new Date();
     const existingState = await this.alertsRepository.findLowStockAlertState(
       shopId,
@@ -131,21 +166,23 @@ export class AlertsService {
     );
 
     if (settings.lowStockAlertsEnabled && isLowStock) {
+      const whatsappEnabled = settings.notificationChannels.whatsapp.lowStockEnabled;
       await this.ensureActiveNotification(
         {
-            shopId,
-            branchId,
-            conditionKey: `low_stock:${medicineId}`,
+          shopId,
+          branchId,
+          conditionKey: buildLowStockConditionKey(branchId, medicineId),
           type: "low_stock",
           severity: currentAvailableQuantity === 0 ? "critical" : "warning",
           entityType: "medicine",
           entityId: medicineId,
           title: `${detail.medicine.medicineName} is running low`,
           message: `Available stock is ${currentAvailableQuantity} against reorder level ${reorderLevel}.`,
-          deliveryChannels: settings.lowStockEmailAlertsEnabled
-            ? ["in_app", "email"]
-            : ["in_app"],
-          emailRequested: settings.lowStockEmailAlertsEnabled,
+          deliveryChannels: buildInventoryDeliveryChannels({
+            emailEnabled: settings.lowStockEmailAlertsEnabled,
+            whatsappEnabled,
+          }),
+          deliveryRequested: settings.lowStockEmailAlertsEnabled || whatsappEnabled,
           metadata: {
             medicineId,
             medicineName: detail.medicine.medicineName,
@@ -158,8 +195,25 @@ export class AlertsService {
         executor,
       );
     } else {
-        await this.resolveCondition(shopId, `low_stock:${medicineId}`, executor);
+      await this.resolveCondition(
+        shopId,
+        buildLowStockConditionKey(branchId, medicineId),
+        executor,
+      );
     }
+
+    await this.syncSupplierReorderNotificationForMedicine(
+      {
+        shopId,
+        branchId,
+        medicineId,
+        medicineName: detail.medicine.medicineName,
+        isLowStock: settings.lowStockAlertsEnabled && isLowStock,
+        currentAvailableQuantity,
+        reorderLevel,
+      },
+      executor,
+    );
 
     const todayStart = startOfToday();
     const nearExpiryLimit = new Date(todayStart);
@@ -180,6 +234,7 @@ export class AlertsService {
       }
 
       if (isExpired) {
+        const whatsappEnabled = settings.notificationChannels.whatsapp.expiryEnabled;
         await this.resolveCondition(shopId, nearExpiryKey, executor);
         await this.ensureActiveNotification(
           {
@@ -191,10 +246,11 @@ export class AlertsService {
             entityId: batch.id,
             title: `${detail.medicine.medicineName} batch ${batch.batchNumber} has expired`,
             message: `Batch ${batch.batchNumber} expired on ${toDateString(batch.expiryDate)} with ${quantityAvailable} units still available.`,
-            deliveryChannels: settings.expiryEmailAlertsEnabled
-              ? ["in_app", "email"]
-              : ["in_app"],
-            emailRequested: settings.expiryEmailAlertsEnabled,
+            deliveryChannels: buildInventoryDeliveryChannels({
+              emailEnabled: settings.expiryEmailAlertsEnabled,
+              whatsappEnabled,
+            }),
+            deliveryRequested: settings.expiryEmailAlertsEnabled || whatsappEnabled,
             metadata: {
               medicineId,
               medicineName: detail.medicine.medicineName,
@@ -212,6 +268,7 @@ export class AlertsService {
       }
 
       if (isNearExpiry) {
+        const whatsappEnabled = settings.notificationChannels.whatsapp.expiryEnabled;
         await this.resolveCondition(shopId, expiredKey, executor);
         await this.ensureActiveNotification(
           {
@@ -223,10 +280,11 @@ export class AlertsService {
             entityId: batch.id,
             title: `${detail.medicine.medicineName} batch ${batch.batchNumber} is nearing expiry`,
             message: `Batch ${batch.batchNumber} expires on ${toDateString(batch.expiryDate)} with ${quantityAvailable} units available.`,
-            deliveryChannels: settings.expiryEmailAlertsEnabled
-              ? ["in_app", "email"]
-              : ["in_app"],
-            emailRequested: settings.expiryEmailAlertsEnabled,
+            deliveryChannels: buildInventoryDeliveryChannels({
+              emailEnabled: settings.expiryEmailAlertsEnabled,
+              whatsappEnabled,
+            }),
+            deliveryRequested: settings.expiryEmailAlertsEnabled || whatsappEnabled,
             metadata: {
               medicineId,
               medicineName: detail.medicine.medicineName,
@@ -278,7 +336,7 @@ export class AlertsService {
       title: `${summary.customer.fullName} has outstanding dues`,
       message: `${summary.customer.fullName} has ${openBillCount} open bill(s) with Rs ${summary.summary.outstandingAmount} pending.`,
       deliveryChannels: ["in_app"],
-      emailRequested: false,
+      deliveryRequested: false,
       metadata: {
         customerId,
         customerCode: summary.customer.customerCode,
@@ -321,7 +379,7 @@ export class AlertsService {
       title: `${summary.supplier.supplierName} has pending payables`,
       message: `${summary.supplier.supplierName} has ${openPurchaseCount} open purchase(s) with Rs ${summary.summary.outstandingAmount} pending.`,
       deliveryChannels: ["in_app"],
-      emailRequested: false,
+      deliveryRequested: false,
       metadata: {
         supplierId,
         supplierName: summary.supplier.supplierName,
@@ -354,8 +412,9 @@ export class AlertsService {
       );
 
       for (const row of lowStockRows) {
-        const conditionKey = `low_stock:${row.medicineId}`;
+        const conditionKey = buildLowStockConditionKey(branchId, row.medicineId);
         currentStockKeys.add(conditionKey);
+        const whatsappEnabled = settings.notificationChannels.whatsapp.lowStockEnabled;
 
         await this.ensureActiveNotification({
           shopId,
@@ -367,15 +426,67 @@ export class AlertsService {
           entityId: row.medicineId,
           title: `${row.medicineName} is running low`,
           message: `Available stock is ${Number(row.availableQuantity)} against reorder level ${Number(row.reorderLevel)}.`,
-          deliveryChannels: settings.lowStockEmailAlertsEnabled
-            ? ["in_app", "email"]
-            : ["in_app"],
-          emailRequested: settings.lowStockEmailAlertsEnabled,
+          deliveryChannels: buildInventoryDeliveryChannels({
+            emailEnabled: settings.lowStockEmailAlertsEnabled,
+            whatsappEnabled,
+          }),
+          deliveryRequested: settings.lowStockEmailAlertsEnabled || whatsappEnabled,
           metadata: {
             medicineId: row.medicineId,
             medicineName: row.medicineName,
             availableQuantity: Number(row.availableQuantity),
             reorderLevel: Number(row.reorderLevel),
+            actionPath: "/app/reports/low-stock",
+            actionLabel: "Open low stock report",
+          },
+        });
+      }
+
+      const supplierReorderRows =
+        await this.alertsRepository.listCurrentLowStockSupplierReorderTargets(
+          shopId,
+          branchId,
+          settings.defaultLowStockThreshold,
+        );
+
+      for (const row of supplierReorderRows) {
+        const conditionKey = buildSupplierReorderConditionKey(
+          branchId,
+          row.medicineId,
+          row.supplierId,
+        );
+        currentStockKeys.add(conditionKey);
+        const supplierWhatsappNumber =
+          row.supplierMobileNumber ?? row.supplierAlternateMobileNumber;
+
+        await this.ensureActiveNotification({
+          shopId,
+          branchId,
+          conditionKey,
+          type: "supplier_reorder",
+          severity: Number(row.availableQuantity) === 0 ? "critical" : "warning",
+          entityType: "supplier",
+          entityId: row.supplierId,
+          title: `Reorder ${row.medicineName} from ${row.supplierName}`,
+          message: `${row.medicineName} is at ${Number(row.availableQuantity)} units against reorder level ${Number(row.reorderLevel)}. Supplier follow-up is required.`,
+          deliveryChannels: buildInventoryDeliveryChannels({
+            emailEnabled: Boolean(row.supplierEmail),
+            whatsappEnabled: Boolean(supplierWhatsappNumber),
+          }),
+          deliveryRequested: Boolean(row.supplierEmail) || Boolean(supplierWhatsappNumber),
+          metadata: {
+            medicineId: row.medicineId,
+            medicineName: row.medicineName,
+            availableQuantity: Number(row.availableQuantity),
+            reorderLevel: Number(row.reorderLevel),
+            supplierId: row.supplierId,
+            supplierName: row.supplierName,
+            companyName: row.companyName,
+            contactPerson: row.contactPerson,
+            supplierEmail: row.supplierEmail,
+            supplierMobileNumber: row.supplierMobileNumber,
+            supplierAlternateMobileNumber: row.supplierAlternateMobileNumber,
+            shopName: row.shopName,
             actionPath: "/app/reports/low-stock",
             actionLabel: "Open low stock report",
           },
@@ -395,6 +506,7 @@ export class AlertsService {
         const isExpired = row.expiryDate < todayStart;
         const conditionKey = `${isExpired ? "expired_stock" : "near_expiry"}:${row.batchId}`;
         currentStockKeys.add(conditionKey);
+        const whatsappEnabled = settings.notificationChannels.whatsapp.expiryEnabled;
 
         await this.ensureActiveNotification({
           shopId,
@@ -410,10 +522,11 @@ export class AlertsService {
           message: isExpired
             ? `Batch ${row.batchNumber} expired on ${toDateString(row.expiryDate)} with ${row.quantityAvailable} units still available.`
             : `Batch ${row.batchNumber} expires on ${toDateString(row.expiryDate)} with ${row.quantityAvailable} units available.`,
-          deliveryChannels: settings.expiryEmailAlertsEnabled
-            ? ["in_app", "email"]
-            : ["in_app"],
-          emailRequested: settings.expiryEmailAlertsEnabled,
+          deliveryChannels: buildInventoryDeliveryChannels({
+            emailEnabled: settings.expiryEmailAlertsEnabled,
+            whatsappEnabled,
+          }),
+          deliveryRequested: settings.expiryEmailAlertsEnabled || whatsappEnabled,
           metadata: {
             medicineId: row.medicineId,
             medicineName: row.medicineName,
@@ -481,7 +594,7 @@ export class AlertsService {
         title: `${item.customer.fullName} has outstanding dues`,
         message: `${item.customer.fullName} has ${openBillCount} open bill(s) with Rs ${item.summary.outstandingAmount} pending.`,
         deliveryChannels: ["in_app"],
-        emailRequested: false,
+        deliveryRequested: false,
         metadata: {
           customerId: item.customer.id,
           customerCode: item.customer.customerCode,
@@ -515,7 +628,7 @@ export class AlertsService {
         title: `${item.supplier.supplierName} has pending payables`,
         message: `${item.supplier.supplierName} has ${openPurchaseCount} open purchase(s) with Rs ${item.summary.outstandingAmount} pending.`,
         deliveryChannels: ["in_app"],
-        emailRequested: false,
+        deliveryRequested: false,
         metadata: {
           supplierId: item.supplier.id,
           supplierName: item.supplier.supplierName,
@@ -539,37 +652,104 @@ export class AlertsService {
   }
 
   async dispatchPendingInventoryAlertEmails(shopId: string, _branchId?: string) {
-    const [pendingNotifications, recipients] = await Promise.all([
-      this.notificationsRepository.listPendingInventoryEmailNotifications(shopId),
-      this.alertsRepository.listAdminEmailRecipients(shopId),
-    ]);
+    const pendingNotifications =
+      await this.notificationsRepository.listPendingInventoryEmailNotifications(
+        shopId,
+      );
 
     if (!pendingNotifications.length) {
       return;
     }
 
-    if (!recipients.length) {
-      await Promise.all(
-        pendingNotifications.map((notification) =>
-          this.notificationsRepository.updateNotification(notification.id, shopId, {
-            emailStatus: "skipped",
-          }),
-        ),
-      );
-      return;
-    }
+    const requiresAdminRecipients = pendingNotifications.some(
+      (notification) => notification.type !== "supplier_reorder",
+    );
+    const recipients = requiresAdminRecipients
+      ? await this.alertsRepository.listAdminEmailRecipients(shopId)
+      : [];
 
     for (const notification of pendingNotifications) {
+      const shouldEmail = notification.deliveryChannels.includes("email");
+      const shouldWhatsapp = notification.deliveryChannels.includes("whatsapp");
+      const metadata = notification.metadata ?? {};
+      const emailRecipients =
+        notification.type === "supplier_reorder"
+          ? shouldEmail && getMetadataString(metadata, "supplierEmail")
+            ? [
+                {
+                  shopName:
+                    getMetadataString(metadata, "shopName") ?? "Medical store",
+                  recipientName:
+                    getMetadataString(metadata, "contactPerson") ??
+                    getMetadataString(metadata, "supplierName") ??
+                    "Supplier",
+                  to: getMetadataString(metadata, "supplierEmail")!,
+                },
+              ]
+            : []
+          : shouldEmail
+            ? recipients
+                .filter((recipient) => Boolean(recipient.user.email))
+                .map(({ shop, user }) => ({
+                  shopName: shop.name,
+                  recipientName: user.fullName,
+                  to: user.email,
+                }))
+            : [];
+      const whatsappRecipients =
+        notification.type === "supplier_reorder"
+          ? (() => {
+              const number =
+                getMetadataString(metadata, "supplierMobileNumber") ??
+                getMetadataString(metadata, "supplierAlternateMobileNumber");
+
+              return shouldWhatsapp && number
+                ? [
+                    {
+                      shopName:
+                        getMetadataString(metadata, "shopName") ??
+                        "Medical store",
+                      to: number,
+                    },
+                  ]
+                : [];
+            })()
+          : shouldWhatsapp
+            ? recipients
+                .filter((recipient) => Boolean(recipient.user.mobileNumber))
+                .map(({ shop, user }) => ({
+                  shopName: shop.name,
+                  to: user.mobileNumber!,
+                }))
+            : [];
+      const hasDeliverableChannel =
+        (!shouldEmail || emailRecipients.length > 0) &&
+        (!shouldWhatsapp || whatsappRecipients.length > 0);
+
+      if (!hasDeliverableChannel) {
+        await this.notificationsRepository.updateNotification(notification.id, shopId, {
+          emailStatus: "skipped",
+          lastError: null,
+        });
+        continue;
+      }
+
       try {
-        await Promise.all(
-          recipients.map(({ shop, user }) =>
-            this.sendInventoryEmail(notification, {
-              shopName: shop.name,
-              recipientName: user.fullName,
-              to: user.email,
-            }),
-          ),
-        );
+        if (emailRecipients.length) {
+          await Promise.all(
+            emailRecipients.map((recipient) =>
+              this.sendInventoryEmail(notification, recipient),
+            ),
+          );
+        }
+
+        if (whatsappRecipients.length) {
+          await Promise.all(
+            whatsappRecipients.map((recipient) =>
+              this.sendInventoryWhatsapp(notification, recipient),
+            ),
+          );
+        }
 
         await this.notificationsRepository.updateNotification(notification.id, shopId, {
           emailStatus: "sent",
@@ -578,7 +758,7 @@ export class AlertsService {
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        logger.error("Failed to send inventory alert email", {
+        logger.error("Failed to send inventory alert delivery", {
           shopId,
           notificationId: notification.id,
           type: notification.type,
@@ -604,14 +784,20 @@ export class AlertsService {
       shopId: string;
       branchId?: string;
       conditionKey: string;
-      type: "low_stock" | "near_expiry" | "expired_stock" | "customer_due" | "supplier_payable";
+      type:
+        | "low_stock"
+        | "supplier_reorder"
+        | "near_expiry"
+        | "expired_stock"
+        | "customer_due"
+        | "supplier_payable";
       severity: "info" | "warning" | "critical";
       entityType: "medicine" | "medicine_batch" | "customer" | "supplier";
       entityId: string;
       title: string;
       message: string;
       deliveryChannels: DeliveryChannel[];
-      emailRequested: boolean;
+      deliveryRequested: boolean;
       metadata: Record<string, unknown>;
     },
     executor?: DbExecutor,
@@ -628,7 +814,7 @@ export class AlertsService {
         input.conditionKey,
         tx,
       );
-      const nextEmailStatus = input.emailRequested
+      const nextEmailStatus = input.deliveryRequested
         ? existing?.emailStatus === "skipped"
           ? "pending"
           : existing?.emailStatus ?? "pending"
@@ -665,7 +851,7 @@ export class AlertsService {
           conditionKey: input.conditionKey,
           metadata: input.metadata,
           deliveryChannels: input.deliveryChannels,
-          emailStatus: input.emailRequested ? "pending" : "skipped",
+          emailStatus: input.deliveryRequested ? "pending" : "skipped",
           isActive: true,
         },
         tx,
@@ -710,6 +896,21 @@ export class AlertsService {
     },
   ) {
     const metadata = notification.metadata ?? {};
+
+    if (notification.type === "supplier_reorder") {
+      await emailService.sendSupplierReorderAlert({
+        to: recipient.to,
+        recipientName: recipient.recipientName,
+        shopName: getMetadataString(metadata, "shopName") ?? recipient.shopName,
+        supplierName:
+          getMetadataString(metadata, "supplierName") ?? recipient.recipientName,
+        medicineName: getMetadataString(metadata, "medicineName") ?? notification.title,
+        currentAvailableQuantity:
+          getMetadataNumber(metadata, "availableQuantity") ?? 0,
+        reorderLevel: getMetadataNumber(metadata, "reorderLevel") ?? 0,
+      });
+      return;
+    }
 
     if (notification.type === "low_stock") {
       await emailService.sendLowStockAlert({
@@ -762,5 +963,170 @@ export class AlertsService {
     }
 
     await emailService.sendInventoryAttentionAlert(payload);
+  }
+
+  private async sendInventoryWhatsapp(
+    notification: Notification,
+    recipient: {
+      to: string;
+      shopName: string;
+    },
+  ) {
+    const metadata = notification.metadata ?? {};
+
+    if (notification.type === "supplier_reorder") {
+      await whatsappService.sendSupplierReorderAlert({
+        to: recipient.to,
+        shopId: notification.shopId,
+        shopName: getMetadataString(metadata, "shopName") ?? recipient.shopName,
+        supplierName: getMetadataString(metadata, "supplierName") ?? "supplier",
+        medicineName: getMetadataString(metadata, "medicineName") ?? notification.title,
+        currentAvailableQuantity:
+          getMetadataNumber(metadata, "availableQuantity") ?? 0,
+        reorderLevel: getMetadataNumber(metadata, "reorderLevel") ?? 0,
+      });
+      return;
+    }
+
+    if (notification.type === "low_stock") {
+      await whatsappService.sendLowStockAlert({
+        to: recipient.to,
+        shopId: notification.shopId,
+        shopName: recipient.shopName,
+        medicineName: getMetadataString(metadata, "medicineName") ?? notification.title,
+        currentAvailableQuantity:
+          getMetadataNumber(metadata, "availableQuantity") ?? 0,
+        reorderLevel: getMetadataNumber(metadata, "reorderLevel") ?? 0,
+      });
+      return;
+    }
+
+    const payload: {
+      to: string;
+      shopId?: string;
+      shopName: string;
+      title: string;
+      message: string;
+      batchNumber?: string;
+      expiryDate?: string;
+      quantityAvailable?: number;
+    } = {
+      to: recipient.to,
+      shopId: notification.shopId,
+      shopName: recipient.shopName,
+      title: notification.title,
+      message: notification.message,
+    };
+
+    const batchNumber = getMetadataString(metadata, "batchNumber");
+    const expiryDate = getMetadataString(metadata, "expiryDate");
+    const quantityAvailable = getMetadataNumber(metadata, "quantityAvailable");
+
+    if (batchNumber) {
+      payload.batchNumber = batchNumber;
+    }
+
+    if (expiryDate) {
+      payload.expiryDate = expiryDate;
+    }
+
+    if (quantityAvailable !== undefined) {
+      payload.quantityAvailable = quantityAvailable;
+    }
+
+    await whatsappService.sendInventoryAttentionAlert(payload);
+  }
+
+  private async syncSupplierReorderNotificationForMedicine(
+    input: {
+      shopId: string;
+      branchId: string;
+      medicineId: string;
+      medicineName: string;
+      isLowStock: boolean;
+      currentAvailableQuantity: number;
+      reorderLevel: number;
+    },
+    executor?: DbExecutor,
+  ) {
+    const conditionPrefix = `supplier_reorder:${input.branchId}:${input.medicineId}:`;
+    const activeKeys =
+      await this.notificationsRepository.listActiveConditionKeysByPrefix(
+        input.shopId,
+        conditionPrefix,
+        executor,
+      );
+    const currentKeys = new Set<string>();
+
+    if (input.isLowStock) {
+      const supplier = await this.alertsRepository.findPreferredSupplierForMedicine(
+        input.shopId,
+        input.branchId,
+        input.medicineId,
+        executor,
+      );
+
+      if (supplier) {
+        const conditionKey = buildSupplierReorderConditionKey(
+          input.branchId,
+          input.medicineId,
+          supplier.supplierId,
+        );
+        const supplierWhatsappNumber =
+          supplier.supplierMobileNumber ?? supplier.supplierAlternateMobileNumber;
+        currentKeys.add(conditionKey);
+
+        await this.ensureActiveNotification(
+          {
+            shopId: input.shopId,
+            branchId: input.branchId,
+            conditionKey,
+            type: "supplier_reorder",
+            severity:
+              input.currentAvailableQuantity === 0 ? "critical" : "warning",
+            entityType: "supplier",
+            entityId: supplier.supplierId,
+            title: `Reorder ${input.medicineName} from ${supplier.supplierName}`,
+            message: `${input.medicineName} is at ${input.currentAvailableQuantity} units against reorder level ${input.reorderLevel}. Supplier follow-up is required.`,
+            deliveryChannels: buildInventoryDeliveryChannels({
+              emailEnabled: Boolean(supplier.supplierEmail),
+              whatsappEnabled: Boolean(supplierWhatsappNumber),
+            }),
+            deliveryRequested:
+              Boolean(supplier.supplierEmail) || Boolean(supplierWhatsappNumber),
+            metadata: {
+              medicineId: input.medicineId,
+              medicineName: input.medicineName,
+              availableQuantity: input.currentAvailableQuantity,
+              reorderLevel: input.reorderLevel,
+              supplierId: supplier.supplierId,
+              supplierName: supplier.supplierName,
+              companyName: supplier.companyName,
+              contactPerson: supplier.contactPerson,
+              supplierEmail: supplier.supplierEmail,
+              supplierMobileNumber: supplier.supplierMobileNumber,
+              supplierAlternateMobileNumber:
+                supplier.supplierAlternateMobileNumber,
+              shopName: supplier.shopName,
+              actionPath: "/app/reports/low-stock",
+              actionLabel: "Open low stock report",
+            },
+          },
+          executor,
+        );
+      }
+    }
+
+    const staleKeys = activeKeys
+      .map((item) => item.conditionKey)
+      .filter((conditionKey) => !currentKeys.has(conditionKey));
+
+    if (staleKeys.length) {
+      await this.notificationsRepository.resolveActiveByConditionKeys(
+        input.shopId,
+        staleKeys,
+        executor,
+      );
+    }
   }
 }

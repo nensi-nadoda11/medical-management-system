@@ -19,25 +19,32 @@ import {
 } from "../api/reports";
 import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
+import { ReportPeriodControl } from "../components/ReportPeriodControl";
 import { ReportsNav } from "../components/ReportsNav";
+import {
+  resolveReportDateRange,
+  toLocalDateInputValue,
+  toMonthInputValue,
+  type ReportPeriodMode,
+} from "../lib/report-period";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
-
-const defaultDateFrom = () => {
-  const value = new Date();
-  value.setDate(1);
-  return value.toISOString().slice(0, 10);
-};
 
 export const SalesReportPage = () => {
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
   const role = sessionQuery.data?.user.role;
+  const today = useMemo(() => new Date(), []);
 
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom);
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
+  const [periodMode, setPeriodMode] = useState<ReportPeriodMode>("monthly");
+  const [selectedDate, setSelectedDate] = useState(toLocalDateInputValue(today));
+  const [selectedMonth, setSelectedMonth] = useState(toMonthInputValue(today));
+  const [customDateFrom, setCustomDateFrom] = useState(
+    `${toMonthInputValue(today)}-01`,
+  );
+  const [customDateTo, setCustomDateTo] = useState(toLocalDateInputValue(today));
   const [groupBy, setGroupBy] = useState<"day" | "month">("day");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -50,11 +57,22 @@ export const SalesReportPage = () => {
   const [isExporting, setIsExporting] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
+  const dateRange = useMemo(
+    () =>
+      resolveReportDateRange({
+        mode: periodMode,
+        selectedDate,
+        selectedMonth,
+        customDateFrom,
+        customDateTo,
+      }),
+    [customDateFrom, customDateTo, periodMode, selectedDate, selectedMonth],
+  );
   const params = useMemo(
     () => ({
       search: deferredSearch || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
+      dateFrom: dateRange.dateFrom,
+      dateTo: dateRange.dateTo,
       groupBy,
       branchId: branchId || undefined,
       combineBranches: combineBranches || undefined,
@@ -69,8 +87,8 @@ export const SalesReportPage = () => {
     [
       branchId,
       combineBranches,
-      dateFrom,
-      dateTo,
+      dateRange.dateFrom,
+      dateRange.dateTo,
       deferredSearch,
       groupBy,
       page,
@@ -104,7 +122,7 @@ export const SalesReportPage = () => {
   const paymentBreakdown = report.summary.paymentBreakdown;
 
   return (
-    <div className="space-y-6">
+    <div className="print-report-page space-y-6">
       <PageHeader
         actions={
           <>
@@ -130,6 +148,7 @@ export const SalesReportPage = () => {
                   })
                   .finally(() => setIsExporting(false));
               }}
+              onPrint={() => window.print()}
             />
           </>
         }
@@ -163,10 +182,40 @@ export const SalesReportPage = () => {
       </div>
 
       <FilterBar
+        className="print-hidden"
         description="Compact filters for quick operational reporting."
         title="Sales filters"
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ReportPeriodControl
+            customDateFrom={customDateFrom}
+            customDateTo={customDateTo}
+            inputClassName={inputClassName}
+            mode={periodMode}
+            onCustomDateFromChange={(value) => {
+              setCustomDateFrom(value);
+              setPage(1);
+            }}
+            onCustomDateToChange={(value) => {
+              setCustomDateTo(value);
+              setPage(1);
+            }}
+            onModeChange={(value) => {
+              setPeriodMode(value);
+              setPage(1);
+            }}
+            onSelectedDateChange={(value) => {
+              setSelectedDate(value);
+              setPage(1);
+            }}
+            onSelectedMonthChange={(value) => {
+              setSelectedMonth(value);
+              setPage(1);
+            }}
+            selectedDate={selectedDate}
+            selectedMonth={selectedMonth}
+          />
+
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
@@ -177,32 +226,6 @@ export const SalesReportPage = () => {
               }}
               placeholder="Search bill number or customer"
               value={search}
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date from
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setPage(1);
-              }}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date to
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setPage(1);
-              }}
-              type="date"
-              value={dateTo}
             />
           </label>
 
@@ -425,13 +448,15 @@ export const SalesReportPage = () => {
             ))}
           </div>
 
-          <Pagination
-            onPageChange={setPage}
-            page={report.rows.pagination.page}
-            pageSize={report.rows.pagination.pageSize}
-            totalItems={report.rows.pagination.total}
-            totalPages={report.rows.pagination.totalPages}
-          />
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
         </div>
       </SectionCard>
     </div>

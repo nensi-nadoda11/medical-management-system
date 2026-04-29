@@ -12,6 +12,7 @@ import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
+import { realtimeService } from "../realtime/realtime.service";
 import { PurchaseReturnsRepository } from "./purchase-returns.repository";
 import type {
   CreatePurchaseReturnInput,
@@ -530,6 +531,23 @@ export class PurchaseReturnsService {
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
+
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      reason: "purchase_return_completed",
+      metadata: {
+        returnId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      reason: "purchase_return_completed",
+      metadata: {
+        returnId,
+      },
+    });
 
     return this.getPurchaseReturnById(shopId, returnId);
   }

@@ -64,6 +64,18 @@ export const finalizePurchase = (id: string) =>
     url: `/purchases/${id}/finalize`,
   });
 
+export const approvePurchaseOrder = (id: string) =>
+  apiRequest<PurchaseDetail>({
+    method: "POST",
+    url: `/purchases/${id}/approve`,
+  });
+
+export const markPurchaseOrderSupplierNotified = (id: string) =>
+  apiRequest<PurchaseDetail>({
+    method: "POST",
+    url: `/purchases/${id}/mark-supplier-notified`,
+  });
+
 export const cancelPurchase = (id: string, payload: CancelPurchasePayload) =>
   apiRequest<PurchaseDetail>({
     method: "POST",

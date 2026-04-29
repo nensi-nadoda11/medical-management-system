@@ -5,11 +5,13 @@ import { requireAuth } from "../auth/auth.middleware";
 import { requirePermission } from "../../shared/http/require_permission";
 import { PurchasesController } from "./purchases.controller";
 import {
+  approvePurchaseOrderSchema,
   cancelPurchaseSchema,
   createPurchaseSchema,
   finalizePurchaseSchema,
   getPurchaseByIdSchema,
   listPurchasesSchema,
+  markPurchaseOrderSupplierNotifiedSchema,
   updateDraftPurchaseSchema,
 } from "./purchases.validation";
 
@@ -43,6 +45,20 @@ router.patch(
   requirePermission("purchases.create"),
   validateRequest(updateDraftPurchaseSchema),
   controller.updateDraftPurchase,
+);
+router.post(
+  "/:id/approve",
+  requireAuth,
+  requirePermission("purchases.finalize"),
+  validateRequest(approvePurchaseOrderSchema),
+  controller.approvePurchaseOrder,
+);
+router.post(
+  "/:id/mark-supplier-notified",
+  requireAuth,
+  requirePermission("purchases.finalize"),
+  validateRequest(markPurchaseOrderSupplierNotifiedSchema),
+  controller.markPurchaseOrderSupplierNotified,
 );
 router.post(
   "/:id/finalize",

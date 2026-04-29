@@ -1,8 +1,11 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { AlertsService } from "../alerts/alerts.service";
 import type { PublicUser } from "../auth/auth.types";
 import { BranchesService } from "../branches/branches.service";
+import { realtimeService } from "../realtime/realtime.service";
 import { StockTransfersRepository } from "./stock-transfers.repository";
 import type {
   CreateStockTransferInput,
@@ -37,6 +40,7 @@ export class StockTransfersService {
     private readonly stockTransfersRepository = new StockTransfersRepository(),
     private readonly branchesService = new BranchesService(),
     private readonly auditLogsService = new AuditLogsService(),
+    private readonly alertsService = new AlertsService(),
   ) {}
 
   async listTransfers(shopId: string, query: ListStockTransfersQuery) {
@@ -206,7 +210,8 @@ export class StockTransfersService {
   }
 
   async completeTransfer(shopId: string, transferId: string, actor: PublicUser) {
-    return db.transaction(async (tx) => {
+    const syncTargets = new Map<string, Set<string>>();
+    const completed = await db.transaction(async (tx) => {
       const transfer = await this.stockTransfersRepository.findTransferById(
         shopId,
         transferId,
@@ -336,9 +341,15 @@ export class StockTransfersService {
           },
           tx,
         );
+
+        const branchSet =
+          syncTargets.get(sourceBatch.medicineId) ?? new Set<string>();
+        branchSet.add(transfer.fromBranchId);
+        branchSet.add(transfer.toBranchId);
+        syncTargets.set(sourceBatch.medicineId, branchSet);
       }
 
-      const completed = await this.stockTransfersRepository.updateTransfer(
+      const completedTransfer = await this.stockTransfersRepository.updateTransfer(
         transfer.id,
         {
           status: "completed",
@@ -366,8 +377,56 @@ export class StockTransfersService {
         tx,
       );
 
-      return completed;
+      return completedTransfer;
     });
+
+    try {
+      for (const [medicineId, branchIds] of syncTargets.entries()) {
+        for (const branchId of branchIds) {
+          await this.alertsService.syncMedicineAlerts(shopId, branchId, medicineId);
+        }
+      }
+
+      const emailDispatchBranches = new Set<string>();
+
+      for (const branchIds of syncTargets.values()) {
+        for (const branchId of branchIds) {
+          emailDispatchBranches.add(branchId);
+        }
+      }
+ 
+      for (const branchId of emailDispatchBranches) {
+        await this.alertsService.dispatchPendingInventoryAlertEmails(
+          shopId,
+          branchId,
+        );
+      }
+    } catch (error) {
+      logger.error("Stock transfer completed but alert sync failed", {
+        transferId,
+        shopId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      reason: "stock_transfer_completed",
+      metadata: {
+        transferId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      reason: "stock_transfer_completed",
+      metadata: {
+        transferId,
+      },
+    });
+
+    return completed;
   }
 
   async cancelTransfer(shopId: string, transferId: string, actor: PublicUser) {

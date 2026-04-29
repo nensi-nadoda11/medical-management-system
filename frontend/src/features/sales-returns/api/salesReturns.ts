@@ -3,10 +3,21 @@ import type {
   CreateSalesReturnPayload,
   ReturnableSaleDetail,
   SalesReturnDetail,
+  SalesReturnListItem,
   SalesReturnListParams,
   SalesReturnsResponse,
   UpdateSalesReturnPayload,
 } from "../../../types/sales-return";
+
+export type {
+  CreateSalesReturnPayload,
+  ReturnableSaleDetail,
+  SalesReturnDetail,
+  SalesReturnListItem,
+  SalesReturnListParams,
+  SalesReturnsResponse,
+  UpdateSalesReturnPayload,
+};
 
 const cleanParams = (
   params: Record<string, string | number | boolean | undefined>,

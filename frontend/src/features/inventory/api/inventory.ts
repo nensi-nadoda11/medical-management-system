@@ -6,11 +6,26 @@ import type {
   InventoryMedicineDetail,
   InventorySummaryParams,
   InventorySummaryResponse,
+  InventoryTransaction,
   InventoryTransactionsResponse,
   LowStockParams,
   StockAdjustmentResponse,
   StockTransactionsParams,
 } from "../../../types/inventory";
+
+export type {
+  CreateStockAdjustmentPayload,
+  ExpiryReportParams,
+  ExpiryReportResponse,
+  InventoryMedicineDetail,
+  InventorySummaryParams,
+  InventorySummaryResponse,
+  InventoryTransaction as StockTransactionListItem,
+  InventoryTransactionsResponse,
+  LowStockParams,
+  StockAdjustmentResponse,
+  StockTransactionsParams,
+};
 
 const cleanParams = (params: Record<string, string | number | boolean | undefined>) =>
   Object.fromEntries(

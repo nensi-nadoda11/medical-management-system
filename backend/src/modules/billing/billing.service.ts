@@ -15,6 +15,7 @@ import { InventoryRepository } from "../inventory/inventory.repository";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
 import { BillingRepository } from "./billing.repository";
+import { realtimeService } from "../realtime/realtime.service";
 import type {
   ListBillsQuery,
   SaveBillInput,
@@ -574,6 +575,25 @@ export class BillingService {
       }
     }
 
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      branchId,
+      reason: "sale_completed",
+      metadata: {
+        saleId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      branchId,
+      reason: "sale_completed",
+      metadata: {
+        saleId,
+      },
+    });
+
     return this.getBillById(shopId, branchId, saleId);
   }
 
@@ -691,6 +711,25 @@ export class BillingService {
         });
       }
     }
+
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      branchId,
+      reason: "held_sale_completed",
+      metadata: {
+        saleId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      branchId,
+      reason: "held_sale_completed",
+      metadata: {
+        saleId,
+      },
+    });
 
     return this.getBillById(shopId, branchId, saleId);
   }

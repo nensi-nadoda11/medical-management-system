@@ -107,6 +107,50 @@ export class PurchasesController {
     }
   };
 
+  approvePurchaseOrder = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const result = await this.purchasesService.approvePurchaseOrder(
+        getShopId(req),
+        getBranchId(req),
+        getRouteId(req),
+        getUserId(req),
+      );
+
+      return res.status(200).json({
+        message: "Purchase order approved successfully.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  markPurchaseOrderSupplierNotified = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const result = await this.purchasesService.markPurchaseOrderSupplierNotified(
+        getShopId(req),
+        getBranchId(req),
+        getRouteId(req),
+        getUserId(req),
+      );
+
+      return res.status(200).json({
+        message: "Purchase order marked as shared with supplier successfully.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   cancelPurchase = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await this.purchasesService.cancelPurchase(

@@ -19,6 +19,7 @@ import {
   medicineBatches,
   medicineCategories,
   medicines,
+  purchaseItems,
   stockAdjustments,
   stockTransactions,
 } from "../../db/schema";
@@ -43,6 +44,19 @@ const availableQuantityExpr = sql<number>`
   )
 `;
 
+const onHandQuantityExpr = sql<number>`
+  coalesce(
+    sum(
+      case
+        when ${medicineBatches.quantityAvailable} > 0
+        then ${medicineBatches.quantityAvailable}
+        else 0
+      end
+    ),
+    0
+  )
+`;
+
 const activeBatchCountExpr = sql<number>`
   coalesce(
     sum(
@@ -57,6 +71,20 @@ const activeBatchCountExpr = sql<number>`
   )
 `;
 
+const resolvedReorderLevelExpr = (defaultThreshold: number) => sql<number>`
+  case
+    when ${medicines.reorderLevel} > 0 then ${medicines.reorderLevel}
+    else ${defaultThreshold}
+  end
+`;
+
+const buildLowStockHavingExpr = (
+  reorderLevelExpr: ReturnType<typeof resolvedReorderLevelExpr>,
+) => sql`
+  ${availableQuantityExpr} <= ${reorderLevelExpr}
+  and not (${availableQuantityExpr} = 0 and ${onHandQuantityExpr} > 0)
+`;
+
 const inventoryBaseFilters = (
   shopId: string,
   branchId: string,
@@ -69,6 +97,7 @@ const inventoryBaseFilters = (
       or(
         sql`lower(${medicines.medicineNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
         sql`lower(${medicines.genericNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
+        like(medicines.barcode, `%${query.search}%`),
       )!,
     );
   }
@@ -350,7 +379,9 @@ export class InventoryRepository {
     shopId: string,
     branchId: string,
     query: ListInventorySummaryQuery,
+    defaultThreshold: number,
   ) {
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
     const orderBy =
       query.sortBy === "availableQuantity"
         ? query.sortOrder === "asc"
@@ -358,8 +389,8 @@ export class InventoryRepository {
           : desc(availableQuantityExpr)
         : query.sortBy === "reorderLevel"
           ? query.sortOrder === "asc"
-            ? asc(medicines.reorderLevel)
-            : desc(medicines.reorderLevel)
+            ? asc(reorderLevelExpr)
+            : desc(reorderLevelExpr)
           : query.sortBy === "updatedAt"
             ? query.sortOrder === "asc"
               ? asc(medicines.updatedAt)
@@ -380,7 +411,9 @@ export class InventoryRepository {
           name: manufacturers.name,
         },
         availableQuantity: availableQuantityExpr,
+        onHandQuantity: onHandQuantityExpr.as("on_hand_quantity"),
         activeBatchCount: activeBatchCountExpr,
+        effectiveReorderLevel: reorderLevelExpr,
       })
       .from(medicines)
       .innerJoin(medicineCategories, eq(medicines.categoryId, medicineCategories.id))
@@ -398,7 +431,7 @@ export class InventoryRepository {
 
     if (query.lowStockOnly) {
       return summaryQuery
-        .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
+        .having(buildLowStockHavingExpr(reorderLevelExpr))
         .orderBy(orderBy, asc(medicines.id))
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
@@ -414,7 +447,9 @@ export class InventoryRepository {
     shopId: string,
     branchId: string,
     query: ListInventorySummaryQuery,
+    defaultThreshold: number,
   ) {
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
     const groupedQuery = getDbExecutor()
       .select({ medicineId: medicines.id })
       .from(medicines)
@@ -430,7 +465,7 @@ export class InventoryRepository {
       .groupBy(medicines.id, medicines.reorderLevel);
 
     const groupedSubquery = (query.lowStockOnly
-      ? groupedQuery.having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
+      ? groupedQuery.having(buildLowStockHavingExpr(reorderLevelExpr))
       : groupedQuery
     ).as("inventory_summary");
     const [result] = await getDbExecutor()
@@ -444,9 +479,11 @@ export class InventoryRepository {
     shopId: string,
     branchId: string,
     medicineId: string,
+    defaultThreshold: number,
     executor?: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
     const [medicineRecord] = await database
       .select({
         medicine: medicines,
@@ -459,7 +496,9 @@ export class InventoryRepository {
           name: manufacturers.name,
         },
         availableQuantity: availableQuantityExpr,
+        onHandQuantity: onHandQuantityExpr.as("on_hand_quantity"),
         activeBatchCount: activeBatchCountExpr,
+        effectiveReorderLevel: reorderLevelExpr,
       })
       .from(medicines)
       .innerJoin(medicineCategories, eq(medicines.categoryId, medicineCategories.id))
@@ -615,6 +654,7 @@ export class InventoryRepository {
           sql`lower(${medicines.medicineNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
           sql`lower(${medicines.genericNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
           sql`lower(${medicineBatches.batchNumberNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
+          like(medicines.barcode, `%${query.search}%`),
         )!,
       );
     }
@@ -674,6 +714,7 @@ export class InventoryRepository {
           sql`lower(${medicines.medicineNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
           sql`lower(${medicines.genericNameNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
           sql`lower(${medicineBatches.batchNumberNormalized}) like ${`%${query.search.toLowerCase()}%`}`,
+          like(medicines.barcode, `%${query.search}%`),
         )!,
       );
     }
@@ -728,8 +769,29 @@ export class InventoryRepository {
     executor: DbExecutor,
   ) {
     const database = getDbExecutor(executor);
+    const purchaseItemRows = await database
+      .select({
+        id: purchaseItems.id,
+        batchId: purchaseItems.medicineBatchId,
+        medicineId: purchaseItems.medicineId,
+      })
+      .from(purchaseItems)
+      .where(
+        and(
+          eq(purchaseItems.shopId, shopId),
+          eq(purchaseItems.branchId, branchId),
+          eq(purchaseItems.purchaseId, purchaseId),
+        ),
+      );
 
-    // 1. Find all transactions related to this purchase items
+    const purchaseItemIds = purchaseItemRows.map((item) => item.id);
+
+    if (!purchaseItemIds.length) {
+      return {
+        touchedMedicineIds: [],
+      };
+    }
+
     const transactions = await database
       .select()
       .from(stockTransactions)
@@ -738,12 +800,11 @@ export class InventoryRepository {
           eq(stockTransactions.shopId, shopId),
           eq(stockTransactions.branchId, branchId),
           eq(stockTransactions.referenceType, "purchase_item"),
-          like(stockTransactions.notes, `%purchase ${purchaseId}%`),
+          inArray(stockTransactions.referenceId, purchaseItemIds),
         ),
       );
 
     for (const tx of transactions) {
-      // 2. Revert batch quantities
       await database
         .update(medicineBatches)
         .set({
@@ -754,7 +815,6 @@ export class InventoryRepository {
         .where(eq(medicineBatches.id, tx.batchId));
     }
 
-    // 3. Delete transactions
     await database
       .delete(stockTransactions)
       .where(
@@ -762,21 +822,33 @@ export class InventoryRepository {
           eq(stockTransactions.shopId, shopId),
           eq(stockTransactions.branchId, branchId),
           eq(stockTransactions.referenceType, "purchase_item"),
-          like(stockTransactions.notes, `%purchase ${purchaseId}%`),
+          inArray(stockTransactions.referenceId, purchaseItemIds),
         ),
       );
 
-    // 4. Cleanup: Delete batches that now have 0 quantity received (if they were created solely by this purchase)
-    // Actually, we might want to keep them if they were previously there, but the upsert logic adds.
-    // If quantityReceived is now 0, it's safe to delete.
-    await database
-      .delete(medicineBatches)
-      .where(
-        and(
-          eq(medicineBatches.shopId, shopId),
-          eq(medicineBatches.branchId, branchId),
-          eq(medicineBatches.quantityReceived, 0),
-        ),
-      );
+    const touchedBatchIds = purchaseItemRows
+      .map((item) => item.batchId)
+      .filter((batchId): batchId is string => Boolean(batchId));
+
+    if (touchedBatchIds.length) {
+      await database
+        .delete(medicineBatches)
+        .where(
+          and(
+            eq(medicineBatches.shopId, shopId),
+            eq(medicineBatches.branchId, branchId),
+            inArray(medicineBatches.id, touchedBatchIds),
+            eq(medicineBatches.quantityReceived, 0),
+          ),
+        );
+    }
+
+    await this.syncBatchStatuses(shopId, branchId, executor);
+
+    return {
+      touchedMedicineIds: [
+        ...new Set(purchaseItemRows.map((item) => item.medicineId)),
+      ],
+    };
   }
 }

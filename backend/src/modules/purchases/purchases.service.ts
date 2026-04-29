@@ -1,5 +1,6 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import {
   moneyMinorUnitsToString,
   roundPercentageAmount,
@@ -13,6 +14,7 @@ import { AdminSettingsService } from "../admin-settings/admin-settings.service";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
 import { PurchaseReturnsRepository } from "../purchase-returns/purchase-returns.repository";
 import { PurchasesRepository } from "./purchases.repository";
+import { realtimeService } from "../realtime/realtime.service";
 import type {
   CancelPurchaseInput,
   CreatePurchaseInput,
@@ -77,6 +79,30 @@ const mapPaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: number) 
   return "partial" as const;
 };
 
+const resolvePurchaseWorkflowStage = (purchase: {
+  status: "draft" | "finalized" | "cancelled";
+  purchaseOrderApprovedAt: Date | null;
+  supplierNotifiedAt: Date | null;
+}) => {
+  if (purchase.status === "cancelled") {
+    return "cancelled" as const;
+  }
+
+  if (purchase.status === "finalized") {
+    return "received" as const;
+  }
+
+  if (purchase.supplierNotifiedAt) {
+    return "supplier_notified" as const;
+  }
+
+  if (purchase.purchaseOrderApprovedAt) {
+    return "approved" as const;
+  }
+
+  return "draft" as const;
+};
+
 const toPurchaseListResponse = (record: Awaited<
   ReturnType<PurchasesRepository["listPurchases"]>
 >[number]) => ({
@@ -94,10 +120,13 @@ const toPurchaseListResponse = (record: Awaited<
   grandTotal: record.purchase.grandTotal,
   paidAmount: record.purchase.paidAmount,
   dueAmount: record.purchase.dueAmount,
+  purchaseOrderApprovedAt: record.purchase.purchaseOrderApprovedAt,
+  supplierNotifiedAt: record.purchase.supplierNotifiedAt,
   finalizedAt: record.purchase.finalizedAt,
   cancelledAt: record.purchase.cancelledAt,
   createdAt: record.purchase.createdAt,
   updatedAt: record.purchase.updatedAt,
+  workflowStage: resolvePurchaseWorkflowStage(record.purchase),
   supplier: record.supplier,
 });
 
@@ -139,10 +168,15 @@ const toPurchaseDetailResponse = (
   notes: record.purchase.notes,
   createdByUserId: record.purchase.createdByUserId,
   updatedByUserId: record.purchase.updatedByUserId,
+  purchaseOrderApprovedAt: record.purchase.purchaseOrderApprovedAt,
+  purchaseOrderApprovedByUserId: record.purchase.purchaseOrderApprovedByUserId,
+  supplierNotifiedAt: record.purchase.supplierNotifiedAt,
+  supplierNotifiedByUserId: record.purchase.supplierNotifiedByUserId,
   finalizedAt: record.purchase.finalizedAt,
   cancelledAt: record.purchase.cancelledAt,
   createdAt: record.purchase.createdAt,
   updatedAt: record.purchase.updatedAt,
+  workflowStage: resolvePurchaseWorkflowStage(record.purchase),
   supplier: record.supplier,
   items: record.items.map(({ item, medicine }) => ({
     id: item.id,
@@ -523,6 +557,16 @@ export class PurchasesService {
       return purchase;
     });
 
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_order_created",
+      metadata: {
+        purchaseId: createdPurchase.id,
+      },
+    });
+
     return this.getPurchaseById(shopId, branchId, createdPurchase.id);
   }
 
@@ -558,6 +602,17 @@ export class PurchasesService {
         400,
         "PURCHASE_NOT_EDITABLE",
         "Only draft purchases can be edited.",
+      );
+    }
+
+    if (
+      existingPurchase.purchaseOrderApprovedAt ||
+      existingPurchase.supplierNotifiedAt
+    ) {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_ALREADY_IN_WORKFLOW",
+        "Approved or supplier-shared purchase orders cannot be edited. Cancel and recreate the order if changes are required.",
       );
     }
 
@@ -681,6 +736,16 @@ export class PurchasesService {
       );
     });
 
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_order_updated",
+      metadata: {
+        purchaseId,
+      },
+    });
+
     return this.getPurchaseById(shopId, branchId, purchaseId);
   }
 
@@ -762,6 +827,12 @@ export class PurchasesService {
         purchaseId,
         {
           status: "finalized",
+          ...(purchase.purchaseOrderApprovedAt
+            ? {}
+            : {
+                purchaseOrderApprovedAt: new Date(),
+                purchaseOrderApprovedByUserId: userId,
+              }),
           finalizedAt: new Date(),
           updatedByUserId: userId,
         },
@@ -776,11 +847,181 @@ export class PurchasesService {
       );
     });
 
-    await this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    try {
+      await this.alertsService.dispatchPendingInventoryAlertEmails(
+        shopId,
+        branchId,
+      );
+    } catch (error) {
+      logger.error("Purchase finalized but inventory alert email dispatch failed", {
+        purchaseId,
+        shopId,
+        branchId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     if (supplierId) {
-      await this.alertsService.syncSupplierPayableNotification(shopId, supplierId);
+      try {
+        await this.alertsService.syncSupplierPayableNotification(
+          shopId,
+          supplierId,
+        );
+      } catch (error) {
+        logger.error("Purchase finalized but supplier payable sync failed", {
+          purchaseId,
+          shopId,
+          supplierId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
+
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_received",
+      metadata: {
+        purchaseId,
+      },
+    });
+    realtimeService.publish({
+      type: "inventory_changed",
+      shopId,
+      branchId,
+      reason: "purchase_received",
+      metadata: {
+        purchaseId,
+      },
+    });
+    realtimeService.publish({
+      type: "notification_changed",
+      shopId,
+      branchId,
+      reason: "purchase_received",
+      metadata: {
+        purchaseId,
+      },
+    });
+
+    return this.getPurchaseById(shopId, branchId, purchaseId);
+  }
+
+  async approvePurchaseOrder(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    userId: string,
+  ) {
+    const purchase = await this.purchasesRepository.findPurchaseById(
+      shopId,
+      branchId,
+      purchaseId,
+    );
+
+    if (!purchase) {
+      throw buildAppError(404, "PURCHASE_NOT_FOUND", "Purchase not found.");
+    }
+
+    if (purchase.status !== "draft") {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_NOT_APPROVABLE",
+        "Only open purchase orders can be approved.",
+      );
+    }
+
+    if (purchase.purchaseOrderApprovedAt) {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_ALREADY_APPROVED",
+        "Purchase order is already approved.",
+      );
+    }
+
+    await this.purchasesRepository.updatePurchase(
+      purchaseId,
+      {
+        purchaseOrderApprovedAt: new Date(),
+        purchaseOrderApprovedByUserId: userId,
+        updatedByUserId: userId,
+      },
+      db,
+    );
+
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_order_approved",
+      metadata: {
+        purchaseId,
+      },
+    });
+
+    return this.getPurchaseById(shopId, branchId, purchaseId);
+  }
+
+  async markPurchaseOrderSupplierNotified(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    userId: string,
+  ) {
+    const purchase = await this.purchasesRepository.findPurchaseById(
+      shopId,
+      branchId,
+      purchaseId,
+    );
+
+    if (!purchase) {
+      throw buildAppError(404, "PURCHASE_NOT_FOUND", "Purchase not found.");
+    }
+
+    if (purchase.status !== "draft") {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_NOT_SHAREABLE",
+        "Only open purchase orders can be marked as shared with the supplier.",
+      );
+    }
+
+    if (!purchase.purchaseOrderApprovedAt) {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_NOT_APPROVED",
+        "Approve the purchase order before marking it as shared with the supplier.",
+      );
+    }
+
+    if (purchase.supplierNotifiedAt) {
+      throw buildAppError(
+        400,
+        "PURCHASE_ORDER_ALREADY_SHARED",
+        "Purchase order is already marked as shared with the supplier.",
+      );
+    }
+
+    await this.purchasesRepository.updatePurchase(
+      purchaseId,
+      {
+        supplierNotifiedAt: new Date(),
+        supplierNotifiedByUserId: userId,
+        updatedByUserId: userId,
+      },
+      db,
+    );
+
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_order_supplier_notified",
+      metadata: {
+        purchaseId,
+      },
+    });
 
     return this.getPurchaseById(shopId, branchId, purchaseId);
   }
@@ -824,6 +1065,16 @@ export class PurchasesService {
       updatedByUserId: userId,
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
     }, db);
+
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_order_cancelled",
+      metadata: {
+        purchaseId,
+      },
+    });
 
     return this.getPurchaseById(shopId, branchId, purchaseId);
   }
@@ -874,22 +1125,81 @@ export class PurchasesService {
 
     // Perform deletion in transaction
     await db.transaction(async (tx) => {
-      // If finalized, we might need to reverse the financial entries.
-      // The accounting system should handle this if we trigger a reversal.
-      // For now, if no related data exists, we delete.
-      
-      // If finalized, delete the medicine batches and stock transactions first?
-      // Or does inventoryStockService have a cleanup?
       if (purchase.status === "finalized") {
         await this.inventoryStockService.deletePurchaseStock(shopId, branchId, purchaseId, tx);
-        
-        // Reverse financial impact if any
-        // Since we are deleting, we should ideally reverse the ledger entries.
-        // Or just delete the ledger entries referencing this purchase.
-        await this.accountingLedgerService.deletePurchaseFinancials(shopId, purchaseId, tx);
       }
 
       await this.purchasesRepository.deletePurchase(purchaseId, tx);
+
+      if (purchase.status === "finalized") {
+        await this.accountingLedgerService.rebuildSupplierLedger(
+          shopId,
+          purchase.supplierId,
+          tx,
+        );
+      }
     });
+
+    if (purchase.status === "finalized") {
+      try {
+        await this.alertsService.dispatchPendingInventoryAlertEmails(
+          shopId,
+          branchId,
+        );
+      } catch (error) {
+        logger.error("Purchase deleted but inventory alert email dispatch failed", {
+          purchaseId,
+          shopId,
+          branchId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+
+      try {
+        await this.alertsService.syncSupplierPayableNotification(
+          shopId,
+          purchase.supplierId,
+        );
+      } catch (error) {
+        logger.error("Purchase deleted but supplier payable sync failed", {
+          purchaseId,
+          shopId,
+          supplierId: purchase.supplierId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    realtimeService.publish({
+      type: "purchase_changed",
+      shopId,
+      branchId,
+      reason: "purchase_deleted",
+      metadata: {
+        purchaseId,
+        deletedStatus: purchase.status,
+      },
+    });
+
+    if (purchase.status === "finalized") {
+      realtimeService.publish({
+        type: "inventory_changed",
+        shopId,
+        branchId,
+        reason: "purchase_deleted",
+        metadata: {
+          purchaseId,
+        },
+      });
+      realtimeService.publish({
+        type: "notification_changed",
+        shopId,
+        branchId,
+        reason: "purchase_deleted",
+        metadata: {
+          purchaseId,
+        },
+      });
+    }
   }
 }

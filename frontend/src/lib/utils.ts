@@ -115,8 +115,8 @@ export const toSelectedCustomerSummary = (customer: {
   fullName: string;
   mobileNumber: string;
   city: string | null;
-  totalDueAmount: string;
-  lastPurchaseDate: string | null;
+  totalDueAmount?: string;
+  lastPurchaseDate?: string | null;
   status: "active" | "inactive";
 }) => {
   if (!customer) return null;
@@ -126,8 +126,8 @@ export const toSelectedCustomerSummary = (customer: {
     fullName: customer.fullName,
     mobileNumber: customer.mobileNumber,
     city: customer.city,
-    totalDueAmount: customer.totalDueAmount,
-    lastPurchaseDate: customer.lastPurchaseDate,
+    totalDueAmount: customer.totalDueAmount ?? "0.00",
+    lastPurchaseDate: customer.lastPurchaseDate ?? null,
     status: customer.status,
   };
 };

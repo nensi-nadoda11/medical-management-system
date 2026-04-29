@@ -32,6 +32,7 @@ import type {
   SalesReportQuery,
   StockReportQuery,
   SupplierReportQuery,
+  UsageReportQuery,
 } from "./reports.validation";
 
 interface ReportAccessScope {
@@ -59,8 +60,35 @@ const availableQuantityExpr = sql<number>`
   )
 `;
 
+const onHandQuantityExpr = sql<number>`
+  coalesce(
+    sum(
+      case
+        when ${medicineBatches.quantityAvailable} > 0
+        then ${medicineBatches.quantityAvailable}
+        else 0
+      end
+    ),
+    0
+  )
+`;
+
 const currentStockValueExpr = sql<string>`
   coalesce(sum(${medicineBatches.purchaseRate} * ${medicineBatches.quantityAvailable}), 0)::text
+`;
+
+const resolvedReorderLevelExpr = (defaultThreshold: number) => sql<number>`
+  case
+    when ${medicines.reorderLevel} > 0 then ${medicines.reorderLevel}
+    else ${defaultThreshold}
+  end
+`;
+
+const buildLowStockHavingExpr = (
+  reorderLevelExpr: ReturnType<typeof resolvedReorderLevelExpr>,
+) => sql`
+  ${availableQuantityExpr} <= ${reorderLevelExpr}
+  and not (${availableQuantityExpr} = 0 and ${onHandQuantityExpr} > 0)
 `;
 
 const buildBranchScopeFilter = (column: AnyPgColumn, branchIds: string[]) =>
@@ -156,6 +184,7 @@ const buildStockFilters = (shopId: string, branchIds: string[], query: StockRepo
         like(medicines.medicineNameNormalized, `%${query.search}%`),
         like(medicines.genericNameNormalized, `%${query.search}%`),
         like(medicineBatches.batchNumberNormalized, `%${query.search}%`),
+        like(medicines.barcode, `%${query.search}%`),
       )!,
     );
   }
@@ -187,6 +216,7 @@ const buildLowStockFilters = (
       or(
         like(medicines.medicineNameNormalized, `%${query.search}%`),
         like(medicines.genericNameNormalized, `%${query.search}%`),
+        like(medicines.barcode, `%${query.search}%`),
       )!,
     );
   }
@@ -223,6 +253,7 @@ const buildExpiryFilters = (
         like(medicines.medicineNameNormalized, `%${query.search}%`),
         like(medicines.genericNameNormalized, `%${query.search}%`),
         like(medicineBatches.batchNumberNormalized, `%${query.search}%`),
+        like(medicines.barcode, `%${query.search}%`),
       )!,
     );
   }
@@ -269,6 +300,54 @@ const buildSupplierFilters = (
 
   if (query.dateTo) {
     filters.push(lte(purchases.purchaseDate, query.dateTo));
+  }
+
+  return and(...filters);
+};
+
+const buildUsageFilters = (
+  shopId: string,
+  branchIds: string[],
+  query: Pick<
+    UsageReportQuery,
+    "search" | "categoryId" | "manufacturerId" | "dateFrom" | "dateTo"
+  >,
+  accessScope: ReportAccessScope,
+) => {
+  const filters = [
+    eq(sales.shopId, shopId),
+    buildBranchScopeFilter(sales.branchId, branchIds),
+    eq(sales.status, "completed"),
+  ];
+
+  if (accessScope.role === "staff") {
+    filters.push(eq(sales.createdByUserId, accessScope.userId));
+  }
+
+  if (query.search) {
+    filters.push(
+      or(
+        like(medicines.medicineNameNormalized, `%${query.search}%`),
+        like(medicines.genericNameNormalized, `%${query.search}%`),
+        like(medicines.barcode, `%${query.search}%`),
+      )!,
+    );
+  }
+
+  if (query.categoryId) {
+    filters.push(eq(medicines.categoryId, query.categoryId));
+  }
+
+  if (query.manufacturerId) {
+    filters.push(eq(medicines.manufacturerId, query.manufacturerId));
+  }
+
+  if (query.dateFrom) {
+    filters.push(gte(sales.completedAt, query.dateFrom));
+  }
+
+  if (query.dateTo) {
+    filters.push(lte(sales.completedAt, query.dateTo));
   }
 
   return and(...filters);
@@ -561,6 +640,7 @@ export class ReportsRepository {
           id: medicines.id,
           medicineName: medicines.medicineName,
           genericName: medicines.genericName,
+          barcode: medicines.barcode,
           form: medicines.form,
           unit: medicines.unit,
           reorderLevel: medicines.reorderLevel,
@@ -599,11 +679,14 @@ export class ReportsRepository {
     shopId: string,
     branchIds: string[],
     query: LowStockReportQuery,
+    defaultThreshold: number,
   ) {
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
+    const reorderLevelSelectExpr = reorderLevelExpr.as("reorder_level");
     const grouped = getDbExecutor()
       .select({
         medicineId: medicines.id,
-        reorderLevel: medicines.reorderLevel,
+        reorderLevel: reorderLevelSelectExpr,
         availableQuantity: availableQuantityExpr.as("available_quantity"),
       })
       .from(medicines)
@@ -617,14 +700,14 @@ export class ReportsRepository {
       )
       .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicines.reorderLevel)
-      .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
+      .having(buildLowStockHavingExpr(reorderLevelExpr))
       .as("low_stock_summary");
 
     const [result] = await getDbExecutor()
       .select({
         totalMedicines: sql<number>`count(*)`,
         totalShortage:
-          sql<number>`coalesce(sum(greatest(${grouped.reorderLevel} - ${grouped.availableQuantity}, 0)), 0)`,
+          sql<number>`coalesce(sum(greatest(${sql.raw("low_stock_summary.reorder_level")} - ${sql.raw("low_stock_summary.available_quantity")}, 0)), 0)`,
       })
       .from(grouped);
 
@@ -635,15 +718,17 @@ export class ReportsRepository {
     shopId: string,
     branchIds: string[],
     query: LowStockReportQuery,
+    defaultThreshold: number,
   ) {
-    const shortageExpr = sql<number>`greatest(${medicines.reorderLevel} - ${availableQuantityExpr}, 0)`;
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
+    const shortageExpr = sql<number>`greatest(${reorderLevelExpr} - ${availableQuantityExpr}, 0)`;
     const orderBy =
       query.sortBy === "medicineName"
         ? [query.sortOrder === "asc" ? asc(medicines.medicineNameNormalized) : desc(medicines.medicineNameNormalized), asc(medicines.id)]
         : query.sortBy === "availableQuantity"
           ? [query.sortOrder === "asc" ? asc(availableQuantityExpr) : desc(availableQuantityExpr), asc(medicines.id)]
           : query.sortBy === "reorderLevel"
-            ? [query.sortOrder === "asc" ? asc(medicines.reorderLevel) : desc(medicines.reorderLevel), asc(medicines.id)]
+            ? [query.sortOrder === "asc" ? asc(reorderLevelExpr) : desc(reorderLevelExpr), asc(medicines.id)]
             : [query.sortOrder === "asc" ? asc(shortageExpr) : desc(shortageExpr), asc(medicines.id)];
 
     return getDbExecutor()
@@ -652,9 +737,9 @@ export class ReportsRepository {
           id: medicines.id,
           medicineName: medicines.medicineName,
           genericName: medicines.genericName,
+          barcode: medicines.barcode,
           form: medicines.form,
           unit: medicines.unit,
-          reorderLevel: medicines.reorderLevel,
         },
         category: {
           id: medicineCategories.id,
@@ -665,6 +750,7 @@ export class ReportsRepository {
           name: manufacturers.name,
         },
         availableQuantity: availableQuantityExpr,
+        reorderLevel: reorderLevelExpr,
         shortage: shortageExpr,
       })
       .from(medicines)
@@ -680,7 +766,7 @@ export class ReportsRepository {
       )
       .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicineCategories.id, manufacturers.id)
-      .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
+      .having(buildLowStockHavingExpr(reorderLevelExpr))
       .orderBy(...orderBy)
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
@@ -690,7 +776,9 @@ export class ReportsRepository {
     shopId: string,
     branchIds: string[],
     query: LowStockReportQuery,
+    defaultThreshold: number,
   ) {
+    const reorderLevelExpr = resolvedReorderLevelExpr(defaultThreshold);
     const grouped = getDbExecutor()
       .select({ medicineId: medicines.id })
       .from(medicines)
@@ -704,7 +792,7 @@ export class ReportsRepository {
       )
       .where(buildLowStockFilters(shopId, branchIds, query))
       .groupBy(medicines.id, medicines.reorderLevel)
-      .having(sql`${availableQuantityExpr} <= ${medicines.reorderLevel}`)
+      .having(buildLowStockHavingExpr(reorderLevelExpr))
       .as("low_stock_rows");
 
     const [result] = await getDbExecutor()
@@ -746,6 +834,7 @@ export class ReportsRepository {
           id: medicines.id,
           medicineName: medicines.medicineName,
           genericName: medicines.genericName,
+          barcode: medicines.barcode,
           reorderLevel: medicines.reorderLevel,
         },
       })
@@ -886,5 +975,177 @@ export class ReportsRepository {
       },
       accessScope,
     );
+  }
+
+  async getUsageSummary(
+    shopId: string,
+    branchIds: string[],
+    query: Pick<
+      UsageReportQuery,
+      "search" | "categoryId" | "manufacturerId" | "dateFrom" | "dateTo"
+    >,
+    accessScope: ReportAccessScope,
+  ) {
+    const [result] = await getDbExecutor()
+      .select({
+        totalUnitsSold: sql<number>`coalesce(sum(${saleItems.quantity}), 0)`,
+        uniqueMedicines: sql<number>`count(distinct ${saleItems.medicineId})`,
+        revenue: sql<string>`coalesce(sum(${saleItems.lineTotal}), 0)::text`,
+        cost: sql<string>`coalesce(sum(${medicineBatches.purchaseRate} * ${saleItems.quantity}), 0)::text`,
+        profit: sql<string>`coalesce(sum(${saleItems.lineTotal} - (${medicineBatches.purchaseRate} * ${saleItems.quantity})), 0)::text`,
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(medicines, eq(saleItems.medicineId, medicines.id))
+      .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
+      .where(buildUsageFilters(shopId, branchIds, query, accessScope));
+
+    return result;
+  }
+
+  async getUsageTrend(
+    shopId: string,
+    branchIds: string[],
+    query: Pick<
+      UsageReportQuery,
+      | "search"
+      | "categoryId"
+      | "manufacturerId"
+      | "dateFrom"
+      | "dateTo"
+      | "groupBy"
+    >,
+    accessScope: ReportAccessScope,
+  ) {
+    const bucket = query.groupBy === "month" ? "month" : "day";
+    const periodExpr = sql<Date>`date_trunc(${sql.raw(`'${bucket}'`)}, ${sales.completedAt})`;
+
+    return getDbExecutor()
+      .select({
+        periodStart: periodExpr,
+        totalUnitsSold: sql<number>`coalesce(sum(${saleItems.quantity}), 0)`,
+        revenue: sql<string>`coalesce(sum(${saleItems.lineTotal}), 0)::text`,
+        cost: sql<string>`coalesce(sum(${medicineBatches.purchaseRate} * ${saleItems.quantity}), 0)::text`,
+        profit: sql<string>`coalesce(sum(${saleItems.lineTotal} - (${medicineBatches.purchaseRate} * ${saleItems.quantity})), 0)::text`,
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(medicines, eq(saleItems.medicineId, medicines.id))
+      .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
+      .where(buildUsageFilters(shopId, branchIds, query, accessScope))
+      .groupBy(periodExpr)
+      .orderBy(asc(periodExpr));
+  }
+
+  async listUsageRows(
+    shopId: string,
+    branchIds: string[],
+    query: UsageReportQuery,
+    accessScope: ReportAccessScope,
+  ) {
+    const quantitySoldExpr = sql<number>`coalesce(sum(${saleItems.quantity}), 0)`;
+    const revenueExpr = sql<string>`coalesce(sum(${saleItems.lineTotal}), 0)::text`;
+    const costExpr = sql<string>`coalesce(sum(${medicineBatches.purchaseRate} * ${saleItems.quantity}), 0)::text`;
+    const profitExpr = sql<string>`coalesce(sum(${saleItems.lineTotal} - (${medicineBatches.purchaseRate} * ${saleItems.quantity})), 0)::text`;
+    const lastSoldAtExpr = sql<Date | null>`max(${sales.completedAt})`;
+
+    const orderBy =
+      query.sortBy === "medicineName"
+        ? [
+            query.sortOrder === "asc"
+              ? asc(medicines.medicineNameNormalized)
+              : desc(medicines.medicineNameNormalized),
+            asc(medicines.id),
+          ]
+        : query.sortBy === "revenue"
+          ? [
+              query.sortOrder === "asc"
+                ? asc(sql`sum(${saleItems.lineTotal})`)
+                : desc(sql`sum(${saleItems.lineTotal})`),
+              asc(medicines.id),
+            ]
+          : query.sortBy === "profit"
+            ? [
+                query.sortOrder === "asc"
+                  ? asc(
+                      sql`sum(${saleItems.lineTotal} - (${medicineBatches.purchaseRate} * ${saleItems.quantity}))`,
+                    )
+                  : desc(
+                      sql`sum(${saleItems.lineTotal} - (${medicineBatches.purchaseRate} * ${saleItems.quantity}))`,
+                    ),
+                asc(medicines.id),
+              ]
+            : query.sortBy === "lastSoldAt"
+              ? [
+                  query.sortOrder === "asc"
+                    ? asc(sql`max(${sales.completedAt})`)
+                    : desc(sql`max(${sales.completedAt})`),
+                  asc(medicines.id),
+                ]
+              : [
+                  query.sortOrder === "asc"
+                    ? asc(sql`sum(${saleItems.quantity})`)
+                    : desc(sql`sum(${saleItems.quantity})`),
+                  asc(medicines.id),
+                ];
+
+    return getDbExecutor()
+      .select({
+        medicine: {
+          id: medicines.id,
+          medicineName: medicines.medicineName,
+          genericName: medicines.genericName,
+          barcode: medicines.barcode,
+          form: medicines.form,
+          unit: medicines.unit,
+        },
+        category: {
+          id: medicineCategories.id,
+          name: medicineCategories.name,
+        },
+        manufacturer: {
+          id: manufacturers.id,
+          name: manufacturers.name,
+        },
+        quantitySold: quantitySoldExpr,
+        revenue: revenueExpr,
+        cost: costExpr,
+        profit: profitExpr,
+        lastSoldAt: lastSoldAtExpr,
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(medicines, eq(saleItems.medicineId, medicines.id))
+      .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
+      .innerJoin(medicineCategories, eq(medicines.categoryId, medicineCategories.id))
+      .innerJoin(manufacturers, eq(medicines.manufacturerId, manufacturers.id))
+      .where(buildUsageFilters(shopId, branchIds, query, accessScope))
+      .groupBy(medicines.id, medicineCategories.id, manufacturers.id)
+      .orderBy(...orderBy)
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize);
+  }
+
+  async countUsageRows(
+    shopId: string,
+    branchIds: string[],
+    query: UsageReportQuery,
+    accessScope: ReportAccessScope,
+  ) {
+    const grouped = getDbExecutor()
+      .select({ medicineId: medicines.id })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(medicines, eq(saleItems.medicineId, medicines.id))
+      .innerJoin(medicineBatches, eq(saleItems.batchId, medicineBatches.id))
+      .where(buildUsageFilters(shopId, branchIds, query, accessScope))
+      .groupBy(medicines.id)
+      .as("usage_rows");
+
+    const [result] = await getDbExecutor()
+      .select({ total: sql<number>`count(*)` })
+      .from(grouped);
+
+    return result?.total ?? 0;
   }
 }

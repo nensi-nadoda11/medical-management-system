@@ -33,6 +33,8 @@ export const ReportsDashboardPage = () => {
   const dashboardQuery = useQuery({
     queryKey: reportsQueryKeys.dashboard(params),
     queryFn: () => getReportsDashboardSummary(params),
+    enabled: Boolean(role),
+    refetchInterval: 300000,
   });
 
   if (!role || dashboardQuery.isLoading) {
@@ -114,9 +116,10 @@ export const ReportsDashboardPage = () => {
           <div className="grid gap-3 md:grid-cols-2">
             {[
               ["Sales report", "/app/reports/sales", "Track bills, value, and payment mix."],
-              ["Profit report", "/app/reports/profit", "Review revenue, cost, and margin trend."],
+              ["Profit & loss", "/app/reports/profit", "Review revenue, cost, and margin trend."],
               ["Stock report", "/app/reports/stock", "Monitor valuation and batch-level stock."],
               ["Supplier report", "/app/reports/suppliers", "See purchase totals and outstanding dues."],
+              ["Usage report", "/app/reports/usage", "Track medicine-wise daily and monthly consumption."],
             ]
               .filter(([title]) =>
                 role === "staff"

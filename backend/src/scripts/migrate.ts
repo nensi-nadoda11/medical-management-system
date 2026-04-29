@@ -14,6 +14,7 @@ const MIGRATIONS_TABLE_SQL = `
 
 const runMigrations = async () => {
   const client = await pool.connect();
+  let currentFile: string | null = null;
 
   try {
     await client.query(MIGRATIONS_TABLE_SQL);
@@ -24,6 +25,7 @@ const runMigrations = async () => {
       .sort();
 
     for (const file of files) {
+      currentFile = file;
       const alreadyExecuted = await client.query<{ name: string }>(
         "SELECT name FROM app_migrations WHERE name = $1 LIMIT 1",
         [file],
@@ -42,11 +44,15 @@ const runMigrations = async () => {
       await client.query("COMMIT");
 
       logger.info("Applied database migration", { file });
+      currentFile = null;
     }
 
     logger.info("Database migration run completed successfully.");
   } catch (error) {
     await client.query("ROLLBACK");
+    if (error instanceof Error && currentFile) {
+      (error as Error & { migrationFile?: string }).migrationFile = currentFile;
+    }
     throw error;
   } finally {
     client.release();
@@ -57,6 +63,10 @@ const runMigrations = async () => {
 runMigrations().catch((error) => {
   logger.error("Database migration run failed", {
     message: error instanceof Error ? error.message : "Unknown error",
+    migrationFile:
+      error instanceof Error && "migrationFile" in error
+        ? String((error as Error & { migrationFile?: string }).migrationFile)
+        : undefined,
   });
   process.exitCode = 1;
 });

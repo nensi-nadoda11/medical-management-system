@@ -11,6 +11,7 @@ import {
   exportSalesReportSchema,
   exportStockReportSchema,
   exportSupplierReportSchema,
+  exportUsageReportSchema,
   getDashboardSummarySchema,
   listExpiryReportSchema,
   listLowStockReportSchema,
@@ -18,6 +19,7 @@ import {
   listSalesReportSchema,
   listStockReportSchema,
   listSupplierReportSchema,
+  listUsageReportSchema,
 } from "./reports.validation";
 
 const router = Router();
@@ -113,6 +115,20 @@ router.get(
   requirePermission("reports.financial"),
   validateRequest(exportSupplierReportSchema),
   controller.exportSupplierReport,
+);
+router.get(
+  "/usage",
+  requireAuth,
+  requirePermission("reports.financial"),
+  validateRequest(listUsageReportSchema),
+  controller.getUsageReport,
+);
+router.get(
+  "/usage/export",
+  requireAuth,
+  requirePermission("reports.financial"),
+  validateRequest(exportUsageReportSchema),
+  controller.exportUsageReport,
 );
 
 export const reportsRoutes = router;

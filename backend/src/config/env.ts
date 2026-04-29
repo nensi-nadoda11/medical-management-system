@@ -79,9 +79,17 @@ const envSchema = z
     SMTP_USER: optionalString,
     SMTP_PASS: optionalString,
     SMS_PROVIDER: z.enum(["console", "twilio"]).default("console"),
+    WHATSAPP_PROVIDER: z.enum(["console", "twilio"]).default("console"),
     TWILIO_ACCOUNT_SID: optionalString,
     TWILIO_AUTH_TOKEN: optionalString,
     TWILIO_FROM_NUMBER: optionalString,
+    TWILIO_WHATSAPP_FROM_NUMBER: optionalString,
+    TWILIO_WHATSAPP_ADMIN_LOW_STOCK_TEMPLATE_SID: optionalString,
+    TWILIO_WHATSAPP_INVENTORY_ATTENTION_TEMPLATE_SID: optionalString,
+    TWILIO_WHATSAPP_SUPPLIER_REORDER_TEMPLATE_SID: optionalString,
+    TWILIO_WHATSAPP_SHOP_SENDER_MAP: optionalString,
+    ALERT_SYNC_ENABLED: booleanSchema.default(true),
+    ALERT_SYNC_INTERVAL_MS: z.coerce.number().int().min(30000).default(300000),
   })
   .superRefine((input, ctx) => {
     if (
@@ -153,6 +161,35 @@ const envSchema = z
       }
     }
 
+    if (input.WHATSAPP_PROVIDER === "twilio") {
+      if (!input.TWILIO_ACCOUNT_SID) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["TWILIO_ACCOUNT_SID"],
+          message:
+            "TWILIO_ACCOUNT_SID is required when WHATSAPP_PROVIDER is twilio.",
+        });
+      }
+
+      if (!input.TWILIO_AUTH_TOKEN) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["TWILIO_AUTH_TOKEN"],
+          message:
+            "TWILIO_AUTH_TOKEN is required when WHATSAPP_PROVIDER is twilio.",
+        });
+      }
+
+      if (!input.TWILIO_WHATSAPP_FROM_NUMBER) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["TWILIO_WHATSAPP_FROM_NUMBER"],
+          message:
+            "TWILIO_WHATSAPP_FROM_NUMBER is required when WHATSAPP_PROVIDER is twilio.",
+        });
+      }
+    }
+
     if (
       input.AUTH_COOKIE_SAME_SITE === "none" &&
       input.AUTH_COOKIE_SECURE === false
@@ -182,6 +219,41 @@ const defaultLocalOrigins = [
   "http://127.0.0.1:5174",
 ];
 
+const parseWhatsappShopSenderMap = (value?: string) => {
+  if (!value) {
+    return {} as Record<string, string>;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid JSON";
+    throw new Error(
+      `Invalid environment configuration: TWILIO_WHATSAPP_SHOP_SENDER_MAP must be valid JSON. ${message}`,
+    );
+  }
+
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error(
+      "Invalid environment configuration: TWILIO_WHATSAPP_SHOP_SENDER_MAP must be a JSON object keyed by shop id.",
+    );
+  }
+
+  const senderMapEntries = Object.entries(parsed).map(([shopId, sender]) => {
+    if (typeof sender !== "string" || !sender.trim()) {
+      throw new Error(
+        `Invalid environment configuration: TWILIO_WHATSAPP_SHOP_SENDER_MAP value for ${shopId} must be a non-empty string.`,
+      );
+    }
+
+    return [shopId, sender.trim()] as const;
+  });
+
+  return Object.fromEntries(senderMapEntries);
+};
+
 const allowedOrigins = Array.from(
   new Set(
     [
@@ -193,6 +265,10 @@ const allowedOrigins = Array.from(
   ),
 );
 
+const whatsappShopSenderMap = parseWhatsappShopSenderMap(
+  parsedEnv.data.TWILIO_WHATSAPP_SHOP_SENDER_MAP,
+);
+
 export const env = {
   ...parsedEnv.data,
   AUTH_COOKIE_SECURE:
@@ -200,4 +276,5 @@ export const env = {
     parsedEnv.data.NODE_ENV === "production",
   DEFAULT_PHONE_COUNTRY: parsedEnv.data.DEFAULT_PHONE_COUNTRY.toUpperCase(),
   allowedOrigins,
+  whatsappShopSenderMap,
 } as const;

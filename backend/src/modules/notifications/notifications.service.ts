@@ -17,6 +17,7 @@ const buildAppError = (statusCode: number, code: string, message: string) =>
 
 const STOCK_NOTIFICATION_TYPES: NotificationType[] = [
   "low_stock",
+  "supplier_reorder",
   "near_expiry",
   "expired_stock",
 ];
@@ -190,6 +191,7 @@ export class NotificationsService {
     if (user.role === "admin") {
       return [
         "low_stock",
+        "supplier_reorder",
         "near_expiry",
         "expired_stock",
         "customer_due",

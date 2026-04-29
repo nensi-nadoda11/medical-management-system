@@ -1,5 +1,6 @@
 import { apiRequest } from "../../../lib/api";
 import type {
+  CustomerPaymentListItem,
   CustomerDueSummary,
   CustomerLedgerResponse,
   CustomerPaymentsParams,
@@ -10,12 +11,33 @@ import type {
   OutstandingSuppliersResponse,
   SaveCustomerAccountingPaymentPayload,
   SaveSupplierAccountingPaymentPayload,
+  SupplierPaymentListItem,
   SupplierDueSummary,
   SupplierLedgerResponse,
   SupplierOption,
   SupplierPaymentsParams,
   SupplierPaymentsResponse,
 } from "../../../types/accounting";
+
+export type {
+  CustomerPaymentListItem as AccountingCustomerPayment,
+  CustomerDueSummary,
+  CustomerLedgerResponse,
+  CustomerPaymentsParams,
+  CustomerPaymentsResponse,
+  OutstandingCustomersParams,
+  OutstandingCustomersResponse,
+  OutstandingSuppliersParams,
+  OutstandingSuppliersResponse,
+  SaveCustomerAccountingPaymentPayload,
+  SaveSupplierAccountingPaymentPayload,
+  SupplierPaymentListItem as AccountingSupplierPayment,
+  SupplierDueSummary,
+  SupplierLedgerResponse,
+  SupplierOption,
+  SupplierPaymentsParams,
+  SupplierPaymentsResponse,
+};
 
 const cleanParams = (
   params: Record<string, string | number | boolean | undefined>,

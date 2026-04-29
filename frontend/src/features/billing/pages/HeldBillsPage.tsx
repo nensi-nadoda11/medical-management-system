@@ -9,7 +9,7 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { formatCurrency } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
-import { billingQueryKeys, listBills } from "../api/billing";
+import { billingQueryKeys, listBills, type BillListItem } from "../api/billing";
 import { BillsRegister } from "../components/BillsRegister";
 import { BillingModuleNav } from "../components/BillingModuleNav";
 

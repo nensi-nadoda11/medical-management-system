@@ -191,6 +191,7 @@ export const adminAuditTargetTypeEnum = pgEnum("admin_audit_target_type", [
 ]);
 export const notificationTypeEnum = pgEnum("notification_type", [
   "low_stock",
+  "supplier_reorder",
   "near_expiry",
   "expired_stock",
   "customer_due",
@@ -1179,6 +1180,20 @@ export const purchases = pgTable(
     updatedByUserId: uuid("updated_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
+    purchaseOrderApprovedAt: timestamp("purchase_order_approved_at", {
+      withTimezone: true,
+    }),
+    purchaseOrderApprovedByUserId: uuid("purchase_order_approved_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    supplierNotifiedAt: timestamp("supplier_notified_at", {
+      withTimezone: true,
+    }),
+    supplierNotifiedByUserId: uuid("supplier_notified_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

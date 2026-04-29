@@ -20,7 +20,7 @@ const items: Array<{
     roles: ["admin", "staff", "accountant"],
   },
   {
-    label: "Profit",
+    label: "Profit & Loss",
     to: "/app/reports/profit",
     roles: ["admin", "accountant"],
   },
@@ -42,6 +42,11 @@ const items: Array<{
   {
     label: "Suppliers",
     to: "/app/reports/suppliers",
+    roles: ["admin", "accountant"],
+  },
+  {
+    label: "Usage",
+    to: "/app/reports/usage",
     roles: ["admin", "accountant"],
   },
 ];

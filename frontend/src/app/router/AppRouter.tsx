@@ -49,6 +49,7 @@ import { ReportsDashboardPage } from "../../features/reports/pages/ReportsDashbo
 import { SalesReportPage } from "../../features/reports/pages/SalesReportPage";
 import { StockReportPage } from "../../features/reports/pages/StockReportPage";
 import { SupplierReportPage } from "../../features/reports/pages/SupplierReportPage";
+import { UsageReportPage } from "../../features/reports/pages/UsageReportPage";
 import { ShopSetupPage } from "../../features/shop/pages/ShopSetupPage";
 import { StaffManagementPage } from "../../features/staff/pages/StaffManagementPage";
 import { StockTransfersPage } from "../../features/stock-transfers/pages/StockTransfersPage";
@@ -119,6 +120,7 @@ export const AppRouter = () => (
           <Route element={<LowStockReportPage />} path="reports/low-stock" />
           <Route element={<ExpiryReportPage />} path="reports/expiry" />
           <Route element={<SupplierReportPage />} path="reports/suppliers" />
+          <Route element={<UsageReportPage />} path="reports/usage" />
         </Route>
         <Route element={<RequirePermissions permissions={["shop.view"]} />}>
           <Route element={<ShopSetupPage />} path="shop-setup" />

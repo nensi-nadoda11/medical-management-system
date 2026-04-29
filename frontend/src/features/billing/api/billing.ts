@@ -1,7 +1,9 @@
 import { apiRequest } from "../../../lib/api";
 import type {
   BillDetail,
+  BillDetailItem,
   BillListParams,
+  BillListItem,
   BillingMedicineOptions,
   BillingMedicineSearchParams,
   BillingMedicineSearchResponse,
@@ -11,7 +13,9 @@ import type {
 
 export type {
   BillDetail,
+  BillDetailItem,
   BillListParams,
+  BillListItem,
   BillingMedicineOptions,
   BillingMedicineSearchParams,
   BillingMedicineSearchResponse,

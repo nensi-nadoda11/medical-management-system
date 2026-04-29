@@ -27,6 +27,7 @@ import { ReportsNav } from "../components/ReportsNav";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const reportRefreshIntervalMs = 300000;
 
 export const LowStockReportPage = () => {
   const { pushToast } = useToast();
@@ -63,6 +64,7 @@ export const LowStockReportPage = () => {
     queryKey: reportsQueryKeys.lowStock(params),
     queryFn: () => getLowStockReport(params),
     enabled: Boolean(role),
+    refetchInterval: reportRefreshIntervalMs,
   });
 
   const categoriesQuery = useQuery({
@@ -99,21 +101,16 @@ export const LowStockReportPage = () => {
     enabled: Boolean(role),
   });
 
-  const activeError =
-    reportQuery.error ?? categoriesQuery.error ?? manufacturersQuery.error;
-
-  if (!role || reportQuery.isLoading || categoriesQuery.isLoading || manufacturersQuery.isLoading) {
+  if (!role || reportQuery.isLoading) {
     return <LoadingState title="Loading low stock report" />;
   }
 
-  if (activeError) {
+  if (reportQuery.error) {
     return (
       <ErrorState
-        description={activeError.message}
+        description={reportQuery.error.message}
         onRetry={() => {
           reportQuery.refetch();
-          categoriesQuery.refetch();
-          manufacturersQuery.refetch();
         }}
         title="Unable to load low stock report"
       />
@@ -123,7 +120,7 @@ export const LowStockReportPage = () => {
   const report = reportQuery.data!;
 
   return (
-    <div className="space-y-6">
+    <div className="print-report-page space-y-6">
       <PageHeader
         actions={
           <>
@@ -149,6 +146,7 @@ export const LowStockReportPage = () => {
                   )
                   .finally(() => setIsExporting(false));
               }}
+              onPrint={() => window.print()}
             />
           </>
         }
@@ -177,7 +175,11 @@ export const LowStockReportPage = () => {
         />
       </div>
 
-      <FilterBar description="Filter shortage by medicine master attributes." title="Low stock filters">
+      <FilterBar
+        className="print-hidden"
+        description="Filter shortage by medicine master attributes."
+        title="Low stock filters"
+      >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
@@ -187,7 +189,7 @@ export const LowStockReportPage = () => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search medicine or generic"
+              placeholder="Search medicine, generic, or barcode"
               value={search}
             />
           </label>
@@ -295,6 +297,11 @@ export const LowStockReportPage = () => {
                         <p className="mt-1 text-sm text-slate-600">
                           {item.medicine.genericName} / {humanizeLabel(item.medicine.form)} / {humanizeLabel(item.medicine.unit)}
                         </p>
+                        {item.medicine.barcode ? (
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            Barcode: {item.medicine.barcode}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{item.manufacturer.name}</td>
@@ -324,6 +331,11 @@ export const LowStockReportPage = () => {
                     <div>
                       <p className="text-sm font-semibold text-slate-950">{item.medicine.medicineName}</p>
                       <p className="mt-1 text-sm text-slate-600">{item.manufacturer.name}</p>
+                      {item.medicine.barcode ? (
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Barcode: {item.medicine.barcode}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="text-sm font-semibold text-rose-700">
                       Short {formatNumber(item.shortage)}
@@ -353,13 +365,15 @@ export const LowStockReportPage = () => {
             )}
           </div>
 
-          <Pagination
-            onPageChange={setPage}
-            page={report.rows.pagination.page}
-            pageSize={report.rows.pagination.pageSize}
-            totalItems={report.rows.pagination.total}
-            totalPages={report.rows.pagination.totalPages}
-          />
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
         </div>
       </SectionCard>
     </div>
