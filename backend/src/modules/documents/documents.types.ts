@@ -23,6 +23,7 @@ export interface DocumentTableColumn {
   key: string;
   label: string;
   align?: "left" | "center" | "right";
+  widthRatio?: number;
 }
 
 export type DocumentTableRow = Record<string, string> & {

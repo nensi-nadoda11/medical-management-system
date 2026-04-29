@@ -10,6 +10,63 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) {
+              if (/[\\/]features[\\/]reports[\\/]/.test(id)) {
+                return "reports";
+              }
+
+              if (
+                /[\\/]features[\\/](inventory|purchases|purchase-returns|stock-transfers)[\\/]/.test(
+                  id,
+                )
+              ) {
+                return "inventory-supply";
+              }
+
+              if (
+                /[\\/]features[\\/](billing|sales-returns|customers|accounting)[\\/]/.test(
+                  id,
+                )
+              ) {
+                return "sales-finance";
+              }
+
+              if (
+                /[\\/]features[\\/](admin-settings|data-management|staff|branches|shop)[\\/]/.test(
+                  id,
+                )
+              ) {
+                return "admin";
+              }
+
+              return undefined;
+            }
+
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) {
+              return "react-vendor";
+            }
+
+            if (id.includes("@tanstack/react-query")) {
+              return "query-vendor";
+            }
+
+            if (id.includes("react-router-dom")) {
+              return "router-vendor";
+            }
+
+            if (id.includes("lucide-react")) {
+              return "icon-vendor";
+            }
+
+            return "vendor";
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         "/api/v1": {

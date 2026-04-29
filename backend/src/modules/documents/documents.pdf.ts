@@ -236,16 +236,34 @@ const drawTable = (
   const columnRatios =
     template.variant === "compact"
       ? [0.46, 0.14, 0.18, 0.22]
-      : new Array(columns.length).fill(1 / columns.length);
-  const columnWidths = columns.map((_, index) => (columnRatios[index] ?? 0.2) * width);
+      : columns.map((column) => column.widthRatio ?? 1);
+  const totalRatio = columnRatios.reduce((sum, ratio) => sum + ratio, 0);
+  const columnWidths = columns.map(
+    (_, index) => ((columnRatios[index] ?? 1) / totalRatio) * width,
+  );
+  const denseTable = template.variant !== "compact" && columns.length >= 7;
+  const headerFontSize = denseTable ? 7.2 : 8;
+  const rowFontSize = denseTable ? 7.6 : 8.6;
   let cursorY = startY;
 
   const drawHeader = () => {
-    cursorY = ensurePageSpace(doc, cursorY, 34);
+    doc.font("Helvetica-Bold").fontSize(headerFontSize);
+    const headerHeight =
+      Math.max(
+        24,
+        ...columns.map((column, index) =>
+          doc.heightOfString(column.label, {
+            width: Math.max((columnWidths[index] ?? 0) - 12, 24),
+            align: column.align ?? "left",
+          }),
+        ),
+      ) + 10;
+
+    cursorY = ensurePageSpace(doc, cursorY, headerHeight + 10);
 
     doc
       .save()
-      .roundedRect(x, cursorY, width, 24, 10)
+      .roundedRect(x, cursorY, width, headerHeight, 10)
       .fill(COLORS.bannerSoft)
       .restore();
 
@@ -255,30 +273,31 @@ const drawTable = (
       doc
         .fillColor(COLORS.white)
         .font("Helvetica-Bold")
-        .fontSize(8)
-        .text(column.label, cursorX + 6, cursorY + 8, {
-          width: columnWidth - 12,
+        .fontSize(headerFontSize)
+        .text(column.label, cursorX + 6, cursorY + 6, {
+          width: Math.max(columnWidth - 12, 24),
           align: column.align ?? "left",
         });
       cursorX += columnWidth;
     });
 
-    cursorY += 30;
+    cursorY += headerHeight + 6;
   };
 
   drawHeader();
 
   template.table.rows.forEach((row, rowIndex) => {
+    doc.font("Helvetica").fontSize(rowFontSize);
     let cursorX = x;
     const rowHeight = Math.max(
       ...columns.map((column, index) =>
         doc.heightOfString(row[column.key] ?? "", {
-          width: (columnWidths[index] ?? 0) - 12,
+          width: Math.max((columnWidths[index] ?? 0) - 12, 24),
           align: column.align ?? "left",
         }),
       ),
       12,
-    ) + 12;
+    ) + (denseTable ? 10 : 12);
 
     cursorY = ensurePageSpace(doc, cursorY, rowHeight + 8);
 
@@ -300,9 +319,9 @@ const drawTable = (
       doc
         .fillColor(COLORS.ink)
         .font("Helvetica")
-        .fontSize(8.6)
+        .fontSize(rowFontSize)
         .text(row[column.key] ?? "", cursorX + 6, cursorY + 6, {
-          width: columnWidth - 12,
+          width: Math.max(columnWidth - 12, 24),
           align: column.align ?? "left",
         });
 
@@ -405,9 +424,12 @@ const drawNotes = (
 };
 
 export const renderDocumentPdf = async (template: GeneratedDocumentTemplate) => {
+  const shouldUseLandscape =
+    template.variant !== "compact" && template.table.columns.length >= 7;
   const doc = new PDFDocument({
     size: "A4",
-    margin: 36,
+    layout: shouldUseLandscape ? "landscape" : "portrait",
+    margin: shouldUseLandscape ? 28 : 36,
   });
   const bufferPromise = bufferFromPdf(doc);
   const usableWidth =

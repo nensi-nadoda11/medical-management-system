@@ -170,7 +170,6 @@ export class PurchasesRepository {
 
   async findDuplicateSupplierInvoice(
     shopId: string,
-    branchId: string,
     supplierId: string,
     supplierInvoiceNumberNormalized: string,
     excludePurchaseId?: string,
@@ -179,7 +178,6 @@ export class PurchasesRepository {
     const database = getDbExecutor(executor);
     const filters = [
       eq(purchases.shopId, shopId),
-      eq(purchases.branchId, branchId),
       eq(purchases.supplierId, supplierId),
       eq(
         purchases.supplierInvoiceNumberNormalized,

@@ -22,6 +22,7 @@ interface BuildExportInput {
   summary: SummaryMetric[];
   columns: TableColumn[];
   rows: Array<Record<string, ExportCellValue>>;
+  pdfLayout?: "auto" | "portrait" | "landscape";
 }
 
 const formatCellValue = (value: ExportCellValue) => {
@@ -188,17 +189,33 @@ export const buildExcelReport = async (input: BuildExportInput) => {
 
 export const buildPdfReport = async (input: BuildExportInput) =>
   new Promise<Buffer>((resolve, reject) => {
+    const portraitMargin = 44;
+    const landscapeMargin = 30;
+    const portraitContentWidth = 595.28 - portraitMargin * 2;
+    const defaultTableWidth = input.columns.reduce(
+      (sum, column) => sum + (column.width ?? 70),
+      0,
+    );
+    const shouldUseLandscape =
+      input.pdfLayout === "landscape" ||
+      (input.pdfLayout !== "portrait" &&
+        (input.columns.length >= 7 ||
+          defaultTableWidth > portraitContentWidth));
     const doc = new PDFDocument({
       size: "A4",
-      margin: 44,
+      layout: shouldUseLandscape ? "landscape" : "portrait",
+      margin: shouldUseLandscape ? landscapeMargin : portraitMargin,
       bufferPages: true,
     });
     const chunks: Buffer[] = [];
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const columnWidths = input.columns.map((column) => column.width ?? 70);
     const tableWidth = columnWidths.reduce((sum, width) => sum + width, 0);
-    const scale = tableWidth > pageWidth ? pageWidth / tableWidth : 1;
+    const scale = tableWidth > 0 ? pageWidth / tableWidth : 1;
     const normalizedWidths = columnWidths.map((width) => width * scale);
+    const denseTable = shouldUseLandscape || input.columns.length >= 7;
+    const headerFontSize = denseTable ? 7.2 : 8;
+    const rowFontSize = denseTable ? 7.6 : 8;
     let pageNumber = 1;
 
     const addTemplate = () =>
@@ -213,10 +230,13 @@ export const buildPdfReport = async (input: BuildExportInput) =>
     let cursorY = 124;
 
     input.summary.forEach((metric, index) => {
-      const cardWidth = (pageWidth - 16) / 2;
+      const summaryColumns = pageWidth > 640 ? 3 : 2;
+      const cardWidth = (pageWidth - 16 * (summaryColumns - 1)) / summaryColumns;
       const cardHeight = 46;
-      const x = doc.page.margins.left + (index % 2) * (cardWidth + 16);
-      const y = cursorY + Math.floor(index / 2) * (cardHeight + 10);
+      const x =
+        doc.page.margins.left + (index % summaryColumns) * (cardWidth + 16);
+      const y =
+        cursorY + Math.floor(index / summaryColumns) * (cardHeight + 10);
 
       doc
         .save()
@@ -237,11 +257,22 @@ export const buildPdfReport = async (input: BuildExportInput) =>
         .text(metric.value, x + 12, y + 24, { width: cardWidth - 24 });
     });
 
-    cursorY += Math.ceil(input.summary.length / 2) * 56 + 14;
+    const summaryColumns = pageWidth > 640 ? 3 : 2;
+    cursorY += Math.ceil(input.summary.length / summaryColumns) * 56 + 14;
 
     const drawTableHeader = () => {
       let cursorX = doc.page.margins.left;
-      const headerHeight = 26;
+      doc.font("Helvetica-Bold").fontSize(headerFontSize);
+      const headerHeight =
+        Math.max(
+          26,
+          ...input.columns.map((column, index) =>
+            doc.heightOfString(column.header, {
+              width: Math.max((normalizedWidths[index] ?? 0) - 12, 24),
+              align: column.align ?? "left",
+            }),
+          ),
+        ) + 8;
 
       doc
         .save()
@@ -254,9 +285,9 @@ export const buildPdfReport = async (input: BuildExportInput) =>
         doc
           .fillColor("#ffffff")
           .font("Helvetica-Bold")
-          .fontSize(8)
-          .text(column.header, cursorX + 6, cursorY + 8, {
-            width: width - 12,
+          .fontSize(headerFontSize)
+          .text(column.header, cursorX + 6, cursorY + 6, {
+            width: Math.max(width - 12, 24),
             align: column.align ?? "left",
           });
         cursorX += width;
@@ -271,7 +302,7 @@ export const buildPdfReport = async (input: BuildExportInput) =>
       input.columns.forEach((column, index) => {
         const width = normalizedWidths[index] ?? 0;
 
-        doc.font("Helvetica").fontSize(8);
+        doc.font("Helvetica").fontSize(rowFontSize);
         const height = doc.heightOfString(formatCellValue(row[column.key]), {
           width: Math.max(width - 12, 24),
           align: column.align ?? "left",
@@ -309,9 +340,9 @@ export const buildPdfReport = async (input: BuildExportInput) =>
         doc
           .fillColor("#0f172a")
           .font("Helvetica")
-          .fontSize(8)
+          .fontSize(rowFontSize)
           .text(formatCellValue(row[column.key]), cursorX + 6, cursorY + 6, {
-            width: width - 12,
+            width: Math.max(width - 12, 24),
             align: column.align ?? "left",
           });
 

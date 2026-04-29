@@ -69,6 +69,20 @@ export const errorHandler = (
     "code" in error &&
     error.code === "23505"
   ) {
+    if (
+      "constraint" in error &&
+      error.constraint === "purchases_shop_supplier_invoice_unique_idx"
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: "DUPLICATE_SUPPLIER_INVOICE",
+          message:
+            "This supplier invoice number is already recorded for the supplier.",
+        },
+      });
+    }
+
     return res.status(409).json({
       success: false,
       error: {

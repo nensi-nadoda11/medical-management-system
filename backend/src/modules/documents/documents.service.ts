@@ -234,20 +234,20 @@ export class DocumentsService {
         columns:
           variant === "compact"
             ? [
-                { key: "item", label: "Item" },
-                { key: "quantity", label: "Qty", align: "center" },
-                { key: "rate", label: "Rate", align: "right" },
-                { key: "amount", label: "Amount", align: "right" },
+                { key: "item", label: "Item", widthRatio: 2.8 },
+                { key: "quantity", label: "Qty", align: "center", widthRatio: 0.9 },
+                { key: "rate", label: "Rate", align: "right", widthRatio: 1.1 },
+                { key: "amount", label: "Amount", align: "right", widthRatio: 1.2 },
               ]
             : [
-                { key: "item", label: "Item" },
-                { key: "batch", label: "Batch" },
-                { key: "expiry", label: "Expiry", align: "center" },
-                { key: "quantity", label: "Qty", align: "center" },
-                { key: "rate", label: "Rate", align: "right" },
-                { key: "tax", label: "Tax", align: "right" },
-                { key: "discount", label: "Discount", align: "right" },
-                { key: "amount", label: "Amount", align: "right" },
+                { key: "item", label: "Item", widthRatio: 2.8 },
+                { key: "batch", label: "Batch", widthRatio: 1.2 },
+                { key: "expiry", label: "Expiry", align: "center", widthRatio: 1.1 },
+                { key: "quantity", label: "Qty", align: "center", widthRatio: 0.8 },
+                { key: "rate", label: "Rate", align: "right", widthRatio: 1.1 },
+                { key: "tax", label: "Tax", align: "right", widthRatio: 0.8 },
+                { key: "discount", label: "Discount", align: "right", widthRatio: 1.0 },
+                { key: "amount", label: "Amount", align: "right", widthRatio: 1.2 },
               ],
         rows: record.items.map((entry) => ({
           id: entry.item.id,
@@ -380,14 +380,14 @@ export class DocumentsService {
       ],
       table: {
         columns: [
-          { key: "item", label: "Item" },
-          { key: "batch", label: "Batch" },
-          { key: "expiry", label: "Expiry", align: "center" },
-          { key: "quantity", label: "Qty", align: "center" },
-          { key: "free", label: "Free", align: "center" },
-          { key: "rate", label: "Purchase", align: "right" },
-          { key: "tax", label: "Tax", align: "right" },
-          { key: "amount", label: "Amount", align: "right" },
+          { key: "item", label: "Item", widthRatio: 2.7 },
+          { key: "batch", label: "Batch", widthRatio: 1.2 },
+          { key: "expiry", label: "Expiry", align: "center", widthRatio: 1.1 },
+          { key: "quantity", label: "Qty", align: "center", widthRatio: 0.8 },
+          { key: "free", label: "Free", align: "center", widthRatio: 0.8 },
+          { key: "rate", label: "Purchase", align: "right", widthRatio: 1.1 },
+          { key: "tax", label: "Tax", align: "right", widthRatio: 0.8 },
+          { key: "amount", label: "Amount", align: "right", widthRatio: 1.2 },
         ],
         rows: record.items.map((entry) => ({
           id: entry.item.id,
@@ -502,13 +502,13 @@ export class DocumentsService {
       ],
       table: {
         columns: [
-          { key: "item", label: "Item" },
-          { key: "batch", label: "Batch" },
-          { key: "sold", label: "Sold", align: "center" },
-          { key: "returned", label: "Returned", align: "center" },
-          { key: "rate", label: "Rate", align: "right" },
-          { key: "reason", label: "Reason" },
-          { key: "amount", label: "Amount", align: "right" },
+          { key: "item", label: "Item", widthRatio: 2.4 },
+          { key: "batch", label: "Batch", widthRatio: 1.4 },
+          { key: "sold", label: "Sold", align: "center", widthRatio: 0.8 },
+          { key: "returned", label: "Returned", align: "center", widthRatio: 0.9 },
+          { key: "rate", label: "Rate", align: "right", widthRatio: 1.0 },
+          { key: "reason", label: "Reason", widthRatio: 1.8 },
+          { key: "amount", label: "Amount", align: "right", widthRatio: 1.1 },
         ],
         rows: record.items.map((entry) => ({
           id: entry.item.id,
@@ -624,13 +624,13 @@ export class DocumentsService {
       ],
       table: {
         columns: [
-          { key: "item", label: "Item" },
-          { key: "batch", label: "Batch" },
-          { key: "purchased", label: "Purchased", align: "center" },
-          { key: "returned", label: "Returned", align: "center" },
-          { key: "rate", label: "Rate", align: "right" },
-          { key: "reason", label: "Reason" },
-          { key: "amount", label: "Amount", align: "right" },
+          { key: "item", label: "Item", widthRatio: 2.4 },
+          { key: "batch", label: "Batch", widthRatio: 1.4 },
+          { key: "purchased", label: "Purchased", align: "center", widthRatio: 1.0 },
+          { key: "returned", label: "Returned", align: "center", widthRatio: 0.9 },
+          { key: "rate", label: "Rate", align: "right", widthRatio: 1.0 },
+          { key: "reason", label: "Reason", widthRatio: 1.8 },
+          { key: "amount", label: "Amount", align: "right", widthRatio: 1.1 },
         ],
         rows: record.items.map((entry) => ({
           id: entry.item.id,
@@ -757,10 +757,10 @@ export class DocumentsService {
       ],
       table: {
         columns: [
-          { key: "reference", label: "Bill Reference" },
-          { key: "date", label: "Bill Date", align: "center" },
-          { key: "status", label: "Status", align: "center" },
-          { key: "amount", label: "Allocated", align: "right" },
+          { key: "reference", label: "Bill Reference", widthRatio: 1.9 },
+          { key: "date", label: "Bill Date", align: "center", widthRatio: 1.1 },
+          { key: "status", label: "Status", align: "center", widthRatio: 1.0 },
+          { key: "amount", label: "Allocated", align: "right", widthRatio: 1.1 },
         ],
         rows: allocationRows,
       },
@@ -881,10 +881,10 @@ export class DocumentsService {
       ],
       table: {
         columns: [
-          { key: "reference", label: "Purchase Reference" },
-          { key: "date", label: "Purchase Date", align: "center" },
-          { key: "status", label: "Status", align: "center" },
-          { key: "amount", label: "Allocated", align: "right" },
+          { key: "reference", label: "Purchase Reference", widthRatio: 1.9 },
+          { key: "date", label: "Purchase Date", align: "center", widthRatio: 1.1 },
+          { key: "status", label: "Status", align: "center", widthRatio: 1.0 },
+          { key: "amount", label: "Allocated", align: "right", widthRatio: 1.1 },
         ],
         rows: allocationRows,
       },

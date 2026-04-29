@@ -29,8 +29,42 @@ const buildAppError = (statusCode: number, code: string, message: string) =>
     message,
   });
 
+const PURCHASE_SUPPLIER_INVOICE_UNIQUE_CONSTRAINT =
+  "purchases_shop_supplier_invoice_unique_idx";
+
 const normalizeSearchValue = (value: string) =>
   collapseWhitespace(value).toLowerCase();
+
+const isDatabaseConstraintError = (
+  error: unknown,
+  code: string,
+  constraintName?: string,
+) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === code &&
+  (!constraintName ||
+    ("constraint" in error &&
+      error.constraint === constraintName));
+
+const rethrowSupplierInvoiceConflict = (error: unknown): never => {
+  if (
+    isDatabaseConstraintError(
+      error,
+      "23505",
+      PURCHASE_SUPPLIER_INVOICE_UNIQUE_CONSTRAINT,
+    )
+  ) {
+    throw buildAppError(
+      409,
+      "DUPLICATE_SUPPLIER_INVOICE",
+      "This supplier invoice number is already recorded for the supplier.",
+    );
+  }
+
+  throw error;
+};
 
 const toEndOfDay = (value: Date) => {
   const date = new Date(value);
@@ -462,7 +496,6 @@ export class PurchasesService {
       const duplicateInvoice =
         await this.purchasesRepository.findDuplicateSupplierInvoice(
           shopId,
-          branchId,
           input.supplierId,
           normalizedInvoiceNumber,
         );
@@ -498,64 +531,80 @@ export class PurchasesService {
       }
     }
 
-    const createdPurchase = await db.transaction(async (tx) => {
-      const purchaseNumber = buildPurchaseNumber();
-      const purchase = await this.purchasesRepository.createPurchase(
-        {
-          shopId,
-          branchId,
-          supplierId: input.supplierId,
-          purchaseNumber,
-          purchaseNumberNormalized: normalizeSearchValue(purchaseNumber),
-          supplierInvoiceNumber: input.supplierInvoiceNumber,
-          supplierInvoiceNumberNormalized: normalizedInvoiceNumber,
-          supplierInvoiceDate: calculated.supplierInvoiceDate,
-          purchaseDate: calculated.normalizedPurchaseDate,
-          status: "draft",
-          paymentStatus: calculated.totals.paymentStatus,
-          subtotal: moneyMinorUnitsToString(calculated.totals.subtotalMinorUnits),
-          discountAmount: moneyMinorUnitsToString(
-            calculated.totals.discountAmountMinorUnits,
-          ),
-          taxAmount: moneyMinorUnitsToString(calculated.totals.taxAmountMinorUnits),
-          roundOffAmount: moneyMinorUnitsToString(
-            calculated.totals.roundOffMinorUnits,
-          ),
-          grandTotal: moneyMinorUnitsToString(
-            calculated.totals.grandTotalMinorUnits,
-          ),
-          initialPaidAmount: moneyMinorUnitsToString(
-            calculated.totals.paidAmountMinorUnits,
-          ),
-          paidAmount: moneyMinorUnitsToString(
-            calculated.totals.paidAmountMinorUnits,
-          ),
-          dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
-          notes: input.notes,
-          createdByUserId: userId,
-          updatedByUserId: userId,
-        },
-        calculated.items.map((item) => ({
-          medicineId: item.medicineId,
-          batchNumber: item.batchNumber,
-          batchNumberNormalized: item.batchNumberNormalized,
-          expiryDate: item.expiryDate,
-          quantity: item.quantity,
-          freeQuantity: item.freeQuantity,
-          purchaseRate: moneyMinorUnitsToString(item.purchaseRateMinorUnits),
-          saleRate: moneyMinorUnitsToString(item.saleRateMinorUnits),
-          mrp: moneyMinorUnitsToString(item.mrpMinorUnits),
-          gstPercent: item.gstPercent,
-          discountPercent: item.discountPercent.toFixed(2),
-          lineSubtotal: moneyMinorUnitsToString(item.lineSubtotalMinorUnits),
-          lineTaxAmount: moneyMinorUnitsToString(item.lineTaxMinorUnits),
-          lineTotal: moneyMinorUnitsToString(item.lineTotalMinorUnits),
-        })),
-        tx,
-      );
+    let createdPurchase:
+      | Awaited<ReturnType<PurchasesRepository["createPurchase"]>>
+      | null = null;
 
-      return purchase;
-    });
+    try {
+      createdPurchase = await db.transaction(async (tx) => {
+        const purchaseNumber = buildPurchaseNumber();
+        const purchase = await this.purchasesRepository.createPurchase(
+          {
+            shopId,
+            branchId,
+            supplierId: input.supplierId,
+            purchaseNumber,
+            purchaseNumberNormalized: normalizeSearchValue(purchaseNumber),
+            supplierInvoiceNumber: input.supplierInvoiceNumber,
+            supplierInvoiceNumberNormalized: normalizedInvoiceNumber,
+            supplierInvoiceDate: calculated.supplierInvoiceDate,
+            purchaseDate: calculated.normalizedPurchaseDate,
+            status: "draft",
+            paymentStatus: calculated.totals.paymentStatus,
+            subtotal: moneyMinorUnitsToString(calculated.totals.subtotalMinorUnits),
+            discountAmount: moneyMinorUnitsToString(
+              calculated.totals.discountAmountMinorUnits,
+            ),
+            taxAmount: moneyMinorUnitsToString(calculated.totals.taxAmountMinorUnits),
+            roundOffAmount: moneyMinorUnitsToString(
+              calculated.totals.roundOffMinorUnits,
+            ),
+            grandTotal: moneyMinorUnitsToString(
+              calculated.totals.grandTotalMinorUnits,
+            ),
+            initialPaidAmount: moneyMinorUnitsToString(
+              calculated.totals.paidAmountMinorUnits,
+            ),
+            paidAmount: moneyMinorUnitsToString(
+              calculated.totals.paidAmountMinorUnits,
+            ),
+            dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
+            notes: input.notes,
+            createdByUserId: userId,
+            updatedByUserId: userId,
+          },
+          calculated.items.map((item) => ({
+            medicineId: item.medicineId,
+            batchNumber: item.batchNumber,
+            batchNumberNormalized: item.batchNumberNormalized,
+            expiryDate: item.expiryDate,
+            quantity: item.quantity,
+            freeQuantity: item.freeQuantity,
+            purchaseRate: moneyMinorUnitsToString(item.purchaseRateMinorUnits),
+            saleRate: moneyMinorUnitsToString(item.saleRateMinorUnits),
+            mrp: moneyMinorUnitsToString(item.mrpMinorUnits),
+            gstPercent: item.gstPercent,
+            discountPercent: item.discountPercent.toFixed(2),
+            lineSubtotal: moneyMinorUnitsToString(item.lineSubtotalMinorUnits),
+            lineTaxAmount: moneyMinorUnitsToString(item.lineTaxMinorUnits),
+            lineTotal: moneyMinorUnitsToString(item.lineTotalMinorUnits),
+          })),
+          tx,
+        );
+
+        return purchase;
+      });
+    } catch (error) {
+      rethrowSupplierInvoiceConflict(error);
+    }
+
+    if (!createdPurchase) {
+      throw buildAppError(
+        500,
+        "PURCHASE_CREATION_FAILED",
+        "Purchase could not be created. Please try again.",
+      );
+    }
 
     realtimeService.publish({
       type: "purchase_changed",
@@ -641,7 +690,6 @@ export class PurchasesService {
       const duplicateInvoice =
         await this.purchasesRepository.findDuplicateSupplierInvoice(
           shopId,
-          branchId,
           input.supplierId,
           normalizedInvoiceNumber,
           purchaseId,
@@ -678,63 +726,67 @@ export class PurchasesService {
       }
     }
 
-    await db.transaction(async (tx) => {
-      await this.purchasesRepository.updatePurchase(
-        purchaseId,
-        {
-          supplierId: input.supplierId,
-          supplierInvoiceNumber: input.supplierInvoiceNumber,
-          supplierInvoiceNumberNormalized: normalizedInvoiceNumber,
-          supplierInvoiceDate: calculated.supplierInvoiceDate,
-          purchaseDate: calculated.normalizedPurchaseDate,
-          paymentStatus: calculated.totals.paymentStatus,
-          subtotal: moneyMinorUnitsToString(calculated.totals.subtotalMinorUnits),
-          discountAmount: moneyMinorUnitsToString(
-            calculated.totals.discountAmountMinorUnits,
-          ),
-          taxAmount: moneyMinorUnitsToString(calculated.totals.taxAmountMinorUnits),
-          roundOffAmount: moneyMinorUnitsToString(
-            calculated.totals.roundOffMinorUnits,
-          ),
-          grandTotal: moneyMinorUnitsToString(
-            calculated.totals.grandTotalMinorUnits,
-          ),
-          initialPaidAmount: moneyMinorUnitsToString(
-            calculated.totals.paidAmountMinorUnits,
-          ),
-          paidAmount: moneyMinorUnitsToString(
-            calculated.totals.paidAmountMinorUnits,
-          ),
-          dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
-          notes: input.notes,
-          updatedByUserId: userId,
-        },
-        tx,
-      );
+    try {
+      await db.transaction(async (tx) => {
+        await this.purchasesRepository.updatePurchase(
+          purchaseId,
+          {
+            supplierId: input.supplierId,
+            supplierInvoiceNumber: input.supplierInvoiceNumber,
+            supplierInvoiceNumberNormalized: normalizedInvoiceNumber,
+            supplierInvoiceDate: calculated.supplierInvoiceDate,
+            purchaseDate: calculated.normalizedPurchaseDate,
+            paymentStatus: calculated.totals.paymentStatus,
+            subtotal: moneyMinorUnitsToString(calculated.totals.subtotalMinorUnits),
+            discountAmount: moneyMinorUnitsToString(
+              calculated.totals.discountAmountMinorUnits,
+            ),
+            taxAmount: moneyMinorUnitsToString(calculated.totals.taxAmountMinorUnits),
+            roundOffAmount: moneyMinorUnitsToString(
+              calculated.totals.roundOffMinorUnits,
+            ),
+            grandTotal: moneyMinorUnitsToString(
+              calculated.totals.grandTotalMinorUnits,
+            ),
+            initialPaidAmount: moneyMinorUnitsToString(
+              calculated.totals.paidAmountMinorUnits,
+            ),
+            paidAmount: moneyMinorUnitsToString(
+              calculated.totals.paidAmountMinorUnits,
+            ),
+            dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
+            notes: input.notes,
+            updatedByUserId: userId,
+          },
+          tx,
+        );
 
-      await this.purchasesRepository.replacePurchaseItems(
-        purchaseId,
-        shopId,
-        branchId,
-        calculated.items.map((item) => ({
-          medicineId: item.medicineId,
-          batchNumber: item.batchNumber,
-          batchNumberNormalized: item.batchNumberNormalized,
-          expiryDate: item.expiryDate,
-          quantity: item.quantity,
-          freeQuantity: item.freeQuantity,
-          purchaseRate: moneyMinorUnitsToString(item.purchaseRateMinorUnits),
-          saleRate: moneyMinorUnitsToString(item.saleRateMinorUnits),
-          mrp: moneyMinorUnitsToString(item.mrpMinorUnits),
-          gstPercent: item.gstPercent,
-          discountPercent: item.discountPercent.toFixed(2),
-          lineSubtotal: moneyMinorUnitsToString(item.lineSubtotalMinorUnits),
-          lineTaxAmount: moneyMinorUnitsToString(item.lineTaxMinorUnits),
-          lineTotal: moneyMinorUnitsToString(item.lineTotalMinorUnits),
-        })),
-        tx,
-      );
-    });
+        await this.purchasesRepository.replacePurchaseItems(
+          purchaseId,
+          shopId,
+          branchId,
+          calculated.items.map((item) => ({
+            medicineId: item.medicineId,
+            batchNumber: item.batchNumber,
+            batchNumberNormalized: item.batchNumberNormalized,
+            expiryDate: item.expiryDate,
+            quantity: item.quantity,
+            freeQuantity: item.freeQuantity,
+            purchaseRate: moneyMinorUnitsToString(item.purchaseRateMinorUnits),
+            saleRate: moneyMinorUnitsToString(item.saleRateMinorUnits),
+            mrp: moneyMinorUnitsToString(item.mrpMinorUnits),
+            gstPercent: item.gstPercent,
+            discountPercent: item.discountPercent.toFixed(2),
+            lineSubtotal: moneyMinorUnitsToString(item.lineSubtotalMinorUnits),
+            lineTaxAmount: moneyMinorUnitsToString(item.lineTaxMinorUnits),
+            lineTotal: moneyMinorUnitsToString(item.lineTotalMinorUnits),
+          })),
+          tx,
+        );
+      });
+    } catch (error) {
+      rethrowSupplierInvoiceConflict(error);
+    }
 
     realtimeService.publish({
       type: "purchase_changed",
