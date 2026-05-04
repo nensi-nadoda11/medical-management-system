@@ -1,7 +1,7 @@
 import { useSessionQuery } from "../../auth/hooks/use-session";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 interface BranchScopeControlProps {
   branchId: string;
@@ -24,7 +24,7 @@ export const BranchScopeControl = ({
 
   return (
     <>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
         Branch
         <select
           className={inputClassName}
@@ -41,7 +41,7 @@ export const BranchScopeControl = ({
         </select>
       </label>
 
-      <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+      <label className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
         <input
           checked={combineBranches}
           onChange={(event) => onCombineBranchesChange(event.target.checked)}

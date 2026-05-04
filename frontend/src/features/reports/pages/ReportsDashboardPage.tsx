@@ -66,7 +66,7 @@ export const ReportsDashboardPage = () => {
         description="Switch between the active branch and combined branch summary when multiple branches are available."
         title="Report scope"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)] xl:max-w-3xl">
           <BranchScopeControl
             branchId={branchId}
             combineBranches={combineBranches}
