@@ -281,7 +281,9 @@ export const useBillingWorkspace = () => {
     }
 
     void (async () => {
-      const medicineIds = [...new Set(heldBillQuery.data!.items.map((item: any) => item.medicine.id))] as string[];
+      const medicineIds = [
+        ...new Set(heldBillQuery.data.items.map((item) => item.medicine.id)),
+      ];
       const optionEntries = await Promise.all(
         medicineIds.map(async (medicineId: string) => [
           medicineId,
@@ -319,7 +321,9 @@ export const useBillingWorkspace = () => {
         : null;
 
       Promise.resolve().then(() => {
-        setDraft(loadHeldBillIntoDraft(heldBillQuery.data!, optionMap, selectedCustomer));
+        setDraft(
+          loadHeldBillIntoDraft(heldBillQuery.data, optionMap, selectedCustomer),
+        );
         setLoadedHeldBillId(heldBillId);
       });
     })().catch((error: Error) => {

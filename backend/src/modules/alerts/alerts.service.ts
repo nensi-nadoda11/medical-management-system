@@ -188,8 +188,8 @@ export class AlertsService {
             medicineName: detail.medicine.medicineName,
             availableQuantity: currentAvailableQuantity,
             reorderLevel,
-            actionPath: "/app/reports/low-stock",
-            actionLabel: "Open low stock report",
+            actionPath: `/app/inventory/${medicineId}`,
+            actionLabel: "Open stock detail",
           },
         },
         executor,
@@ -436,8 +436,8 @@ export class AlertsService {
             medicineName: row.medicineName,
             availableQuantity: Number(row.availableQuantity),
             reorderLevel: Number(row.reorderLevel),
-            actionPath: "/app/reports/low-stock",
-            actionLabel: "Open low stock report",
+            actionPath: `/app/inventory/${row.medicineId}`,
+            actionLabel: "Open stock detail",
           },
         });
       }
@@ -487,8 +487,8 @@ export class AlertsService {
             supplierMobileNumber: row.supplierMobileNumber,
             supplierAlternateMobileNumber: row.supplierAlternateMobileNumber,
             shopName: row.shopName,
-            actionPath: "/app/reports/low-stock",
-            actionLabel: "Open low stock report",
+            actionPath: `/app/inventory/${row.medicineId}`,
+            actionLabel: "Open stock detail",
           },
         });
       }
@@ -1108,8 +1108,8 @@ export class AlertsService {
               supplierAlternateMobileNumber:
                 supplier.supplierAlternateMobileNumber,
               shopName: supplier.shopName,
-              actionPath: "/app/reports/low-stock",
-              actionLabel: "Open low stock report",
+              actionPath: `/app/inventory/${input.medicineId}`,
+              actionLabel: "Open stock detail",
             },
           },
           executor,

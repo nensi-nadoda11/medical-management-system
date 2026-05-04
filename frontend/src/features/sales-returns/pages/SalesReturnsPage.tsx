@@ -79,7 +79,7 @@ export const SalesReturnsPage = () => {
             <BillingModuleNav canCreateBills={canCreateReturns} />
             {canCreateReturns ? (
               <Link
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"
                 to="/app/billing/returns/new"
               >
                 Create return

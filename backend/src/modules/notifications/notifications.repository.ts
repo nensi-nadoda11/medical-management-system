@@ -273,6 +273,7 @@ export class NotificationsRepository {
         and(
           eq(notifications.shopId, shopId),
           inArray(notifications.type, allowedTypes),
+          eq(notifications.isActive, true),
           isNull(notifications.readAt),
         ),
       );
@@ -326,6 +327,7 @@ export class NotificationsRepository {
         and(
           eq(notifications.shopId, shopId),
           inArray(notifications.type, allowedTypes),
+          eq(notifications.isActive, true),
           freshnessCondition,
         ),
       )

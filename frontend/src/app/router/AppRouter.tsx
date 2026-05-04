@@ -1,7 +1,6 @@
 import {
   Suspense,
   lazy,
-  type ComponentType,
   type ReactNode,
 } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -16,9 +15,7 @@ import {
 import { LoadingState } from "../../components/ui/LoadingState";
 import { useSessionQuery } from "../../features/auth/hooks/use-session";
 
-const lazyPage = <T extends ComponentType<any>>(
-  loader: () => Promise<{ default: T }>,
-) => lazy(loader);
+const lazyPage: typeof lazy = lazy;
 
 const renderLazyRoute = (element: ReactNode) => (
   <Suspense fallback={<LoadingState title="Loading page" />}>

@@ -9,7 +9,7 @@ import { toDateInputValue } from "../../../lib/utils";
 import type { CustomerListItem, SaveCustomerPayload } from "../../../types/customer";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const phoneIsValid = (value: string) => value.replace(/\D/g, "").length >= 10;
 
@@ -172,7 +172,7 @@ export const CustomerFormModal = ({
 
   return (
     <Modal
-      bodyClassName="space-y-6"
+      bodyClassName="space-y-6 overflow-x-hidden"
       description="Keep customer master data clean for billing, due follow-up, and future ledger-ready workflows."
       footer={
         <>
@@ -195,23 +195,22 @@ export const CustomerFormModal = ({
       }
       onClose={onClose}
       open={open}
-      panelClassName="max-w-3xl"
+      panelClassName="max-w-5xl"
       title={customer ? "Edit customer" : "Add customer"}
     >
       <form
-        className="grid gap-6"
+        className="grid min-w-0 gap-6"
         id="customer-form"
         onSubmit={handleSubmit(async (values) => {
           await onSubmit(toPayload(values));
         })}
       >
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <FormSection
-            description="Core customer identity used across billing, search, and repeat-buyer visibility."
             title="Customer profile"
           >
-            <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+            <div className="grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Full name
                 <input className={inputClassName} {...register("fullName")} />
                 {errors.fullName ? (
@@ -219,7 +218,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Mobile number
                 <input className={inputClassName} {...register("mobileNumber")} />
                 {errors.mobileNumber ? (
@@ -229,7 +228,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Alternate mobile
                 <input className={inputClassName} {...register("alternateMobileNumber")} />
                 {errors.alternateMobileNumber ? (
@@ -239,7 +238,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Email
                 <input className={inputClassName} {...register("email")} />
                 {errors.email ? (
@@ -247,7 +246,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Gender
                 <select className={inputClassName} {...register("gender")}>
                   <option value="">Select gender</option>
@@ -257,7 +256,7 @@ export const CustomerFormModal = ({
                 </select>
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Age
                 <input className={inputClassName} {...register("age")} type="number" />
                 {errors.age ? (
@@ -265,7 +264,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Date of birth
                 <input className={inputClassName} {...register("dateOfBirth")} type="date" />
               </label>
@@ -273,31 +272,30 @@ export const CustomerFormModal = ({
           </FormSection>
 
           <FormSection
-            description="Address and status fields keep customer records ready for follow-up and operational review."
             title="Address and status"
           >
-            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+            <div className="grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Address line 1
                 <input className={inputClassName} {...register("addressLine1")} />
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Address line 2
                 <input className={inputClassName} {...register("addressLine2")} />
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 City
                 <input className={inputClassName} {...register("city")} />
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 State
                 <input className={inputClassName} {...register("state")} />
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Pincode
                 <input className={inputClassName} {...register("pincode")} />
                 {errors.pincode ? (
@@ -305,7 +303,7 @@ export const CustomerFormModal = ({
                 ) : null}
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 Status
                 <select className={inputClassName} {...register("status")}>
                   <option value="active">Active</option>
@@ -313,7 +311,7 @@ export const CustomerFormModal = ({
                 </select>
               </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Notes
                 <textarea
                   className={`${inputClassName} min-h-32 resize-none`}

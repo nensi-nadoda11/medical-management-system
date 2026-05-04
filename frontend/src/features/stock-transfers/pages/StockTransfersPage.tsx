@@ -22,7 +22,7 @@ import {
 } from "../api/stock-transfers";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 interface DraftTransferItem {
   sourceBatchId: string;
@@ -194,10 +194,10 @@ export const StockTransfersPage = () => {
         description="Select source and destination branches, then add batches that should move."
         title="Create transfer"
       >
-        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
+          <div className="min-w-0 space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 From branch
                 <select
                   className={inputClassName}
@@ -215,7 +215,7 @@ export const StockTransfersPage = () => {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
                 To branch
                 <select
                   className={inputClassName}
@@ -234,7 +234,7 @@ export const StockTransfersPage = () => {
               </label>
             </div>
 
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
               Search batches
               <input
                 className={inputClassName}
@@ -275,8 +275,8 @@ export const StockTransfersPage = () => {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
+          <div className="min-w-0 space-y-4">
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
               Notes
               <textarea
                 className={`${inputClassName} min-h-24`}

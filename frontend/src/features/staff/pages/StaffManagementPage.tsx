@@ -225,58 +225,60 @@ export const StaffManagementPage = () => {
 
               {visibleUsers.length ? (
                 <div className="overflow-x-auto">
-              <table className="min-w-[760px] w-full border-separate border-spacing-y-3">
-                <thead>
-<tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                    <th className="px-4">User</th>
-                    <th className="px-4">Role</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Last login</th>
-                    <th className="px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleUsers.map((user) => (
-                    <tr className="rounded-3xl bg-slate-50" key={user.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">{user.fullName}</p>
-                          <p className="mt-1 text-sm text-slate-700">{user.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={user.role} tone={user.role} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge label={user.isActive ? "active" : "inactive"} />
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {formatDateTime(user.lastLoginAt)}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={user.role === "admin"}
-                            onClick={() => setEditingUser(user)}
-                            type="button"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={user.role === "admin"}
-                            onClick={() => setPendingAction({ kind: "toggle-user", user })}
-                            type="button"
-                          >
-                            {user.isActive ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <table className="min-w-190 w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                        <th className="px-4">User</th>
+                        <th className="px-4">Role</th>
+                        <th className="px-4">Status</th>
+                        <th className="px-4">Last login</th>
+                        <th className="px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleUsers.map((user) => (
+                        <tr className="rounded-3xl bg-slate-50" key={user.id}>
+                          <td className="rounded-l-3xl px-4 py-4">
+                            <div>
+                              <p className="font-semibold text-slate-950">{user.fullName}</p>
+                              <p className="mt-1 text-sm text-slate-700">{user.email}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={user.role} tone={user.role} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={user.isActive ? "active" : "inactive"} />
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {formatDateTime(user.lastLoginAt)}
+                          </td>
+                          <td className="rounded-r-3xl px-4 py-4">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                aria-label={`Edit ${user.fullName}`}
+                                className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={user.role === "admin"}
+                                onClick={() => setEditingUser(user)}
+                                title={`Edit ${user.fullName}`}
+                                type="button"
+                              >
+                                <Pencil aria-hidden="true" className="h-4 w-4" />
+                              </button>
+                              <button
+                                className="rounded-2xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={user.role === "admin"}
+                                onClick={() => setPendingAction({ kind: "toggle-user", user })}
+                                type="button"
+                              >
+                                {user.isActive ? "Deactivate" : "Activate"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <EmptyState
@@ -293,7 +295,7 @@ export const StaffManagementPage = () => {
           )
         ) : invitations.length ? (
           <div className="overflow-x-auto">
-            <table className="min-w-[860px] w-full border-separate border-spacing-y-3">
+            <table className="min-w-215 w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   <th className="px-4">Invitee</th>
