@@ -202,13 +202,23 @@ export const ShopSetupPage = () => {
     <div className="space-y-6">
       <PageHeader
         actions={<StatusBadge label={shopProfile.status} tone={shopProfile.status} />}
-        description="Keep your store identity, billing details, and contact information up to date in one place."
         eyebrow="Admin settings"
         title="Shop Setup"
       />
 
       <div>
         <SectionCard
+          action={
+            !isEditing ? (
+              <button
+                className="ui-btn ui-btn--secondary"
+                onClick={() => setIsEditing(true)}
+                type="button"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            ) : null
+          }
           description="These details are used across admin workflows, invoices, and communication screens."
           title="Shop profile"
         >
@@ -266,15 +276,7 @@ export const ShopSetupPage = () => {
               </p>
               
               <div className="flex items-center gap-2">
-                {!isEditing ? (
-                  <button
-                    className="ui-btn ui-btn--secondary"
-                    onClick={() => setIsEditing(true)}
-                    type="button"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                ) : (
+                {isEditing ? (
                   <>
                     <button
                       className="ui-btn ui-btn--ghost"
@@ -292,7 +294,7 @@ export const ShopSetupPage = () => {
                       {updateMutation.isPending ? "Saving..." : "Save changes"}
                     </button>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
           </form>

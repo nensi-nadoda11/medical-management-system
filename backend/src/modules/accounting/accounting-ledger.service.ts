@@ -2,20 +2,9 @@ import {
   moneyMinorUnitsToString,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { buildSettlementState } from "../../shared/utils/financials";
 import { AccountingRepository } from "./accounting.repository";
 import type { DbExecutor } from "../../shared/db/executor";
-
-const mapPaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: number) => {
-  if (grandTotalMinorUnits <= 0 || paidMinorUnits >= grandTotalMinorUnits) {
-    return "paid" as const;
-  }
-
-  if (paidMinorUnits <= 0) {
-    return "unpaid" as const;
-  }
-
-  return "partial" as const;
-};
 
 const toDateValue = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
@@ -49,6 +38,188 @@ type LedgerSeedEntry = {
 export class AccountingLedgerService {
   constructor(private readonly accountingRepository = new AccountingRepository()) {}
 
+  async applyAvailableCustomerAdvanceToSale(
+    shopId: string,
+    saleId: string,
+    executor: DbExecutor,
+  ) {
+    const computation = await this.accountingRepository.getSalePaymentComputation(
+      shopId,
+      saleId,
+      executor,
+    );
+
+    if (!computation || computation.sale.status !== "completed" || !computation.sale.customerId) {
+      return 0;
+    }
+
+    await this.accountingRepository.lockCustomerPayments(
+      computation.sale.customerId,
+      executor,
+    );
+
+    const netReceivableMinorUnits = Math.max(
+      toMoneyMinorUnits(computation.sale.grandTotal) -
+        toMoneyMinorUnits(computation.returnedAmount),
+      0,
+    );
+    const settlementState = buildSettlementState(
+      netReceivableMinorUnits,
+      toMoneyMinorUnits(computation.sale.initialPaidAmount) +
+        toMoneyMinorUnits(computation.allocatedAmount),
+    );
+    let remainingDueMinorUnits = settlementState.dueMinorUnits;
+
+    if (remainingDueMinorUnits <= 0) {
+      return 0;
+    }
+
+    const advanceSources =
+      await this.accountingRepository.listCustomerAdvancePaymentSources(
+        shopId,
+        computation.sale.customerId,
+        executor,
+      );
+
+    const allocations: Array<{
+      customerPaymentId: string;
+      amountMinorUnits: number;
+    }> = [];
+
+    for (const source of advanceSources) {
+      if (remainingDueMinorUnits <= 0) {
+        break;
+      }
+
+      const availableMinorUnits = toMoneyMinorUnits(source.remainingAmount);
+      const appliedMinorUnits = Math.min(
+        availableMinorUnits,
+        remainingDueMinorUnits,
+      );
+
+      if (appliedMinorUnits <= 0) {
+        continue;
+      }
+
+      allocations.push({
+        customerPaymentId: source.payment.id,
+        amountMinorUnits: appliedMinorUnits,
+      });
+      remainingDueMinorUnits -= appliedMinorUnits;
+    }
+
+    if (!allocations.length) {
+      return 0;
+    }
+
+    await this.accountingRepository.createCustomerPaymentAllocations(
+      allocations.map((allocation) => ({
+        shopId,
+        customerPaymentId: allocation.customerPaymentId,
+        customerId: computation.sale.customerId!,
+        saleId,
+        amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
+      })),
+      executor,
+    );
+
+    return allocations.reduce(
+      (sum, allocation) => sum + allocation.amountMinorUnits,
+      0,
+    );
+  }
+
+  async applyAvailableSupplierAdvanceToPurchase(
+    shopId: string,
+    purchaseId: string,
+    executor: DbExecutor,
+  ) {
+    const computation = await this.accountingRepository.getPurchasePaymentComputation(
+      shopId,
+      purchaseId,
+      executor,
+    );
+
+    if (!computation || computation.purchase.status !== "finalized") {
+      return 0;
+    }
+
+    await this.accountingRepository.lockSupplierPayments(
+      computation.purchase.supplierId,
+      executor,
+    );
+
+    const netPayableMinorUnits = Math.max(
+      toMoneyMinorUnits(computation.purchase.grandTotal) -
+        toMoneyMinorUnits(computation.returnedAmount),
+      0,
+    );
+    const settlementState = buildSettlementState(
+      netPayableMinorUnits,
+      toMoneyMinorUnits(computation.purchase.initialPaidAmount) +
+        toMoneyMinorUnits(computation.allocatedAmount),
+    );
+    let remainingDueMinorUnits = settlementState.dueMinorUnits;
+
+    if (remainingDueMinorUnits <= 0) {
+      return 0;
+    }
+
+    const advanceSources =
+      await this.accountingRepository.listSupplierAdvancePaymentSources(
+        shopId,
+        computation.purchase.supplierId,
+        executor,
+      );
+
+    const allocations: Array<{
+      supplierPaymentId: string;
+      amountMinorUnits: number;
+    }> = [];
+
+    for (const source of advanceSources) {
+      if (remainingDueMinorUnits <= 0) {
+        break;
+      }
+
+      const availableMinorUnits = toMoneyMinorUnits(source.remainingAmount);
+      const appliedMinorUnits = Math.min(
+        availableMinorUnits,
+        remainingDueMinorUnits,
+      );
+
+      if (appliedMinorUnits <= 0) {
+        continue;
+      }
+
+      allocations.push({
+        supplierPaymentId: source.payment.id,
+        amountMinorUnits: appliedMinorUnits,
+      });
+      remainingDueMinorUnits -= appliedMinorUnits;
+    }
+
+    if (!allocations.length) {
+      return 0;
+    }
+
+    await this.accountingRepository.createSupplierPaymentAllocations(
+      allocations.map((allocation) => ({
+        shopId,
+        supplierPaymentId: allocation.supplierPaymentId,
+        supplierId: computation.purchase.supplierId,
+        purchaseId,
+        amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
+      })),
+      executor,
+    );
+
+    return allocations.reduce(
+      (sum, allocation) => sum + allocation.amountMinorUnits,
+      0,
+    );
+  }
+
   async syncCustomerSaleFinancials(
     shopId: string,
     saleId: string,
@@ -70,18 +241,18 @@ export class AccountingLedgerService {
         toMoneyMinorUnits(computation.returnedAmount),
       0,
     );
-    const appliedMinorUnits =
+    const settlementState = buildSettlementState(
+      netReceivableMinorUnits,
       toMoneyMinorUnits(computation.sale.initialPaidAmount) +
-      toMoneyMinorUnits(computation.allocatedAmount);
-    const paidMinorUnits = Math.min(appliedMinorUnits, netReceivableMinorUnits);
-    const dueMinorUnits = Math.max(netReceivableMinorUnits - appliedMinorUnits, 0);
+        toMoneyMinorUnits(computation.allocatedAmount),
+    );
 
     await this.accountingRepository.updateSaleFinancials(
       saleId,
       {
-        paidAmount: moneyMinorUnitsToString(paidMinorUnits),
-        dueAmount: moneyMinorUnitsToString(dueMinorUnits),
-        paymentStatus: mapPaymentStatus(paidMinorUnits, netReceivableMinorUnits),
+        paidAmount: moneyMinorUnitsToString(settlementState.settledMinorUnits),
+        dueAmount: moneyMinorUnitsToString(settlementState.dueMinorUnits),
+        paymentStatus: settlementState.paymentStatus,
         updatedByUserId,
       },
       executor,
@@ -115,18 +286,18 @@ export class AccountingLedgerService {
         toMoneyMinorUnits(computation.returnedAmount),
       0,
     );
-    const appliedMinorUnits =
+    const settlementState = buildSettlementState(
+      netPayableMinorUnits,
       toMoneyMinorUnits(computation.purchase.initialPaidAmount) +
-      toMoneyMinorUnits(computation.allocatedAmount);
-    const paidMinorUnits = Math.min(appliedMinorUnits, netPayableMinorUnits);
-    const dueMinorUnits = Math.max(netPayableMinorUnits - appliedMinorUnits, 0);
+        toMoneyMinorUnits(computation.allocatedAmount),
+    );
 
     await this.accountingRepository.updatePurchaseFinancials(
       purchaseId,
       {
-        paidAmount: moneyMinorUnitsToString(paidMinorUnits),
-        dueAmount: moneyMinorUnitsToString(dueMinorUnits),
-        paymentStatus: mapPaymentStatus(paidMinorUnits, netPayableMinorUnits),
+        paidAmount: moneyMinorUnitsToString(settlementState.settledMinorUnits),
+        dueAmount: moneyMinorUnitsToString(settlementState.dueMinorUnits),
+        paymentStatus: settlementState.paymentStatus,
         updatedByUserId,
       },
       executor,

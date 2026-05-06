@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
-import { shops } from "../../db/schema";
+import { shops, users } from "../../db/schema";
 
 export class ShopRepository {
   async findById(shopId: string) {
@@ -10,6 +10,21 @@ export class ShopRepository {
       .where(eq(shops.id, shopId))
       .limit(1);
     return shop ?? null;
+  }
+
+  async findPrimaryAdminByShopId(shopId: string) {
+    const [user] = await db
+      .select({
+        fullName: users.fullName,
+        email: users.email,
+        mobileNumber: users.mobileNumber,
+      })
+      .from(users)
+      .where(and(eq(users.shopId, shopId), eq(users.role, "admin")))
+      .orderBy(asc(users.createdAt), asc(users.id))
+      .limit(1);
+
+    return user ?? null;
   }
 
   async updateProfile(

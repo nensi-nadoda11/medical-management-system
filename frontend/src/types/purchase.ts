@@ -37,6 +37,7 @@ export interface PurchaseListItem {
   taxAmount: string;
   roundOffAmount: string;
   grandTotal: string;
+  initialPaidAmount: string;
   paidAmount: string;
   dueAmount: string;
   purchaseOrderApprovedAt: string | null;

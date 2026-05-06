@@ -1,7 +1,9 @@
 import { AppError } from "../../shared/errors/app-error";
+import { logger } from "../../shared/logger";
 import type { Notification } from "../../db/schema";
 import { AlertsService } from "../alerts/alerts.service";
 import type { PublicUser } from "../auth/auth.types";
+import { BranchesRepository } from "../branches/branches.repository";
 import { NotificationsRepository, type NotificationType } from "./notifications.repository";
 import type {
   BulkMarkNotificationsReadInput,
@@ -32,6 +34,7 @@ export class NotificationsService {
   constructor(
     private readonly notificationsRepository = new NotificationsRepository(),
     private readonly alertsService = new AlertsService(),
+    private readonly branchesRepository = new BranchesRepository(),
   ) {}
 
   async listNotifications(
@@ -40,8 +43,8 @@ export class NotificationsService {
     user: PublicUser,
     query: ListNotificationsQuery,
   ) {
-    await this.alertsService.syncShopAlerts(shopId, branchId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    await this.syncShopAlertsSafely(shopId, branchId);
+    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 
@@ -76,8 +79,8 @@ export class NotificationsService {
   }
 
   async getUnreadCount(shopId: string, branchId: string, user: PublicUser) {
-    await this.alertsService.syncShopAlerts(shopId, branchId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    await this.syncShopAlertsSafely(shopId, branchId);
+    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 
@@ -90,8 +93,8 @@ export class NotificationsService {
   }
 
   async getSummary(shopId: string, branchId: string, user: PublicUser) {
-    await this.alertsService.syncShopAlerts(shopId, branchId);
-    void this.alertsService.dispatchPendingInventoryAlertEmails(shopId, branchId);
+    await this.syncShopAlertsSafely(shopId, branchId);
+    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
 
     const allowedTypes = this.getAllowedTypes(user);
 
@@ -257,5 +260,39 @@ export class NotificationsService {
         totalPages: Math.ceil(total / pageSize) || 1,
       },
     };
+  }
+
+  private dispatchPendingInventoryAlertEmailsInBackground(
+    shopId: string,
+    branchId: string,
+  ) {
+    void this.alertsService
+      .dispatchPendingInventoryAlertEmails(shopId, branchId)
+      .catch((error) => {
+        logger.error("Background inventory alert dispatch failed", {
+          shopId,
+          branchId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      });
+  }
+
+  private async syncShopAlertsSafely(shopId: string, branchId: string) {
+    try {
+      const isBranchingSchemaReady =
+        await this.branchesRepository.isBranchingSchemaReady();
+
+      if (!isBranchingSchemaReady) {
+        return;
+      }
+
+      await this.alertsService.syncShopAlerts(shopId, branchId);
+    } catch (error) {
+      logger.warn("Notifications alert sync skipped after recoverable failure", {
+        shopId,
+        branchId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 }

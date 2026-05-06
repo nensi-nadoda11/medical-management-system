@@ -165,6 +165,32 @@ const customerAllocationTotalsBySaleSubquery = (
     .groupBy(customerPaymentAllocations.saleId)
     .as("customer_allocation_totals_by_sale");
 
+const customerAllocationTotalsByPaymentSubquery = (
+  shopId: string,
+  executor?: DbExecutor,
+) =>
+  getDbExecutor(executor)
+    .select({
+      customerPaymentId: customerPaymentAllocations.customerPaymentId,
+      allocatedAmount:
+        sql<string>`coalesce(sum(${customerPaymentAllocations.amount}), 0.00)`.as(
+          "allocated_amount",
+        ),
+    })
+    .from(customerPaymentAllocations)
+    .innerJoin(
+      customerPayments,
+      eq(customerPaymentAllocations.customerPaymentId, customerPayments.id),
+    )
+    .where(
+      and(
+        eq(customerPaymentAllocations.shopId, shopId),
+        eq(customerPayments.status, "completed"),
+      ),
+    )
+    .groupBy(customerPaymentAllocations.customerPaymentId)
+    .as("customer_allocation_totals_by_payment");
+
 const supplierAllocationTotalsByPurchaseSubquery = (
   shopId: string,
   executor?: DbExecutor,
@@ -193,6 +219,35 @@ const supplierAllocationTotalsByPurchaseSubquery = (
     )
     .groupBy(supplierPaymentAllocations.purchaseId)
     .as("supplier_allocation_totals_by_purchase");
+
+const supplierAllocationTotalsByPaymentSubquery = (
+  shopId: string,
+  executor?: DbExecutor,
+) =>
+  getDbExecutor(executor)
+    .select({
+      supplierPaymentId: supplierPaymentAllocations.supplierPaymentId,
+      allocatedAmount:
+        sql<string>`coalesce(sum(${supplierPaymentAllocations.amount}), 0.00)`.as(
+          "allocated_amount",
+        ),
+    })
+    .from(supplierPaymentAllocations)
+    .innerJoin(
+      supplierPayments,
+      eq(
+        supplierPaymentAllocations.supplierPaymentId,
+        supplierPayments.id,
+      ),
+    )
+    .where(
+      and(
+        eq(supplierPaymentAllocations.shopId, shopId),
+        eq(supplierPayments.status, "completed"),
+      ),
+    )
+    .groupBy(supplierPaymentAllocations.supplierPaymentId)
+    .as("supplier_allocation_totals_by_payment");
 
 const supplierReturnTotalsByPurchaseSubquery = (
   shopId: string,
@@ -734,6 +789,54 @@ export class AccountingRepository {
       );
   }
 
+  async listCustomerAdvancePaymentSources(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const allocationTotals = customerAllocationTotalsByPaymentSubquery(shopId, executor);
+
+    return getDbExecutor(executor)
+      .select({
+        payment: customerPayments,
+        allocatedAmount:
+          sql<string>`coalesce(${aliasedColumn("customer_allocation_totals_by_payment", "allocated_amount")}, 0.00)`.as(
+            "allocated_amount",
+          ),
+        remainingAmount: sql<string>`
+          greatest(
+            ${customerPayments.amount}
+            - coalesce(${aliasedColumn("customer_allocation_totals_by_payment", "allocated_amount")}, 0.00),
+            0.00
+          )
+        `.as("remaining_amount"),
+      })
+      .from(customerPayments)
+      .leftJoin(
+        allocationTotals,
+        eq(allocationTotals.customerPaymentId, customerPayments.id),
+      )
+      .where(
+        and(
+          eq(customerPayments.shopId, shopId),
+          eq(customerPayments.customerId, customerId),
+          eq(customerPayments.status, "completed"),
+          sql`
+            greatest(
+              ${customerPayments.amount}
+              - coalesce(${aliasedColumn("customer_allocation_totals_by_payment", "allocated_amount")}, 0.00),
+              0.00
+            ) > 0
+          `,
+        ),
+      )
+      .orderBy(
+        asc(customerPayments.paymentDate),
+        asc(customerPayments.createdAt),
+        asc(customerPayments.id),
+      );
+  }
+
   async listSupplierPayments(shopId: string, query: ListAccountingSupplierPaymentsQuery) {
     const orderBy =
       query.sortBy === "createdAt"
@@ -865,6 +968,54 @@ export class AccountingRepository {
       .orderBy(
         asc(supplierPaymentAllocations.createdAt),
         asc(supplierPaymentAllocations.id),
+      );
+  }
+
+  async listSupplierAdvancePaymentSources(
+    shopId: string,
+    supplierId: string,
+    executor?: DbExecutor,
+  ) {
+    const allocationTotals = supplierAllocationTotalsByPaymentSubquery(shopId, executor);
+
+    return getDbExecutor(executor)
+      .select({
+        payment: supplierPayments,
+        allocatedAmount:
+          sql<string>`coalesce(${aliasedColumn("supplier_allocation_totals_by_payment", "allocated_amount")}, 0.00)`.as(
+            "allocated_amount",
+          ),
+        remainingAmount: sql<string>`
+          greatest(
+            ${supplierPayments.amount}
+            - coalesce(${aliasedColumn("supplier_allocation_totals_by_payment", "allocated_amount")}, 0.00),
+            0.00
+          )
+        `.as("remaining_amount"),
+      })
+      .from(supplierPayments)
+      .leftJoin(
+        allocationTotals,
+        eq(allocationTotals.supplierPaymentId, supplierPayments.id),
+      )
+      .where(
+        and(
+          eq(supplierPayments.shopId, shopId),
+          eq(supplierPayments.supplierId, supplierId),
+          eq(supplierPayments.status, "completed"),
+          sql`
+            greatest(
+              ${supplierPayments.amount}
+              - coalesce(${aliasedColumn("supplier_allocation_totals_by_payment", "allocated_amount")}, 0.00),
+              0.00
+            ) > 0
+          `,
+        ),
+      )
+      .orderBy(
+        asc(supplierPayments.paymentDate),
+        asc(supplierPayments.createdAt),
+        asc(supplierPayments.id),
       );
   }
 
@@ -1014,9 +1165,13 @@ export class AccountingRepository {
     };
   }
 
-  async getCustomerFinancialSummary(shopId: string, customerId: string) {
-    const summary = customerSummarySubquery(shopId);
-    const [row] = await getDbExecutor()
+  async getCustomerFinancialSummary(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const summary = customerSummarySubquery(shopId, executor);
+    const [row] = await getDbExecutor(executor)
       .select({
         customer: customers,
         totalSales: summary.totalSales,
@@ -1280,9 +1435,13 @@ export class AccountingRepository {
     };
   }
 
-  async getSupplierFinancialSummary(shopId: string, supplierId: string) {
-    const summary = supplierSummarySubquery(shopId);
-    const [row] = await getDbExecutor()
+  async getSupplierFinancialSummary(
+    shopId: string,
+    supplierId: string,
+    executor?: DbExecutor,
+  ) {
+    const summary = supplierSummarySubquery(shopId, executor);
+    const [row] = await getDbExecutor(executor)
       .select({
         supplier: suppliers,
         totalPurchases: summary.totalPurchases,
@@ -1476,6 +1635,34 @@ export class AccountingRepository {
       payment,
       allocations: createdAllocations,
     };
+  }
+
+  async createSupplierPaymentAllocations(
+    allocations: Array<typeof supplierPaymentAllocations.$inferInsert>,
+    executor: DbExecutor,
+  ) {
+    if (!allocations.length) {
+      return [];
+    }
+
+    return getDbExecutor(executor)
+      .insert(supplierPaymentAllocations)
+      .values(allocations)
+      .returning();
+  }
+
+  async createCustomerPaymentAllocations(
+    allocations: Array<typeof customerPaymentAllocations.$inferInsert>,
+    executor: DbExecutor,
+  ) {
+    if (!allocations.length) {
+      return [];
+    }
+
+    return getDbExecutor(executor)
+      .insert(customerPaymentAllocations)
+      .values(allocations)
+      .returning();
   }
 
   async updateSaleFinancials(

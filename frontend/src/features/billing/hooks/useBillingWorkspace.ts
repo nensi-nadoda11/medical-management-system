@@ -11,6 +11,7 @@ import type {
   BillingMedicineSearchItem,
   SaveBillPayload,
 } from "../../../types/billing";
+import { accountingQueryKeys, getCustomerDueSummary } from "../../accounting/api/accounting";
 import {
   customersQueryKeys,
   getCustomer,
@@ -133,7 +134,7 @@ const loadHeldBillIntoDraft = (
   customerName: bill.customerName ?? "",
   customerPhone: bill.customerPhone ?? "",
   paymentMethod: bill.paymentMethod,
-  paidAmount: bill.paidAmount,
+  paidAmount: bill.initialPaidAmount ?? bill.paidAmount,
   roundOffAmount: bill.roundOffAmount,
   notes: bill.notes ?? "",
   isFefoEnabled: true,
@@ -250,6 +251,12 @@ export const useBillingWorkspace = () => {
     enabled: Boolean(deferredCustomerSearch.trim().length >= 2),
     staleTime: 15_000,
   });
+  const selectedCustomerAdvanceQuery = useQuery({
+    queryKey: accountingQueryKeys.customerSummary(draft.selectedCustomer?.id ?? ""),
+    queryFn: () => getCustomerDueSummary(draft.selectedCustomer!.id),
+    enabled: Boolean(draft.selectedCustomer?.id),
+    staleTime: 15_000,
+  });
 
   // Mutations
   const createHeldMutation = useMutation({
@@ -364,7 +371,22 @@ export const useBillingWorkspace = () => {
     const roundOff = Number(draft.roundOffAmount || 0);
     const grandTotal = subtotal + taxAmount + roundOff;
     const paidAmount = Number(draft.paidAmount || 0);
-    const dueAmount = grandTotal - paidAmount;
+    const availableAdvance = Number(
+      selectedCustomerAdvanceQuery.data?.summary.advanceAmount ?? 0,
+    );
+    const previewAdvanceApplied = Math.min(
+      availableAdvance,
+      Math.max(grandTotal - paidAmount, 0),
+    );
+    const effectivePaidAmount = Math.min(
+      grandTotal,
+      paidAmount + previewAdvanceApplied,
+    );
+    const dueAmount = Math.max(grandTotal - effectivePaidAmount, 0);
+    const newAdvanceAmount = Math.max(
+      paidAmount + previewAdvanceApplied - grandTotal,
+      0,
+    );
 
     return {
       subtotal,
@@ -373,9 +395,18 @@ export const useBillingWorkspace = () => {
       roundOff,
       grandTotal,
       paidAmount,
+      availableAdvance,
+      previewAdvanceApplied,
+      effectivePaidAmount,
+      newAdvanceAmount,
       dueAmount,
     };
-  }, [draft.items, draft.paidAmount, draft.roundOffAmount]);
+  }, [
+    draft.items,
+    draft.paidAmount,
+    draft.roundOffAmount,
+    selectedCustomerAdvanceQuery.data?.summary.advanceAmount,
+  ]);
 
   const resetDraft = useCallback(() => {
     setSearchParams({});

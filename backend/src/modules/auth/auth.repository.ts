@@ -54,6 +54,8 @@ export const authRepository = {
       name: string;
       slug: string;
       status: "pending_verification" | "active" | "suspended";
+      phone: string;
+      email: string;
       createdAt: Date;
     },
     executor?: DbExecutor,
@@ -65,6 +67,8 @@ export const authRepository = {
         name: input.name,
         slug: input.slug,
         status: input.status,
+        phone: input.phone,
+        email: input.email,
         createdAt: input.createdAt,
         updatedAt: input.createdAt,
       })

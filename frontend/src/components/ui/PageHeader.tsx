@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }
 
@@ -26,9 +26,11 @@ export const PageHeader = ({
           <h1 className="text-[1.55rem] font-semibold tracking-tight text-slate-950 md:text-[1.85rem]">
             {title}
           </h1>
-          <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-[0.96rem]">
-            {description}
-          </p>
+          {description ? (
+            <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-[0.96rem]">
+              {description}
+            </p>
+          ) : null}
         </div>
       </div>
       {actions ? (

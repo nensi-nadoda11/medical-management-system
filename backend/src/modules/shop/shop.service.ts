@@ -19,7 +19,17 @@ export class ShopService {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
     }
 
-    return shop;
+    if (!this.shouldUseRegistrationDefaults(shop)) {
+      return shop;
+    }
+
+    const primaryAdmin = await this.shopRepository.findPrimaryAdminByShopId(shopId);
+
+    return {
+      ...shop,
+      phone: shop.phone ?? primaryAdmin?.mobileNumber ?? null,
+      email: shop.email ?? primaryAdmin?.email ?? null,
+    };
   }
 
   async updateProfile(shopId: string, input: UpdateShopProfileInput) {
@@ -42,5 +52,28 @@ export class ShopService {
     }
 
     return updatedShop;
+  }
+
+  private shouldUseRegistrationDefaults(shop: Awaited<ReturnType<ShopRepository["findById"]>>) {
+    if (!shop) {
+      return false;
+    }
+
+    const hasMissingPrimaryContact = !shop.phone || !shop.email;
+    const hasDetailedProfileData = Boolean(
+      shop.addressLine1 ||
+        shop.addressLine2 ||
+        shop.city ||
+        shop.state ||
+        shop.pincode ||
+        shop.gstNumber ||
+        shop.licenseNumber,
+    );
+    const profileLooksUntouched =
+      shop.updatedAt.getTime() === shop.createdAt.getTime() ||
+      (shop.activatedAt !== null &&
+        shop.updatedAt.getTime() === shop.activatedAt.getTime());
+
+    return hasMissingPrimaryContact && !hasDetailedProfileData && profileLooksUntouched;
   }
 }

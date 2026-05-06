@@ -7,9 +7,11 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { buildSettlementState } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import { AccountingRepository } from "../accounting/accounting.repository";
 import { CustomersRepository } from "../customers/customers.repository";
 import { InventoryRepository } from "../inventory/inventory.repository";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
@@ -47,18 +49,6 @@ const buildPaginatedResponse = <T>(
     totalPages: Math.ceil(total / pageSize) || 1,
   },
 });
-
-const mapPaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: number) => {
-  if (paidMinorUnits <= 0) {
-    return "unpaid" as const;
-  }
-
-  if (paidMinorUnits >= grandTotalMinorUnits) {
-    return "paid" as const;
-  }
-
-  return "partial" as const;
-};
 
 const sanitizeInvoicePrefix = (value?: string | null) => {
   const normalized = (value ?? "INV")
@@ -110,6 +100,7 @@ const toSaleListResponse = (record: Awaited<
   taxAmount: record.sale.taxAmount,
   roundOffAmount: record.sale.roundOffAmount,
   grandTotal: record.sale.grandTotal,
+  initialPaidAmount: record.sale.initialPaidAmount,
   paidAmount: record.sale.paidAmount,
   dueAmount: record.sale.dueAmount,
   notes: record.sale.notes,
@@ -139,6 +130,7 @@ const toSaleDetailResponse = (
   taxAmount: record.sale.taxAmount,
   roundOffAmount: record.sale.roundOffAmount,
   grandTotal: record.sale.grandTotal,
+  initialPaidAmount: record.sale.initialPaidAmount,
   paidAmount: record.sale.paidAmount,
   dueAmount: record.sale.dueAmount,
   notes: record.sale.notes,
@@ -206,6 +198,7 @@ type PreparedSaleDraft = {
     roundOffMinorUnits: number;
     grandTotalMinorUnits: number;
     paidAmountMinorUnits: number;
+    settledPaidMinorUnits: number;
     dueAmountMinorUnits: number;
     paymentStatus: "unpaid" | "partial" | "paid";
   };
@@ -220,6 +213,7 @@ export class BillingService {
   constructor(
     private readonly billingRepository = new BillingRepository(),
     private readonly customersRepository = new CustomersRepository(),
+    private readonly accountingRepository = new AccountingRepository(),
     private readonly inventoryRepository = new InventoryRepository(),
     private readonly inventoryStockService = new InventoryStockService(),
     private readonly alertsService = new AlertsService(),
@@ -313,7 +307,7 @@ export class BillingService {
             preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
-            preparedDraft.totals.paidAmountMinorUnits,
+            preparedDraft.totals.settledPaidMinorUnits,
           ),
           dueAmount: moneyMinorUnitsToString(preparedDraft.totals.dueAmountMinorUnits),
           notes: preparedDraft.notes,
@@ -409,7 +403,7 @@ export class BillingService {
             preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
-            preparedDraft.totals.paidAmountMinorUnits,
+            preparedDraft.totals.settledPaidMinorUnits,
           ),
           dueAmount: moneyMinorUnitsToString(preparedDraft.totals.dueAmountMinorUnits),
           notes: preparedDraft.notes,
@@ -488,7 +482,7 @@ export class BillingService {
             preparedDraft.totals.paidAmountMinorUnits,
           ),
           paidAmount: moneyMinorUnitsToString(
-            preparedDraft.totals.paidAmountMinorUnits,
+            preparedDraft.totals.settledPaidMinorUnits,
           ),
           dueAmount: moneyMinorUnitsToString(preparedDraft.totals.dueAmountMinorUnits),
           notes: preparedDraft.notes,
@@ -539,6 +533,12 @@ export class BillingService {
       );
 
       if (created.sale.customerId) {
+        await this.accountingLedgerService.applyAvailableCustomerAdvanceToSale(
+          shopId,
+          created.sale.id,
+          tx,
+        );
+
         await this.accountingLedgerService.syncCustomerSaleFinancials(
           shopId,
           created.sale.id,
@@ -628,14 +628,6 @@ export class BillingService {
         );
       }
 
-      if (!settings.allowPartialPayments && Number(sale.dueAmount) > 0) {
-        throw buildAppError(
-          400,
-          "PARTIAL_PAYMENTS_DISABLED",
-          "Partial payments are disabled in admin settings.",
-        );
-      }
-
       const items = await this.billingRepository.listSaleItemsBySaleId(
         saleId,
         branchId,
@@ -677,7 +669,35 @@ export class BillingService {
         tx,
       );
 
+      if (!settings.allowPartialPayments) {
+        const availableAdvanceMinorUnits = sale.customerId
+          ? await this.accountingRepository
+              .getCustomerFinancialSummary(shopId, sale.customerId, tx)
+              .then((summary) =>
+                toMoneyMinorUnits(summary?.summary.advanceAmount ?? 0),
+              )
+          : 0;
+        const effectiveDueMinorUnits = Math.max(
+          toMoneyMinorUnits(sale.dueAmount) - availableAdvanceMinorUnits,
+          0,
+        );
+
+        if (effectiveDueMinorUnits > 0) {
+          throw buildAppError(
+            400,
+            "PARTIAL_PAYMENTS_DISABLED",
+            "Partial payments are disabled in admin settings.",
+          );
+        }
+      }
+
       if (sale.customerId) {
+        await this.accountingLedgerService.applyAvailableCustomerAdvanceToSale(
+          shopId,
+          saleId,
+          tx,
+        );
+
         await this.accountingLedgerService.syncCustomerSaleFinancials(
           shopId,
           saleId,
@@ -996,23 +1016,10 @@ export class BillingService {
       throw buildAppError(400, "INVALID_BILL_TOTAL", "Grand total cannot be negative.");
     }
 
-    if (paidAmountMinorUnits > grandTotalMinorUnits) {
-      throw buildAppError(
-        400,
-        "PAID_AMOUNT_EXCEEDS_TOTAL",
-        "Paid amount cannot exceed grand total.",
-      );
-    }
-
-    const dueAmountMinorUnits = grandTotalMinorUnits - paidAmountMinorUnits;
-
-    if (!settings.allowPartialPayments && dueAmountMinorUnits > 0) {
-      throw buildAppError(
-        400,
-        "PARTIAL_PAYMENTS_DISABLED",
-        "Partial payments are disabled in admin settings.",
-      );
-    }
+    const settlementState = buildSettlementState(
+      grandTotalMinorUnits,
+      paidAmountMinorUnits,
+    );
 
     let customerDetails:
       | {
@@ -1021,6 +1028,7 @@ export class BillingService {
           customerPhone: string;
         }
       | undefined;
+    let availableAdvanceMinorUnits = 0;
 
     if (input.customerId) {
       const customer = await this.customersRepository.findCustomerById(
@@ -1046,6 +1054,30 @@ export class BillingService {
         customerName: customer.fullName,
         customerPhone: customer.mobileNumber,
       };
+
+      if (settlementState.dueMinorUnits > 0) {
+        const customerSummary = await this.accountingRepository.getCustomerFinancialSummary(
+          shopId,
+          customer.id,
+          executor,
+        );
+        availableAdvanceMinorUnits = toMoneyMinorUnits(
+          customerSummary?.summary.advanceAmount ?? 0,
+        );
+      }
+    }
+
+    const effectiveDueMinorUnits = Math.max(
+      settlementState.dueMinorUnits - availableAdvanceMinorUnits,
+      0,
+    );
+
+    if (!settings.allowPartialPayments && effectiveDueMinorUnits > 0) {
+      throw buildAppError(
+        400,
+        "PARTIAL_PAYMENTS_DISABLED",
+        "Partial payments are disabled in admin settings.",
+      );
     }
 
     return {
@@ -1057,11 +1089,9 @@ export class BillingService {
         roundOffMinorUnits,
         grandTotalMinorUnits,
         paidAmountMinorUnits,
-        dueAmountMinorUnits,
-        paymentStatus: mapPaymentStatus(
-          paidAmountMinorUnits,
-          grandTotalMinorUnits,
-        ),
+        settledPaidMinorUnits: settlementState.settledMinorUnits,
+        dueAmountMinorUnits: settlementState.dueMinorUnits,
+        paymentStatus: settlementState.paymentStatus,
       },
       paymentMethod: input.paymentMethod,
       ...(customerDetails ?? {}),

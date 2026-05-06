@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -9,6 +10,10 @@ import { GST_PERCENTAGES, type Medicine } from "../../../types/medicine";
 import type { PurchaseDetail, SavePurchasePayload } from "../../../types/purchase";
 import type { Supplier } from "../../../types/supplier";
 import { cn, formatCurrency, toDateInputValue } from "../../../lib/utils";
+import {
+  accountingQueryKeys,
+  getSupplierDueSummary,
+} from "../../accounting/api/accounting";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
@@ -124,7 +129,7 @@ const buildDefaultValues = (
       supplierInvoiceNumber: purchase.supplierInvoiceNumber ?? "",
       supplierInvoiceDate: toDateInputValue(purchase.supplierInvoiceDate),
       purchaseDate: toDateInputValue(purchase.purchaseDate),
-      paidAmount: Number(purchase.paidAmount),
+      paidAmount: Number(purchase.initialPaidAmount ?? purchase.paidAmount),
       roundOffAmount: Number(purchase.roundOffAmount),
       notes: purchase.notes ?? "",
       items: purchase.items.map((item) => ({
@@ -267,6 +272,10 @@ export const PurchaseForm = ({
     control,
     name: "items",
   });
+  const supplierId = useWatch({
+    control,
+    name: "supplierId",
+  });
   const paidAmount = useWatch({
     control,
     name: "paidAmount",
@@ -280,10 +289,28 @@ export const PurchaseForm = ({
     reset(buildDefaultValues(purchase, suppliers, medicines));
   }, [medicines, purchase, reset, suppliers]);
 
+  const supplierSummaryQuery = useQuery({
+    queryKey: accountingQueryKeys.supplierSummary(supplierId ?? ""),
+    queryFn: () => getSupplierDueSummary(supplierId ?? ""),
+    enabled: Boolean(supplierId),
+  });
+
   const totals = calculateTotals(
     watchedItems ?? [],
     Number(paidAmount ?? 0),
     Number(roundOffAmount ?? 0),
+  );
+  const availableAdvance = Number(
+    supplierSummaryQuery.data?.summary.advanceAmount ?? 0,
+  );
+  const previewAdvanceApplied = Math.min(
+    availableAdvance,
+    Math.max(totals.grandTotal - totals.paidAmount, 0),
+  );
+  const effectivePaidAmount = totals.paidAmount + previewAdvanceApplied;
+  const adjustedDueAmount = Math.max(
+    totals.grandTotal - effectivePaidAmount,
+    0,
   );
 
   const canSubmit = suppliers.length > 0 && medicines.length > 0;
@@ -392,6 +419,9 @@ export const PurchaseForm = ({
                 ) : null}
                 <span className="text-xs text-slate-500">
                   Enter only the amount already paid against this purchase.
+                </span>
+                <span className="text-xs text-slate-500">
+                  Existing supplier advance, if available, is auto-adjusted when this purchase is finalized.
                 </span>
               </label>
 
@@ -802,20 +832,47 @@ export const PurchaseForm = ({
           >
             <div className="space-y-3">
               {[
-                ["Taxable amount", formatCurrency(totals.subtotal)],
-                ["Discount amount", formatCurrency(totals.discount)],
-                ["Tax amount", formatCurrency(totals.tax)],
-                ["Round off", formatCurrency(roundOffAmount)],
-                ["Grand total", formatCurrency(totals.grandTotal)],
-                ["Paid amount", formatCurrency(totals.paidAmount)],
-                ["Due amount", formatCurrency(totals.dueAmount)],
-              ].map(([label, value], index) => (
+                {
+                  label: "Taxable amount",
+                  value: formatCurrency(totals.subtotal),
+                },
+                {
+                  label: "Discount amount",
+                  value: formatCurrency(totals.discount),
+                },
+                {
+                  label: "Tax amount",
+                  value: formatCurrency(totals.tax),
+                },
+                {
+                  label: "Round off",
+                  value: formatCurrency(roundOffAmount),
+                },
+                {
+                  label: "Grand total",
+                  value: formatCurrency(totals.grandTotal),
+                  tone: "primary",
+                },
+                {
+                  label: "Advance total",
+                  value: formatCurrency(availableAdvance),
+                },
+                {
+                  label: "Paid amount",
+                  value: formatCurrency(effectivePaidAmount),
+                },
+                {
+                  label: "Due amount",
+                  value: formatCurrency(adjustedDueAmount),
+                  tone: "warning",
+                },
+              ].map(({ label, value, tone }) => (
                 <div
                   className={cn(
                     "flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm",
-                    index === 4
+                    tone === "primary"
                       ? "bg-slate-950 text-white"
-                      : index === 6
+                      : tone === "warning"
                         ? "bg-amber-50 text-amber-900"
                         : "border border-slate-200 bg-white text-slate-700",
                   )}

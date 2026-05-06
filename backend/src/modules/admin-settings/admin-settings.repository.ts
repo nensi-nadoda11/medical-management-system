@@ -17,7 +17,9 @@ import type { ListAdminAuditLogsQuery } from "./admin-settings.validation";
 export class AdminSettingsRepository {
   async findShopById(shopId: string, executor?: DbExecutor) {
     const [shop] = await getDbExecutor(executor)
-      .select()
+      .select({
+        id: shops.id,
+      })
       .from(shops)
       .where(eq(shops.id, shopId))
       .limit(1);

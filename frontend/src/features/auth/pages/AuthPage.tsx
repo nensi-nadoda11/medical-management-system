@@ -359,19 +359,24 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
           cleaner admin experience built for day-to-day business use.
         </p>
 
-        <div className="hero-grid">
-          <article className="hero-metric">
-            <strong>Fast onboarding</strong>
-            <span>Create the admin account and get into the dashboard quickly.</span>
-          </article>
-          <article className="hero-metric">
-            <strong>Business-first design</strong>
-            <span>Focused screens with less clutter and better readability.</span>
-          </article>
-          <article className="hero-metric">
-            <strong>Responsive layout</strong>
-            <span>Comfortable on desktop, tablet, and mobile screens.</span>
-          </article>
+        <div aria-hidden="true" className="hero-medicine-scatter">
+          <span className="hero-pill hero-pill--a" />
+          <span className="hero-pill hero-pill--b" />
+          <span className="hero-pill hero-pill--c" />
+          <span className="hero-pill hero-pill--d" />
+          <span className="hero-pill hero-pill--e" />
+          <span className="hero-tablet hero-tablet--a" />
+          <span className="hero-tablet hero-tablet--b" />
+          <span className="hero-tablet hero-tablet--c" />
+          <span className="hero-tablet hero-tablet--d" />
+          <span className="hero-powder hero-powder--a" />
+          <span className="hero-powder hero-powder--b" />
+          <span className="hero-powder hero-powder--c" />
+          <div className="hero-medicine-copy">
+            <span>Calm setup</span>
+            <strong>Inventory-ready access</strong>
+            <p>Capsules, tablets, and small motion details keep the welcome side lighter without adding clutter.</p>
+          </div>
         </div>
       </section>
 

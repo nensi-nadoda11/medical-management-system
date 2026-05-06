@@ -48,9 +48,23 @@ class RealtimeService {
       occurredAt: event.occurredAt ?? new Date().toISOString(),
     };
 
-    response.write(
+    return this.safeWrite(
+      response,
       `event: ${payload.type}\ndata: ${JSON.stringify(payload)}\n\n`,
     );
+  }
+
+  safeWrite(response: Response, chunk: string) {
+    if (response.writableEnded || response.destroyed) {
+      return false;
+    }
+
+    try {
+      response.write(chunk);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   publish(event: Omit<RealtimeEvent, "occurredAt">) {
@@ -60,7 +74,11 @@ class RealtimeService {
       }
 
       try {
-        this.sendEvent(subscriber.response, event);
+        const didWrite = this.sendEvent(subscriber.response, event);
+
+        if (!didWrite) {
+          this.subscribers.delete(subscriber.id);
+        }
       } catch {
         this.subscribers.delete(subscriber.id);
       }

@@ -103,7 +103,6 @@ export const BranchesPage = () => {
             Create branch
           </button>
         }
-        description="Manage branch masters, operational status, and branch-level overrides without affecting single-store fallback."
         eyebrow="Multi-Branch Control"
         title="Branch management"
       />
@@ -116,7 +115,6 @@ export const BranchesPage = () => {
       </div>
 
       <SectionCard
-        description="Every shop always retains an internal default branch for backward-compatible data isolation."
         title="Branch register"
       >
         {branches.length ? (

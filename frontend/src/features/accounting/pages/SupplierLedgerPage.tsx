@@ -13,6 +13,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import {
+  cn,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -32,6 +33,29 @@ import { SupplierPaymentEntryModal } from "../components/SupplierPaymentEntryMod
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+
+const getSupplierBalancePresentation = (amount: string) => {
+  const numericAmount = Number(amount);
+
+  if (numericAmount < 0) {
+    return {
+      className: "text-emerald-700",
+      label: `Advance ${formatCurrency(Math.abs(numericAmount))}`,
+    };
+  }
+
+  if (numericAmount > 0) {
+    return {
+      className: "text-amber-700",
+      label: `Payable ${formatCurrency(numericAmount)}`,
+    };
+  }
+
+  return {
+    className: "text-slate-950",
+    label: `Settled ${formatCurrency(0)}`,
+  };
+};
 
 export const SupplierLedgerPage = () => {
   const { id = "" } = useParams();
@@ -293,36 +317,40 @@ export const SupplierLedgerPage = () => {
       </SectionCard>
 
       <SectionCard
-        description="Every ledger movement shows debit, credit, running balance, and source reference for clean payable traceability."
+        description="Debit reduces supplier payable, credit increases payable, and the running balance clearly shows whether the supplier is in advance or still payable."
         title="Ledger activity"
       >
         {ledger.items.length ? (
           <div className="space-y-4">
             <div className="grid gap-3 xl:hidden">
-              {ledger.items.map((entry) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={entry.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{formatDateTime(entry.entryDate)}</p>
-                      <p className="mt-1 text-sm text-slate-600">{entry.notes || humanizeLabel(entry.referenceType)}</p>
-                    </div>
-                    <StatusBadge label={entry.transactionType} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Debit", formatCurrency(entry.debit)],
-                      ["Credit", formatCurrency(entry.credit)],
-                      ["Balance", formatCurrency(entry.balanceAfter)],
-                      ["Created by", entry.createdBy?.fullName || "System"],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+              {ledger.items.map((entry) => {
+                const balance = getSupplierBalancePresentation(entry.balanceAfter);
+
+                return (
+                  <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={entry.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">{formatDateTime(entry.entryDate)}</p>
+                        <p className="mt-1 text-sm text-slate-600">{entry.notes || humanizeLabel(entry.referenceType)}</p>
                       </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
+                      <StatusBadge label={entry.transactionType} />
+                    </div>
+                    <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        ["Payable down", formatCurrency(entry.debit), "text-slate-900"],
+                        ["Payable up", formatCurrency(entry.credit), "text-slate-900"],
+                        ["Running status", balance.label, balance.className],
+                        ["Created by", entry.createdBy?.fullName || "System", "text-slate-900"],
+                      ].map(([label, value, className]) => (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
+                          <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
+                          <dd className={cn("mt-1 text-sm font-medium", className)}>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </article>
+                );
+              })}
             </div>
 
             <div className="hidden overflow-x-auto xl:block">
@@ -332,24 +360,28 @@ export const SupplierLedgerPage = () => {
                     <th className="px-4">Date</th>
                     <th className="px-4">Transaction</th>
                     <th className="px-4">Reference</th>
-                    <th className="px-4">Debit</th>
-                    <th className="px-4">Credit</th>
-                    <th className="px-4">Balance</th>
+                    <th className="px-4">Payable down</th>
+                    <th className="px-4">Payable up</th>
+                    <th className="px-4">Running status</th>
                     <th className="px-4">Created by</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ledger.items.map((entry) => (
-                    <tr className="rounded-3xl bg-slate-50" key={entry.id}>
-                      <td className="rounded-l-3xl px-4 py-4 text-sm text-slate-700">{formatDateTime(entry.entryDate)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={entry.transactionType} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{entry.notes || humanizeLabel(entry.referenceType)}</td>
-                      <td className="px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(entry.debit)}</td>
-                      <td className="px-4 py-4 text-sm font-medium text-emerald-700">{formatCurrency(entry.credit)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">{formatCurrency(entry.balanceAfter)}</td>
-                      <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-700">{entry.createdBy?.fullName || "System"}</td>
-                    </tr>
-                  ))}
+                  {ledger.items.map((entry) => {
+                    const balance = getSupplierBalancePresentation(entry.balanceAfter);
+
+                    return (
+                      <tr className="rounded-3xl bg-slate-50" key={entry.id}>
+                        <td className="rounded-l-3xl px-4 py-4 text-sm text-slate-700">{formatDateTime(entry.entryDate)}</td>
+                        <td className="px-4 py-4"><StatusBadge label={entry.transactionType} /></td>
+                        <td className="px-4 py-4 text-sm text-slate-700">{entry.notes || humanizeLabel(entry.referenceType)}</td>
+                        <td className="px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(entry.debit)}</td>
+                        <td className="px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(entry.credit)}</td>
+                        <td className={cn("px-4 py-4 text-sm font-semibold", balance.className)}>{balance.label}</td>
+                        <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-700">{entry.createdBy?.fullName || "System"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -326,6 +326,10 @@ export const SalesReturnEditorPage = () => {
     }
 
     const parsedRefundAmount = Number.parseFloat(refundAmount || "0");
+    const currentSaleDueAmount = Number.parseFloat(
+      returnableSaleQuery.data?.sale.dueAmount ?? "0",
+    );
+    const maxRefundAmount = Math.max(previewTotal - currentSaleDueAmount, 0);
 
     if (!Number.isFinite(parsedRefundAmount) || parsedRefundAmount < 0) {
       pushToast({
@@ -340,6 +344,16 @@ export const SalesReturnEditorPage = () => {
       pushToast({
         title: "Refund exceeds return total",
         description: "Refund amount cannot be greater than the return amount.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (parsedRefundAmount > maxRefundAmount) {
+      pushToast({
+        title: "Refund exceeds net return",
+        description:
+          "Return amount first adjusts the bill due. Refund can only use the remaining return balance.",
         variant: "error",
       });
       return;
@@ -419,6 +433,10 @@ export const SalesReturnEditorPage = () => {
 
   const isBusy =
     createMutation.isPending || updateMutation.isPending || completeMutation.isPending;
+  const currentSaleDueAmount = Number.parseFloat(
+    returnableSaleQuery.data?.sale.dueAmount ?? "0",
+  );
+  const maxRefundAmount = Math.max(previewTotal - currentSaleDueAmount, 0);
 
   return (
     <div className="space-y-6">
@@ -821,6 +839,9 @@ export const SalesReturnEditorPage = () => {
                       type="number"
                       value={refundAmount}
                     />
+                    <span className="text-xs text-slate-500">
+                      Bill due adjusts first. Maximum refundable amount is {formatCurrency(maxRefundAmount)}.
+                    </span>
                   </label>
 
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -879,6 +900,8 @@ export const SalesReturnEditorPage = () => {
                   {[
                     ["Selected items", selectedItems.length.toString()],
                     ["Return amount", formatCurrency(previewTotal)],
+                    ["Bill due adjustment", formatCurrency(Math.min(currentSaleDueAmount, previewTotal))],
+                    ["Max refund", formatCurrency(maxRefundAmount)],
                     ["Refund amount", formatCurrency(refundAmount || 0)],
                     ["Refund status", humanizeLabel(normalizeRefundFields(Number.parseFloat(refundAmount || "0"), refundMethod, refundStatus).refundStatus)],
                   ].map(([label, value]) => (

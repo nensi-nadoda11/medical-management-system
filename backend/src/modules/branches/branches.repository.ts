@@ -6,9 +6,47 @@ import {
   userBranches,
   users,
 } from "../../db/schema";
+import { pool } from "../../db/client";
 import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 
 export class BranchesRepository {
+  async isBranchingSchemaReady() {
+    const result = await pool.query<{
+      branches_table_exists: boolean;
+      has_shop_id: boolean;
+      has_status: boolean;
+    }>(`
+      select
+        to_regclass('public.branches') is not null as branches_table_exists,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'branches'
+            and column_name = 'shop_id'
+        ) as has_shop_id,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'branches'
+            and column_name = 'status'
+        ) as has_status
+    `);
+
+    const [firstRow] = result.rows;
+
+    if (!firstRow) {
+      return false;
+    }
+
+    return Boolean(
+      firstRow.branches_table_exists &&
+        firstRow.has_shop_id &&
+        firstRow.has_status,
+    );
+  }
+
   async findDefaultBranchByShopId(shopId: string, executor?: DbExecutor) {
     const [branch] = await getDbExecutor(executor)
       .select()
@@ -57,11 +95,10 @@ export class BranchesRepository {
       .select({
         id: branches.id,
         shopId: branches.shopId,
-        name: branches.name,
       })
       .from(branches)
       .where(eq(branches.status, "active"))
-      .orderBy(asc(branches.shopId), desc(branches.isDefault), asc(branches.name), asc(branches.id));
+      .orderBy(asc(branches.shopId), desc(branches.isDefault), asc(branches.id));
   }
 
   async listAssignedBranchesForUser(

@@ -203,6 +203,8 @@ class AuthService {
           name: input.shopName,
           slug: shopSlug,
           status: "pending_verification",
+          phone: input.mobileNumber,
+          email: input.email,
           createdAt: now,
         },
         tx,

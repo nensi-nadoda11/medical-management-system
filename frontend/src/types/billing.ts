@@ -35,6 +35,7 @@ export interface BillListItem {
   taxAmount: string;
   roundOffAmount: string;
   grandTotal: string;
+  initialPaidAmount: string;
   paidAmount: string;
   dueAmount: string;
   notes: string | null;

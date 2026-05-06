@@ -946,7 +946,6 @@ export const AdminSettingsPage = () => {
       <PageHeader
         eyebrow="Admin settings"
         title="Admin Settings and Permissions"
-        description="Control role access, user overrides, operational rules, and change history from one compact admin workspace."
         actions={
           <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
             {[

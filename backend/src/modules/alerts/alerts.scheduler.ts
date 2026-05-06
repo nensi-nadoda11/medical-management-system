@@ -8,6 +8,7 @@ import { AlertsService } from "./alerts.service";
 export class AlertsScheduler {
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private hasLoggedBranchSchemaSkip = false;
 
   constructor(
     private readonly branchesRepository = new BranchesRepository(),
@@ -45,6 +46,19 @@ export class AlertsScheduler {
     this.isRunning = true;
 
     try {
+      const isBranchingSchemaReady =
+        await this.branchesRepository.isBranchingSchemaReady();
+
+      if (!isBranchingSchemaReady) {
+        if (!this.hasLoggedBranchSchemaSkip) {
+          logger.warn("Alerts scheduler skipped because branching schema is not ready");
+          this.hasLoggedBranchSchemaSkip = true;
+        }
+        return;
+      }
+
+      this.hasLoggedBranchSchemaSkip = false;
+
       const activeBranches = await this.branchesRepository.listActiveBranches();
       const touchedShopIds = new Set<string>();
 

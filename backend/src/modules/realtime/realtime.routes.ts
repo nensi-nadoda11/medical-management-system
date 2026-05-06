@@ -20,8 +20,12 @@ router.get("/stock-events", requireAuth, (req, res) => {
     response: res,
   });
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) {
-      res.write(": keep-alive\n\n");
+    if (!realtimeService.safeWrite(res, ": keep-alive\n\n")) {
+      clearInterval(heartbeat);
+      unsubscribe();
+      if (!res.writableEnded) {
+        res.end();
+      }
     }
   }, 15_000);
 
@@ -42,6 +46,11 @@ router.get("/stock-events", requireAuth, (req, res) => {
     if (!res.writableEnded) {
       res.end();
     }
+  });
+
+  res.on("error", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
   });
 });
 

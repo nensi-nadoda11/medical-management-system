@@ -10,3 +10,6 @@ frontend/dist
 backend/dist
 .vscode
 .DS_Store
+backend/*.log
+backend/tmp-server-*.out.log
+backend/tmp-server-*.err.log

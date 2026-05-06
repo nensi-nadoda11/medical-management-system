@@ -414,7 +414,7 @@ export class AdminSettingsService {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
     }
 
-    return this.buildResolvedShopSettings(shopId, shop.invoicePrefix, settings, recipients);
+    return this.buildResolvedShopSettings(shopId, settings, recipients);
   }
 
   async getResolvedShopSettings(shopId: string, executor?: DbExecutor) {
@@ -430,7 +430,6 @@ export class AdminSettingsService {
 
     return this.buildResolvedShopSettings(
       shopId,
-      shop.invoicePrefix,
       settings,
       recipients,
     );
@@ -554,7 +553,6 @@ export class AdminSettingsService {
 
   private buildResolvedShopSettings(
     shopId: string,
-    invoicePrefix: string | null,
     settings: Awaited<ReturnType<AdminSettingsRepository["findShopSettings"]>>,
     recipients: Awaited<ReturnType<AdminSettingsRepository["listAdminEmailRecipients"]>>,
   ): ResolvedShopSettings {
@@ -589,7 +587,6 @@ export class AdminSettingsService {
         SHOP_SETTINGS_DEFAULTS.expiryEmailAlertsEnabled,
       invoicePrefix:
         settings?.invoicePrefix ??
-        invoicePrefix ??
         SHOP_SETTINGS_DEFAULTS.invoicePrefix,
       allowPartialPayments:
         settings?.allowPartialPayments ??

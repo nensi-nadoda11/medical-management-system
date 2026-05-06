@@ -1,4 +1,0 @@
-◇ injected env (28) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-[2026-04-17T08:12:19.671Z] [INFO] Email provider initialized {"provider":"smtp"}
-[2026-04-17T08:12:20.016Z] [INFO] SMS provider initialized {"provider":"twilio"}
-[2026-04-17T08:12:20.277Z] [INFO] Backend server started {"port":4001,"environment":"development"}

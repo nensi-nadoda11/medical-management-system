@@ -23,6 +23,10 @@ interface BillingSummaryPanelProps {
     roundOff: number;
     grandTotal: number;
     paidAmount: number;
+    availableAdvance: number;
+    previewAdvanceApplied: number;
+    effectivePaidAmount: number;
+    newAdvanceAmount: number;
     dueAmount: number;
   };
   isSubmitting: boolean;
@@ -105,13 +109,21 @@ export const BillingSummaryPanel = ({
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-3 2xl:grid-cols-2">
+                <div className="mt-4 grid gap-3 2xl:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                       Outstanding due
                     </p>
                     <p className="mt-1 text-sm font-semibold text-amber-700">
                       {formatCurrency(draft.selectedCustomer.totalDueAmount ?? "0.00")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Available advance
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-emerald-700">
+                      {formatCurrency(totals.availableAdvance)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -287,12 +299,34 @@ export const BillingSummaryPanel = ({
               <span>Grand total</span>
               <span>{formatCurrency(totals.grandTotal)}</span>
             </div>
+            {draft.selectedCustomer ? (
+              <div className="flex items-center justify-between">
+                <span>Advance used</span>
+                <span className="font-semibold text-emerald-700">
+                  {formatCurrency(totals.previewAdvanceApplied)}
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
-              <span>Paid</span>
+              <span>Paid entered</span>
               <span className="font-semibold text-slate-950">
                 {formatCurrency(totals.paidAmount)}
               </span>
             </div>
+            <div className="flex items-center justify-between">
+              <span>Effective paid</span>
+              <span className="font-semibold text-slate-950">
+                {formatCurrency(totals.effectivePaidAmount)}
+              </span>
+            </div>
+            {totals.newAdvanceAmount > 0 ? (
+              <div className="flex items-center justify-between">
+                <span>New advance</span>
+                <span className="font-semibold text-emerald-700">
+                  {formatCurrency(totals.newAdvanceAmount)}
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <span>Due</span>
               <span

@@ -7,6 +7,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { getReturnRefundCapMinorUnits } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
@@ -811,9 +812,14 @@ export class SalesReturnsService {
       preparedItems.map((item) => item.lineReturnAmountMinorUnits),
     );
     const refundAmountMinorUnits = toMoneyMinorUnits(input.refundAmount);
+    const maxRefundMinorUnits = getReturnRefundCapMinorUnits(
+      totalReturnAmountMinorUnits,
+      toMoneyMinorUnits(sale.dueAmount),
+    );
     const refundConfig = this.normalizeRefund({
       refundAmountMinorUnits,
       totalReturnAmountMinorUnits,
+      maxRefundMinorUnits,
       refundStatus: input.refundStatus,
       ...(input.refundMethod ? { refundMethod: input.refundMethod } : {}),
     });
@@ -830,6 +836,7 @@ export class SalesReturnsService {
   private normalizeRefund(input: {
     refundAmountMinorUnits: number;
     totalReturnAmountMinorUnits: number;
+    maxRefundMinorUnits: number;
     refundMethod?: RefundMethod;
     refundStatus: RefundStatus;
   }) {
@@ -838,6 +845,14 @@ export class SalesReturnsService {
         400,
         "REFUND_AMOUNT_INVALID",
         "Refund amount cannot exceed the total return amount.",
+      );
+    }
+
+    if (input.refundAmountMinorUnits > input.maxRefundMinorUnits) {
+      throw buildAppError(
+        400,
+        "REFUND_AMOUNT_EXCEEDS_NET_RETURN",
+        "Refund amount cannot exceed the return amount left after settling the bill due.",
       );
     }
 

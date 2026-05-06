@@ -7,6 +7,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { buildSettlementState } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
@@ -101,18 +102,6 @@ const buildPaginatedResponse = <T>(
   },
 });
 
-const mapPaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: number) => {
-  if (paidMinorUnits <= 0) {
-    return "unpaid" as const;
-  }
-
-  if (paidMinorUnits >= grandTotalMinorUnits) {
-    return "paid" as const;
-  }
-
-  return "partial" as const;
-};
-
 const resolvePurchaseWorkflowStage = (purchase: {
   status: "draft" | "finalized" | "cancelled";
   purchaseOrderApprovedAt: Date | null;
@@ -152,6 +141,7 @@ const toPurchaseListResponse = (record: Awaited<
   taxAmount: record.purchase.taxAmount,
   roundOffAmount: record.purchase.roundOffAmount,
   grandTotal: record.purchase.grandTotal,
+  initialPaidAmount: record.purchase.initialPaidAmount,
   paidAmount: record.purchase.paidAmount,
   dueAmount: record.purchase.dueAmount,
   purchaseOrderApprovedAt: record.purchase.purchaseOrderApprovedAt,
@@ -197,6 +187,7 @@ const toPurchaseDetailResponse = (
   taxAmount: record.purchase.taxAmount,
   roundOffAmount: record.purchase.roundOffAmount,
   grandTotal: record.purchase.grandTotal,
+  initialPaidAmount: record.purchase.initialPaidAmount,
   paidAmount: record.purchase.paidAmount,
   dueAmount: record.purchase.dueAmount,
   notes: record.purchase.notes,
@@ -351,15 +342,10 @@ class PurchaseTotalsBuilder {
       );
     }
 
-    if (paidAmountMinorUnits > grandTotalMinorUnits) {
-      throw buildAppError(
-        400,
-        "PAID_AMOUNT_EXCEEDS_TOTAL",
-        "Paid amount cannot exceed grand total.",
-      );
-    }
-
-    const dueAmountMinorUnits = grandTotalMinorUnits - paidAmountMinorUnits;
+    const settlementState = buildSettlementState(
+      grandTotalMinorUnits,
+      paidAmountMinorUnits,
+    );
 
     return {
       normalizedPurchaseDate,
@@ -374,11 +360,9 @@ class PurchaseTotalsBuilder {
         roundOffMinorUnits,
         grandTotalMinorUnits,
         paidAmountMinorUnits,
-        dueAmountMinorUnits,
-        paymentStatus: mapPaymentStatus(
-          paidAmountMinorUnits,
-          grandTotalMinorUnits,
-        ),
+        settledPaidMinorUnits: settlementState.settledMinorUnits,
+        dueAmountMinorUnits: settlementState.dueMinorUnits,
+        paymentStatus: settlementState.paymentStatus,
       },
     };
   }
@@ -566,7 +550,7 @@ export class PurchasesService {
               calculated.totals.paidAmountMinorUnits,
             ),
             paidAmount: moneyMinorUnitsToString(
-              calculated.totals.paidAmountMinorUnits,
+              calculated.totals.settledPaidMinorUnits,
             ),
             dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
             notes: input.notes,
@@ -752,7 +736,7 @@ export class PurchasesService {
               calculated.totals.paidAmountMinorUnits,
             ),
             paidAmount: moneyMinorUnitsToString(
-              calculated.totals.paidAmountMinorUnits,
+              calculated.totals.settledPaidMinorUnits,
             ),
             dueAmount: moneyMinorUnitsToString(calculated.totals.dueAmountMinorUnits),
             notes: input.notes,
@@ -888,6 +872,12 @@ export class PurchasesService {
           finalizedAt: new Date(),
           updatedByUserId: userId,
         },
+        tx,
+      );
+
+      await this.accountingLedgerService.applyAvailableSupplierAdvanceToPurchase(
+        shopId,
+        purchaseId,
         tx,
       );
 

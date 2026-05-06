@@ -366,7 +366,6 @@ export const DataManagementPage = () => {
       <PageHeader
         eyebrow="Admin utility"
         title="Data Management"
-        description="Handle safe bulk imports, export operational datasets, and create controlled shop backups without stepping outside your existing admin guardrails."
         actions={
           <div className="flex flex-wrap gap-2">
             {sectionTabs.map((tab) => (
@@ -408,7 +407,6 @@ export const DataManagementPage = () => {
         <div className="space-y-6">
           <SectionCard
             title="Import wizard"
-            description="Choose a template, upload a file, validate row-level issues, then confirm only when the preview looks safe."
             action={
               <div className="flex flex-wrap gap-2">
                 <button
@@ -478,7 +476,7 @@ export const DataManagementPage = () => {
               </label>
 
               <button
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="self-end rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!selectedFile || validateImportMutation.isPending}
                 onClick={() => validateImportMutation.mutate()}
                 type="button"

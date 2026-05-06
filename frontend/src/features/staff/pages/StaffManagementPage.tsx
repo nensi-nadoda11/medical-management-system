@@ -155,7 +155,6 @@ export const StaffManagementPage = () => {
             Invite user
           </button>
         }
-        description="Manage active team members, pending invitations, and account access from one admin-friendly view."
         eyebrow="Admin workspace"
         title="Staff Management"
       />
@@ -196,7 +195,6 @@ export const StaffManagementPage = () => {
             ))}
           </div>
         }
-        description="Switch between live team members and invitation activity without leaving the page."
         title="Team operations"
       >
         {activeTab === "users" ? (
