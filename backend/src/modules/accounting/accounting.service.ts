@@ -233,14 +233,6 @@ export class AccountingService {
         })
         .filter((value): value is NonNullable<typeof value> => Boolean(value));
 
-      if (input.saleId && remainingMinorUnits > 0) {
-        throw buildAppError(
-          400,
-          "PAYMENT_EXCEEDS_BILL_DUE",
-          "Payment amount cannot exceed the selected bill due.",
-        );
-      }
-
       const created = await this.accountingRepository.createCustomerPayment(
         {
           shopId,
@@ -559,14 +551,6 @@ export class AccountingService {
             : null;
         })
         .filter((value): value is NonNullable<typeof value> => Boolean(value));
-
-      if (input.purchaseId && remainingMinorUnits > 0) {
-        throw buildAppError(
-          400,
-          "PAYMENT_EXCEEDS_PURCHASE_DUE",
-          "Payment amount cannot exceed the selected purchase due.",
-        );
-      }
 
       const created = await this.accountingRepository.createSupplierPayment(
         {

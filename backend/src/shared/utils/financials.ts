@@ -47,6 +47,18 @@ export const buildSettlementState = (
   };
 };
 
+export const derivePriorAdvanceMinorUnits = (
+  currentBalanceMinorUnits: number,
+  currentDocumentBalanceContributionMinorUnits: number,
+) =>
+  Math.max(
+    -(
+      currentBalanceMinorUnits -
+      currentDocumentBalanceContributionMinorUnits
+    ),
+    0,
+  );
+
 export const getReturnRefundCapMinorUnits = (
   totalReturnAmountMinorUnits: number,
   currentDueMinorUnits: number,

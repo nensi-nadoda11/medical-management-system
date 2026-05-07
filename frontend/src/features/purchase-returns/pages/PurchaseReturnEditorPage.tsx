@@ -33,6 +33,8 @@ import type {
   CreatePurchaseReturnPayload,
   PurchaseReturnDetail,
   PurchaseReturnReason,
+  PurchaseReturnRefundMethod,
+  PurchaseReturnRefundStatus,
   ReturnablePurchaseDetailItem,
   UpdatePurchaseReturnPayload,
 } from "../../../types/purchase-return";
@@ -69,6 +71,25 @@ const calculateLineReturnAmount = (
   };
 };
 
+const normalizeRefundFields = (
+  refundAmount: number,
+  refundMethod: PurchaseReturnRefundMethod | "",
+  refundStatus: PurchaseReturnRefundStatus,
+) => {
+  if (refundAmount <= 0) {
+    return {
+      refundAmount: 0,
+      refundStatus: "not_required" as const,
+    };
+  }
+
+  return {
+    refundAmount,
+    refundMethod: refundMethod || undefined,
+    refundStatus,
+  };
+};
+
 export const PurchaseReturnEditorPage = () => {
   const { id = "" } = useParams();
   const isEditing = Boolean(id);
@@ -86,6 +107,10 @@ export const PurchaseReturnEditorPage = () => {
   const [selectedPurchaseId, setSelectedPurchaseId] = useState(
     searchParams.get("purchaseId") ?? "",
   );
+  const [refundAmount, setRefundAmount] = useState("0");
+  const [refundMethod, setRefundMethod] = useState<PurchaseReturnRefundMethod | "">("");
+  const [refundStatus, setRefundStatus] =
+    useState<PurchaseReturnRefundStatus>("not_required");
   const [notes, setNotes] = useState("");
   const [itemDrafts, setItemDrafts] = useState<Record<string, ItemDraft>>({});
   const initializedKeyRef = useRef("");
@@ -145,6 +170,9 @@ export const PurchaseReturnEditorPage = () => {
 
     Promise.resolve().then(() => {
       if (existingReturn) {
+        setRefundAmount(existingReturn.refundAmount);
+        setRefundMethod(existingReturn.refundMethod ?? "");
+        setRefundStatus(existingReturn.refundStatus);
         setNotes(existingReturn.notes ?? "");
         setItemDrafts(
           Object.fromEntries(
@@ -167,6 +195,9 @@ export const PurchaseReturnEditorPage = () => {
         return;
       }
 
+      setRefundAmount("0");
+      setRefundMethod("");
+      setRefundStatus("not_required");
       setNotes("");
       setItemDrafts(
         Object.fromEntries(
@@ -314,7 +345,42 @@ export const PurchaseReturnEditorPage = () => {
       return;
     }
 
+    const parsedRefundAmount = Number.parseFloat(refundAmount || "0");
+    const currentPurchaseDueAmount = Number.parseFloat(
+      returnablePurchaseQuery.data?.purchase.dueAmount ?? "0",
+    );
+    const maxRefundAmount = Math.max(previewTotal - currentPurchaseDueAmount, 0);
+
+    if (!Number.isFinite(parsedRefundAmount) || parsedRefundAmount < 0) {
+      pushToast({
+        title: "Invalid refund amount",
+        description: "Enter a valid non-negative refund amount.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (parsedRefundAmount > previewTotal) {
+      pushToast({
+        title: "Refund exceeds return total",
+        description: "Refund amount cannot be greater than the return amount.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (parsedRefundAmount > maxRefundAmount) {
+      pushToast({
+        title: "Refund exceeds net return",
+        description:
+          "Return amount first adjusts the purchase due. Refund can only use the remaining return balance.",
+        variant: "error",
+      });
+      return;
+    }
+
     const payloadBase = {
+      ...normalizeRefundFields(parsedRefundAmount, refundMethod, refundStatus),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       items: selectedItems.map((item) => ({
         purchaseItemId: item.item.purchaseItemId,
@@ -387,6 +453,10 @@ export const PurchaseReturnEditorPage = () => {
 
   const isBusy =
     createMutation.isPending || updateMutation.isPending || completeMutation.isPending;
+  const currentPurchaseDueAmount = Number.parseFloat(
+    returnablePurchaseQuery.data?.purchase.dueAmount ?? "0",
+  );
+  const maxRefundAmount = Math.max(previewTotal - currentPurchaseDueAmount, 0);
 
   return (
     <div className="space-y-6">
@@ -803,16 +873,81 @@ export const PurchaseReturnEditorPage = () => {
             </SectionCard>
 
             <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-              <SectionCard description="Optional notes stay attached to the return header for supplier follow-up or review." title="Return notes">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Notes
-                  <textarea
-                    className={`${inputClassName} min-h-32 resize-y`}
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder="Optional return notes"
-                    value={notes}
-                  />
-                </label>
+              <SectionCard description="Capture how the supplier-side refund should be recorded for this return." title="Refund details">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Refund amount
+                    <input
+                      className={inputClassName}
+                      min="0"
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setRefundAmount(value);
+                        if (Number.parseFloat(value || "0") <= 0) {
+                          setRefundMethod("");
+                          setRefundStatus("not_required");
+                        } else if (refundStatus === "not_required") {
+                          setRefundStatus("pending");
+                        }
+                      }}
+                      step="0.01"
+                      type="number"
+                      value={refundAmount}
+                    />
+                    <span className="text-xs text-slate-500">
+                      Purchase due adjusts first. Maximum refundable amount is {formatCurrency(maxRefundAmount)}.
+                    </span>
+                  </label>
+
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Refund method
+                    <select
+                      className={inputClassName}
+                      disabled={Number.parseFloat(refundAmount || "0") <= 0}
+                      onChange={(event) =>
+                        setRefundMethod(event.target.value as PurchaseReturnRefundMethod | "")
+                      }
+                      value={refundMethod}
+                    >
+                      <option value="">Select method</option>
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="bank_transfer">Bank transfer</option>
+                      <option value="adjustment">Adjustment</option>
+                    </select>
+                  </label>
+
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Refund status
+                    <select
+                      className={inputClassName}
+                      disabled={Number.parseFloat(refundAmount || "0") <= 0}
+                      onChange={(event) =>
+                        setRefundStatus(event.target.value as PurchaseReturnRefundStatus)
+                      }
+                      value={
+                        Number.parseFloat(refundAmount || "0") <= 0
+                          ? "not_required"
+                          : refundStatus
+                      }
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="processed">Processed</option>
+                      <option value="not_required">Not required</option>
+                    </select>
+                  </label>
+
+                  <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+                    Notes
+                    <textarea
+                      className={`${inputClassName} min-h-28 resize-y`}
+                      onChange={(event) => setNotes(event.target.value)}
+                      placeholder="Optional return notes"
+                      value={notes}
+                    />
+                  </label>
+                </div>
               </SectionCard>
 
               <SectionCard description="Preview totals before saving the draft or posting the stock deduction." title="Return totals">
@@ -823,6 +958,22 @@ export const PurchaseReturnEditorPage = () => {
                     [
                       "Purchase due",
                       formatCurrency(returnablePurchaseQuery.data.purchase.dueAmount),
+                    ],
+                    [
+                      "Due adjustment",
+                      formatCurrency(Math.min(currentPurchaseDueAmount, previewTotal)),
+                    ],
+                    ["Max refund", formatCurrency(maxRefundAmount)],
+                    ["Refund amount", formatCurrency(refundAmount || 0)],
+                    [
+                      "Refund status",
+                      humanizeLabel(
+                        normalizeRefundFields(
+                          Number.parseFloat(refundAmount || "0"),
+                          refundMethod,
+                          refundStatus,
+                        ).refundStatus,
+                      ),
                     ],
                     [
                       "Supplier",

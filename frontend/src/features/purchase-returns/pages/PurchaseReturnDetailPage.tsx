@@ -172,6 +172,7 @@ export const PurchaseReturnDetailPage = () => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard hint="Current return status" label="Status" value={<StatusBadge label={purchaseReturn.status} />} />
         <SummaryCard hint="Total value of returned lines" label="Return amount" value={formatCurrency(purchaseReturn.totalReturnAmount)} />
+        <SummaryCard hint="Actual supplier refund captured on this return" label="Refund amount" value={formatCurrency(purchaseReturn.refundAmount)} />
         <SummaryCard hint="Linked purchase" label="Purchase" value={purchaseReturn.purchase.purchaseNumber} />
         <SummaryCard hint="Supplier on the original purchase" label="Supplier" value={purchaseReturn.supplier.supplierName} />
       </div>
@@ -183,6 +184,8 @@ export const PurchaseReturnDetailPage = () => {
             ["Supplier", purchaseReturn.supplier.supplierName],
             ["Purchase date", formatDate(purchaseReturn.purchase.purchaseDate)],
             ["Payment status", humanizeLabel(purchaseReturn.purchase.paymentStatus)],
+            ["Refund method", purchaseReturn.refundMethod ? humanizeLabel(purchaseReturn.refundMethod) : "Not required"],
+            ["Refund status", humanizeLabel(purchaseReturn.refundStatus)],
             ["Created by", purchaseReturn.createdBy.fullName],
             ["Created at", formatDateTime(purchaseReturn.createdAt)],
             ["Completed by", purchaseReturn.completedBy?.fullName ?? "Not completed"],

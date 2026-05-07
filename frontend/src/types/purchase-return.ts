@@ -14,9 +14,25 @@ export const PURCHASE_RETURN_REASONS = [
   "purchase_mistake",
   "other",
 ] as const;
+export const PURCHASE_RETURN_REFUND_STATUSES = [
+  "pending",
+  "processed",
+  "not_required",
+] as const;
+export const PURCHASE_RETURN_REFUND_METHODS = [
+  "cash",
+  "upi",
+  "card",
+  "bank_transfer",
+  "adjustment",
+] as const;
 
 export type PurchaseReturnStatus = (typeof PURCHASE_RETURN_STATUSES)[number];
 export type PurchaseReturnReason = (typeof PURCHASE_RETURN_REASONS)[number];
+export type PurchaseReturnRefundStatus =
+  (typeof PURCHASE_RETURN_REFUND_STATUSES)[number];
+export type PurchaseReturnRefundMethod =
+  (typeof PURCHASE_RETURN_REFUND_METHODS)[number];
 
 export interface PurchaseReturnSupplierSummary {
   id: string;
@@ -38,6 +54,9 @@ export interface PurchaseReturnListItem {
   supplier: PurchaseReturnSupplierSummary;
   status: PurchaseReturnStatus;
   totalReturnAmount: string;
+  refundAmount: string;
+  refundMethod: PurchaseReturnRefundMethod | null;
+  refundStatus: PurchaseReturnRefundStatus;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -89,12 +108,13 @@ export interface PurchaseReturnDetail extends PurchaseReturnListItem {
     id: string;
     purchaseNumber: string;
     purchaseDate: string;
-    status: "draft" | "finalized" | "cancelled";
-    paymentStatus: "unpaid" | "partial" | "paid";
-    grandTotal: string;
-    paidAmount: string;
-    dueAmount: string;
-    finalizedAt: string | null;
+  status: "draft" | "finalized" | "cancelled";
+  paymentStatus: "unpaid" | "partial" | "paid";
+  grandTotal: string;
+  paidAmount: string;
+  dueAmount: string;
+  netReturnCreditAmount: string;
+  finalizedAt: string | null;
   };
   supplier: PurchaseReturnSupplierSummary;
   createdBy: {
@@ -169,11 +189,17 @@ export interface PurchaseReturnItemInput {
 
 export interface CreatePurchaseReturnPayload {
   purchaseId: string;
+  refundAmount: number;
+  refundMethod?: PurchaseReturnRefundMethod;
+  refundStatus: PurchaseReturnRefundStatus;
   notes?: string;
   items: PurchaseReturnItemInput[];
 }
 
 export interface UpdatePurchaseReturnPayload {
+  refundAmount: number;
+  refundMethod?: PurchaseReturnRefundMethod;
+  refundStatus: PurchaseReturnRefundStatus;
   notes?: string;
   items: PurchaseReturnItemInput[];
 }

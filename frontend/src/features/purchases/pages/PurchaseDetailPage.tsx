@@ -21,6 +21,12 @@ import {
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import { hasPermission } from "../../../types/auth";
+import { suppliersQueryKeys } from "../../suppliers/api/suppliers";
+import {
+  accountingQueryKeys,
+  createAccountingSupplierPayment,
+} from "../../accounting/api/accounting";
+import { SupplierPaymentEntryModal } from "../../accounting/components/SupplierPaymentEntryModal";
 import {
   approvePurchaseOrder,
   cancelPurchase,
@@ -67,8 +73,10 @@ export const PurchaseDetailPage = () => {
     user,
     "purchaseReturns.create",
   );
+  const canRecordPayments = hasPermission(user, "payments.create");
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [cancelNotes, setCancelNotes] = useState("");
 
   const purchaseQuery = useQuery({
@@ -150,6 +158,30 @@ export const PurchaseDetailPage = () => {
       });
       setIsCancelOpen(false);
       setCancelNotes("");
+    },
+  });
+  const paymentMutation = useMutation({
+    mutationFn: createAccountingSupplierPayment,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: accountingQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: suppliersQueryKeys.all }),
+      ]);
+      pushToast({
+        title: "Supplier payment recorded",
+        description: "Purchase due and supplier accounting were refreshed successfully.",
+        variant: "success",
+      });
+      setIsPaymentOpen(false);
+    },
+    onError: (error: Error) => {
+      pushToast({
+        title: "Unable to record supplier payment",
+        description: error.message,
+        variant: "error",
+      });
     },
   });
 
@@ -255,6 +287,15 @@ export const PurchaseDetailPage = () => {
               >
                 Create return
               </Link>
+            ) : null}
+            {!isDraft && canRecordPayments && Number(purchase.dueAmount) > 0 ? (
+              <button
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                onClick={() => setIsPaymentOpen(true)}
+                type="button"
+              >
+                Pay supplier
+              </button>
             ) : null}
           </>
         }
@@ -512,6 +553,17 @@ export const PurchaseDetailPage = () => {
           <SectionCard
             description="Backend-calculated totals stored with the purchase."
             title="Financial breakdown"
+            action={
+              !isDraft && canRecordPayments && Number(purchase.dueAmount) > 0 ? (
+                <button
+                  className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  onClick={() => setIsPaymentOpen(true)}
+                  type="button"
+                >
+                  Pay due
+                </button>
+              ) : null
+            }
           >
             <div className="space-y-2.5">
               {[
@@ -574,6 +626,24 @@ export const PurchaseDetailPage = () => {
         open={isCancelOpen}
         title="Cancel this purchase?"
         tone="danger"
+      />
+
+      <SupplierPaymentEntryModal
+        errorMessage={paymentMutation.error?.message}
+        isSubmitting={paymentMutation.isPending}
+        onClose={() => setIsPaymentOpen(false)}
+        onSubmit={async (payload) => {
+          await paymentMutation.mutateAsync(payload);
+        }}
+        open={isPaymentOpen}
+        preset={{
+          supplierId: purchase.supplier.id,
+          supplierLabel: `${purchase.supplier.supplierName} / ${purchase.supplier.companyName || "Independent"} / ${purchase.supplier.mobileNumber}`,
+          purchaseId: purchase.id,
+          purchaseLabel: `${purchase.purchaseNumber} / Due ${formatCurrency(purchase.dueAmount)} / ${formatDate(purchase.purchaseDate)}`,
+          lockSupplier: true,
+          lockPurchase: true,
+        }}
       />
     </div>
   );

@@ -505,23 +505,21 @@ export class CustomersService {
         tx,
       );
 
-      await Promise.all(
-        allocations.map((allocation) =>
-          this.customersRepository.updateSalePaymentAmounts(
-            allocation.saleId,
-            {
-              paidAmount: moneyMinorUnitsToString(allocation.nextPaidMinorUnits),
-              dueAmount: moneyMinorUnitsToString(allocation.nextDueMinorUnits),
-              paymentStatus: mapSalePaymentStatus(
-                allocation.nextPaidMinorUnits,
-                allocation.grandTotalMinorUnits,
-              ),
-              updatedByUserId: receivedByUserId,
-            },
-            tx,
-          ),
-        ),
-      );
+      for (const allocation of allocations) {
+        await this.customersRepository.updateSalePaymentAmounts(
+          allocation.saleId,
+          {
+            paidAmount: moneyMinorUnitsToString(allocation.nextPaidMinorUnits),
+            dueAmount: moneyMinorUnitsToString(allocation.nextDueMinorUnits),
+            paymentStatus: mapSalePaymentStatus(
+              allocation.nextPaidMinorUnits,
+              allocation.grandTotalMinorUnits,
+            ),
+            updatedByUserId: receivedByUserId,
+          },
+          tx,
+        );
+      }
 
       return createdPayment.payment.id;
     });

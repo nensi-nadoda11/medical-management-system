@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -9,6 +10,7 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
+import { useToast } from "../../../hooks/use-toast";
 import {
   formatCurrency,
   formatDate,
@@ -20,13 +22,23 @@ import { useSessionQuery } from "../../auth/hooks/use-session";
 import { billingQueryKeys, getBill, type BillDetailItem } from "../api/billing";
 import { BillingModuleNav } from "../components/BillingModuleNav";
 import { listSalesReturns, salesReturnsQueryKeys, type SalesReturnListItem } from "../../sales-returns/api/salesReturns";
+import { customersQueryKeys } from "../../customers/api/customers";
+import {
+  accountingQueryKeys,
+  createAccountingCustomerPayment,
+} from "../../accounting/api/accounting";
+import { CustomerPaymentEntryModal } from "../../accounting/components/CustomerPaymentEntryModal";
 
 export const BillingDetailPage = () => {
   const { id = "" } = useParams();
+  const queryClient = useQueryClient();
+  const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
   const user = sessionQuery.data?.user;
   const canCreateBills = hasPermission(user, "billing.create");
   const canCreateSalesReturn = hasPermission(user, "billing.return");
+  const canRecordPayments = hasPermission(user, "payments.create");
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
   const billQuery = useQuery({
     queryKey: billingQueryKeys.detail(id),
@@ -49,6 +61,30 @@ export const BillingDetailPage = () => {
         sortBy: "createdAt",
         sortOrder: "desc",
       }),
+  });
+  const paymentMutation = useMutation({
+    mutationFn: createAccountingCustomerPayment,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: billingQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: billingQueryKeys.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: accountingQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: customersQueryKeys.all }),
+      ]);
+      pushToast({
+        title: "Payment recorded",
+        description: "Bill due and customer accounting were refreshed successfully.",
+        variant: "success",
+      });
+      setIsPaymentOpen(false);
+    },
+    onError: (error: Error) => {
+      pushToast({
+        title: "Unable to record payment",
+        description: error.message,
+        variant: "error",
+      });
+    },
   });
 
   if (billQuery.isLoading) {
@@ -102,6 +138,18 @@ export const BillingDetailPage = () => {
               >
                 Create return
               </Link>
+            ) : null}
+            {canRecordPayments &&
+            bill.status === "completed" &&
+            bill.customerId &&
+            Number(bill.dueAmount) > 0 ? (
+              <button
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                onClick={() => setIsPaymentOpen(true)}
+                type="button"
+              >
+                Receive payment
+              </button>
             ) : null}
           </>
         }
@@ -340,6 +388,26 @@ export const BillingDetailPage = () => {
           ))}
         </div>
       </SectionCard>
+
+      {bill.customerId ? (
+        <CustomerPaymentEntryModal
+          errorMessage={paymentMutation.error?.message}
+          isSubmitting={paymentMutation.isPending}
+          onClose={() => setIsPaymentOpen(false)}
+          onSubmit={async (payload) => {
+            await paymentMutation.mutateAsync(payload);
+          }}
+          open={isPaymentOpen}
+          preset={{
+            customerId: bill.customerId,
+            customerLabel: `${bill.customerLabel} / ${bill.customerPhone || "No phone"}`,
+            saleId: bill.id,
+            saleLabel: `${bill.billNumber} / Due ${formatCurrency(bill.dueAmount)} / ${formatDate(bill.completedAt ?? bill.createdAt)}`,
+            lockCustomer: true,
+            lockSale: true,
+          }}
+        />
+      ) : null}
     </div>
   );
 };

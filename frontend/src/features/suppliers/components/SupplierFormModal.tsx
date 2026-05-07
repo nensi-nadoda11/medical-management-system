@@ -365,7 +365,7 @@ export const SupplierFormModal = ({
           </FormSection>
 
           <FormSection
-            description="Set account opening balance and internal notes from day one for cleaner financial readiness."
+            description="Set supplier advance opening balance and internal notes from day one for cleaner financial readiness."
             title="Accounting setup"
           >
             <div className="grid gap-4 md:grid-cols-2">
@@ -377,6 +377,9 @@ export const SupplierFormModal = ({
                     {errors.openingBalance.message}
                   </span>
                 ) : null}
+                <span className="text-xs text-slate-500">
+                  Enter a positive amount when advance is already lying with this supplier.
+                </span>
               </label>
 
               <label className="grid gap-2 text-sm font-medium text-slate-700">

@@ -88,6 +88,11 @@ describe("dateTo normalization for listing services", () => {
     const repository = {
       listSales: vi.fn().mockResolvedValue([]),
       countSales: vi.fn().mockResolvedValue(0),
+      getSalesSummary: vi.fn().mockResolvedValue({
+        totalSales: "0.00",
+        totalBills: 0,
+        averageBillValue: "0.00",
+      }),
     };
     const service = new BillingService(
       repository as never,

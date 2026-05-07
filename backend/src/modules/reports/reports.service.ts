@@ -90,6 +90,24 @@ const toMoneyNumber = (value?: string | number | null) => Number(value ?? 0);
 const toPercentString = (numerator: number, denominator: number) =>
   denominator > 0 ? ((numerator / denominator) * 100).toFixed(2) : "0.00";
 
+type SequentialTasks<T extends readonly unknown[]> = {
+  [K in keyof T]: () => Promise<T[K]>;
+};
+
+const runReportReadsSequentially = async <T extends readonly unknown[]>(
+  tasks: SequentialTasks<T>,
+): Promise<T> => {
+  const results: unknown[] = [];
+
+  for (const task of tasks) {
+    // Report endpoints aggregate multiple DB reads; serializing them avoids
+    // overlapping queries on the same pg client.
+    results.push(await task());
+  }
+
+  return results as unknown as T;
+};
+
 export class ReportsService {
   constructor(
     private readonly reportsRepository = new ReportsRepository(),
@@ -113,38 +131,44 @@ export class ReportsService {
     );
 
     const [todaySales, monthlySales, lowStockCount, expirySummary, monthlyProfit] =
-      await Promise.all([
-        this.reportsRepository.getTodaySalesSummary(shopId, branchIds, accessScope),
-        this.reportsRepository.getMonthlySalesSummary(shopId, branchIds, accessScope),
-        Promise.all(
-          branchIds.map((branchId) =>
-            this.inventoryRepository.countInventorySummary(
-              shopId,
-              branchId,
+      await runReportReadsSequentially([
+        () => this.reportsRepository.getTodaySalesSummary(shopId, branchIds, accessScope),
+        () => this.reportsRepository.getMonthlySalesSummary(shopId, branchIds, accessScope),
+        async () => {
+          const counts = await runReportReadsSequentially(
+            branchIds.map(
+              (branchId) => () =>
+                this.inventoryRepository.countInventorySummary(
+                  shopId,
+                  branchId,
+                  {
+                    page: 1,
+                    pageSize: 1,
+                    sortBy: "availableQuantity",
+                    sortOrder: "asc",
+                    search: undefined,
+                    lowStockOnly: true,
+                  },
+                  branchThresholds.get(branchId) ?? 10,
+                ),
+            ) as SequentialTasks<readonly number[]>,
+          );
+
+          return counts.reduce((sum, count) => sum + count, 0);
+        },
+        () => this.reportsRepository.getExpirySummary(shopId, branchIds),
+        () =>
+          this.reportsRepository.getProfitSummary(
+            shopId,
+            branchIds,
+            normalizeRange<Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo">>(
               {
-                page: 1,
-                pageSize: 1,
-                sortBy: "availableQuantity",
-                sortOrder: "asc",
                 search: undefined,
-                lowStockOnly: true,
               },
-              branchThresholds.get(branchId) ?? 10,
+              true,
             ),
+            accessScope,
           ),
-        ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
-        this.reportsRepository.getExpirySummary(shopId, branchIds),
-        this.reportsRepository.getProfitSummary(
-          shopId,
-          branchIds,
-          normalizeRange<Pick<ProfitReportQuery, "search" | "dateFrom" | "dateTo">>(
-            {
-              search: undefined,
-            },
-            true,
-          ),
-          accessScope,
-        ),
       ]);
 
     return {
@@ -181,33 +205,44 @@ export class ReportsService {
       true,
     );
 
-    const [summary, paymentBreakdown, trend, rows, total] = await Promise.all([
-      this.reportsRepository.getSalesSummary(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.getSalesPaymentBreakdown(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.getSalesTrend(shopId, branchIds, normalizedQuery, accessScope),
-      this.reportsRepository.listSalesReportRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.countSalesReportRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-    ]);
+    const [summary, paymentBreakdown, trend, rows, total] =
+      await runReportReadsSequentially([
+        () =>
+          this.reportsRepository.getSalesSummary(
+            shopId,
+            branchIds,
+            normalizedQuery,
+            accessScope,
+          ),
+        () =>
+          this.reportsRepository.getSalesPaymentBreakdown(
+            shopId,
+            branchIds,
+            normalizedQuery,
+            accessScope,
+          ),
+        () =>
+          this.reportsRepository.getSalesTrend(
+            shopId,
+            branchIds,
+            normalizedQuery,
+            accessScope,
+          ),
+        () =>
+          this.reportsRepository.listSalesReportRows(
+            shopId,
+            branchIds,
+            normalizedQuery,
+            accessScope,
+          ),
+        () =>
+          this.reportsRepository.countSalesReportRows(
+            shopId,
+            branchIds,
+            normalizedQuery,
+            accessScope,
+          ),
+      ]);
 
     return {
       filters: {
@@ -264,31 +299,35 @@ export class ReportsService {
       true,
     );
 
-    const [summary, trend, rows, total] = await Promise.all([
-      this.reportsRepository.getProfitSummary(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.getProfitTrend(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.listProfitRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.countProfitRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
+    const [summary, trend, rows, total] = await runReportReadsSequentially([
+      () =>
+        this.reportsRepository.getProfitSummary(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.getProfitTrend(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.listProfitRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.countProfitRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
     ]);
 
     const revenue = toMoneyNumber(summary?.revenue);
@@ -359,34 +398,39 @@ export class ReportsService {
       branchIds,
     );
 
-    const [summary, lowStockCount, rows, total] = await Promise.all([
-      this.reportsRepository.getStockSummary(shopId, branchIds, normalizedQuery),
-      Promise.all(
-        branchIds.map((branchId) =>
-          this.inventoryRepository.countInventorySummary(
-            shopId,
-            branchId,
-            {
-              page: 1,
-              pageSize: 1,
-              sortBy: "availableQuantity",
-              sortOrder: "asc",
-              lowStockOnly: true,
-              search: normalizedQuery.search,
-              ...(normalizedQuery.categoryId
-                ? { categoryId: normalizedQuery.categoryId }
-                : {}),
-              ...(normalizedQuery.manufacturerId
-                ? { manufacturerId: normalizedQuery.manufacturerId }
-                : {}),
-              ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
-            },
-            branchThresholds.get(branchId) ?? 10,
-          ),
-        ),
-      ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
-      this.reportsRepository.listStockRows(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.countStockRows(shopId, branchIds, normalizedQuery),
+    const [summary, lowStockCount, rows, total] = await runReportReadsSequentially([
+      () => this.reportsRepository.getStockSummary(shopId, branchIds, normalizedQuery),
+      async () => {
+        const counts = await runReportReadsSequentially(
+          branchIds.map(
+            (branchId) => () =>
+              this.inventoryRepository.countInventorySummary(
+                shopId,
+                branchId,
+                {
+                  page: 1,
+                  pageSize: 1,
+                  sortBy: "availableQuantity",
+                  sortOrder: "asc",
+                  lowStockOnly: true,
+                  search: normalizedQuery.search,
+                  ...(normalizedQuery.categoryId
+                    ? { categoryId: normalizedQuery.categoryId }
+                    : {}),
+                  ...(normalizedQuery.manufacturerId
+                    ? { manufacturerId: normalizedQuery.manufacturerId }
+                    : {}),
+                  ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
+                },
+                branchThresholds.get(branchId) ?? 10,
+              ),
+          ) as SequentialTasks<readonly number[]>,
+        );
+
+        return counts.reduce((sum, count) => sum + count, 0);
+      },
+      () => this.reportsRepository.listStockRows(shopId, branchIds, normalizedQuery),
+      () => this.reportsRepository.countStockRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -440,25 +484,28 @@ export class ReportsService {
         : (await this.adminSettingsService.getResolvedShopSettings(shopId))
             .defaultLowStockThreshold;
 
-    const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getLowStockSummary(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        defaultThreshold,
-      ),
-      this.reportsRepository.listLowStockRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        defaultThreshold,
-      ),
-      this.reportsRepository.countLowStockRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        defaultThreshold,
-      ),
+    const [summary, rows, total] = await runReportReadsSequentially([
+      () =>
+        this.reportsRepository.getLowStockSummary(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          defaultThreshold,
+        ),
+      () =>
+        this.reportsRepository.listLowStockRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          defaultThreshold,
+        ),
+      () =>
+        this.reportsRepository.countLowStockRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          defaultThreshold,
+        ),
     ]);
 
     return {
@@ -495,10 +542,10 @@ export class ReportsService {
       search: normalizeSearch(query.search),
     };
 
-    const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getExpirySummary(shopId, branchIds),
-      this.reportsRepository.listExpiryRows(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.countExpiryRows(shopId, branchIds, normalizedQuery),
+    const [summary, rows, total] = await runReportReadsSequentially([
+      () => this.reportsRepository.getExpirySummary(shopId, branchIds),
+      () => this.reportsRepository.listExpiryRows(shopId, branchIds, normalizedQuery),
+      () => this.reportsRepository.countExpiryRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -536,10 +583,10 @@ export class ReportsService {
       true,
     );
 
-    const [summary, rows, total] = await Promise.all([
-      this.reportsRepository.getSupplierSummary(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.listSupplierRows(shopId, branchIds, normalizedQuery),
-      this.reportsRepository.countSupplierRows(shopId, branchIds, normalizedQuery),
+    const [summary, rows, total] = await runReportReadsSequentially([
+      () => this.reportsRepository.getSupplierSummary(shopId, branchIds, normalizedQuery),
+      () => this.reportsRepository.listSupplierRows(shopId, branchIds, normalizedQuery),
+      () => this.reportsRepository.countSupplierRows(shopId, branchIds, normalizedQuery),
     ]);
 
     return {
@@ -581,31 +628,35 @@ export class ReportsService {
       true,
     );
 
-    const [summary, trend, rows, total] = await Promise.all([
-      this.reportsRepository.getUsageSummary(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.getUsageTrend(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.listUsageRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
-      this.reportsRepository.countUsageRows(
-        shopId,
-        branchIds,
-        normalizedQuery,
-        accessScope,
-      ),
+    const [summary, trend, rows, total] = await runReportReadsSequentially([
+      () =>
+        this.reportsRepository.getUsageSummary(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.getUsageTrend(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.listUsageRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
+      () =>
+        this.reportsRepository.countUsageRows(
+          shopId,
+          branchIds,
+          normalizedQuery,
+          accessScope,
+        ),
     ]);
 
     const revenue = toMoneyNumber(summary?.revenue);

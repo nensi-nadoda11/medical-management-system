@@ -1,4 +1,5 @@
 import { db } from "../../db/client";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import { AppError } from "../../shared/errors/app-error";
 import { logger } from "../../shared/logger";
 import {
@@ -8,6 +9,7 @@ import {
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
 import { toEndOfDay } from "../../shared/utils/date-range";
+import { getReturnRefundCapMinorUnits } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
@@ -73,10 +75,16 @@ type PreparedReturnItem = {
   notes?: string;
 };
 
+type RefundMethod = "cash" | "upi" | "card" | "bank_transfer" | "adjustment";
+type RefundStatus = "pending" | "processed" | "not_required";
+
 type PreparedReturnDraft = {
   purchaseId: string;
   supplierId: string;
   notes?: string;
+  refundMethod?: RefundMethod;
+  refundStatus: RefundStatus;
+  refundAmountMinorUnits: number;
   totalReturnAmountMinorUnits: number;
   items: PreparedReturnItem[];
 };
@@ -113,6 +121,9 @@ export class PurchaseReturnsService {
         supplier: record.supplier,
         status: record.purchaseReturn.status,
         totalReturnAmount: record.purchaseReturn.totalReturnAmount,
+        refundAmount: record.purchaseReturn.refundAmount,
+        refundMethod: record.purchaseReturn.refundMethod,
+        refundStatus: record.purchaseReturn.refundStatus,
         notes: record.purchaseReturn.notes,
         createdAt: record.purchaseReturn.createdAt,
         updatedAt: record.purchaseReturn.updatedAt,
@@ -148,6 +159,9 @@ export class PurchaseReturnsService {
       returnNumber: record.purchaseReturn.returnNumber,
       status: record.purchaseReturn.status,
       totalReturnAmount: record.purchaseReturn.totalReturnAmount,
+      refundAmount: record.purchaseReturn.refundAmount,
+      refundMethod: record.purchaseReturn.refundMethod,
+      refundStatus: record.purchaseReturn.refundStatus,
       notes: record.purchaseReturn.notes,
       createdByUserId: record.purchaseReturn.createdByUserId,
       completedByUserId: record.purchaseReturn.completedByUserId,
@@ -166,6 +180,16 @@ export class PurchaseReturnsService {
         grandTotal: record.purchase.grandTotal,
         paidAmount: record.purchase.paidAmount,
         dueAmount: record.purchase.dueAmount,
+        netReturnCreditAmount: moneyMinorUnitsToString(
+          Math.max(
+            toMoneyMinorUnits(record.purchaseReturn.totalReturnAmount) -
+              (record.purchaseReturn.refundMethod &&
+              record.purchaseReturn.refundMethod !== "adjustment"
+                ? toMoneyMinorUnits(record.purchaseReturn.refundAmount)
+                : 0),
+            0,
+          ),
+        ),
         finalizedAt: record.purchase.finalizedAt,
       },
       supplier: record.supplier,
@@ -301,6 +325,9 @@ export class PurchaseReturnsService {
         shopId,
         {
           purchaseId: input.purchaseId,
+          refundAmount: input.refundAmount,
+          refundStatus: input.refundStatus,
+          ...(input.refundMethod ? { refundMethod: input.refundMethod } : {}),
           ...(input.notes ? { notes: input.notes } : {}),
           items: input.items,
         },
@@ -319,6 +346,9 @@ export class PurchaseReturnsService {
           totalReturnAmount: moneyMinorUnitsToString(
             preparedDraft.totalReturnAmountMinorUnits,
           ),
+          refundAmount: moneyMinorUnitsToString(preparedDraft.refundAmountMinorUnits),
+          refundMethod: preparedDraft.refundMethod,
+          refundStatus: preparedDraft.refundStatus,
           notes: preparedDraft.notes,
           createdByUserId: userId,
         },
@@ -374,6 +404,9 @@ export class PurchaseReturnsService {
         shopId,
         {
           purchaseId: existing.purchaseId,
+          refundAmount: input.refundAmount,
+          refundStatus: input.refundStatus,
+          ...(input.refundMethod ? { refundMethod: input.refundMethod } : {}),
           ...(input.notes ? { notes: input.notes } : {}),
           items: input.items,
         },
@@ -386,6 +419,9 @@ export class PurchaseReturnsService {
           totalReturnAmount: moneyMinorUnitsToString(
             preparedDraft.totalReturnAmountMinorUnits,
           ),
+          refundAmount: moneyMinorUnitsToString(preparedDraft.refundAmountMinorUnits),
+          refundMethod: preparedDraft.refundMethod,
+          refundStatus: preparedDraft.refundStatus,
           notes: preparedDraft.notes,
         },
         tx,
@@ -457,6 +493,9 @@ export class PurchaseReturnsService {
         shopId,
         {
           purchaseId: existing.purchaseId,
+          refundAmount: Number(existing.refundAmount),
+          refundStatus: existing.refundStatus,
+          ...(existing.refundMethod ? { refundMethod: existing.refundMethod } : {}),
           ...(existing.notes ? { notes: existing.notes } : {}),
           items: draftItems.map((item) => ({
             purchaseItemId: item.purchaseItemId,
@@ -509,6 +548,9 @@ export class PurchaseReturnsService {
           totalReturnAmount: moneyMinorUnitsToString(
             preparedDraft.totalReturnAmountMinorUnits,
           ),
+          refundAmount: moneyMinorUnitsToString(preparedDraft.refundAmountMinorUnits),
+          refundMethod: preparedDraft.refundMethod,
+          refundStatus: preparedDraft.refundStatus,
           notes: preparedDraft.notes,
           completedByUserId: userId,
           completedAt: new Date(),
@@ -592,10 +634,13 @@ export class PurchaseReturnsService {
 
   private async buildReturnMeta(shopId: string, executor: DbExecutor) {
     await this.purchaseReturnsRepository.lockReturnSequence(shopId, executor);
-    const [shop, sequence] = await Promise.all([
-      this.purchaseReturnsRepository.getShopById(shopId, executor),
-      this.purchaseReturnsRepository.getNextReturnSequence(shopId, executor),
-    ]);
+    const [shop, sequence] = await runDbReads(
+      [
+        () => this.purchaseReturnsRepository.getShopById(shopId, executor),
+        () => this.purchaseReturnsRepository.getNextReturnSequence(shopId, executor),
+      ] as const,
+      executor,
+    );
 
     if (!shop) {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
@@ -611,6 +656,9 @@ export class PurchaseReturnsService {
     shopId: string,
     input: {
       purchaseId: string;
+      refundAmount: number;
+      refundMethod?: RefundMethod;
+      refundStatus: RefundStatus;
       notes?: string;
       items: PurchaseReturnItemInput[];
     },
@@ -746,14 +794,98 @@ export class PurchaseReturnsService {
       );
     }
 
+    const totalReturnAmountMinorUnits = sumMoneyMinorUnits(
+      preparedItems.map((item) => item.lineReturnAmountMinorUnits),
+    );
+    const refundAmountMinorUnits = toMoneyMinorUnits(input.refundAmount);
+    const maxRefundMinorUnits = getReturnRefundCapMinorUnits(
+      totalReturnAmountMinorUnits,
+      toMoneyMinorUnits(purchase.dueAmount),
+    );
+    const refundConfig = this.normalizeRefund({
+      refundAmountMinorUnits,
+      totalReturnAmountMinorUnits,
+      maxRefundMinorUnits,
+      refundStatus: input.refundStatus,
+      ...(input.refundMethod ? { refundMethod: input.refundMethod } : {}),
+    });
+
     return {
       purchaseId: input.purchaseId,
       supplierId: purchase.supplierId,
       ...(input.notes ? { notes: input.notes } : {}),
-      totalReturnAmountMinorUnits: sumMoneyMinorUnits(
-        preparedItems.map((item) => item.lineReturnAmountMinorUnits),
-      ),
+      ...refundConfig,
+      totalReturnAmountMinorUnits,
       items: preparedItems,
+    };
+  }
+
+  private normalizeRefund(input: {
+    refundAmountMinorUnits: number;
+    totalReturnAmountMinorUnits: number;
+    maxRefundMinorUnits: number;
+    refundMethod?: RefundMethod;
+    refundStatus: RefundStatus;
+  }) {
+    if (input.refundAmountMinorUnits > input.totalReturnAmountMinorUnits) {
+      throw buildAppError(
+        400,
+        "REFUND_AMOUNT_INVALID",
+        "Refund amount cannot exceed the total return amount.",
+      );
+    }
+
+    if (input.refundAmountMinorUnits > input.maxRefundMinorUnits) {
+      throw buildAppError(
+        400,
+        "REFUND_AMOUNT_EXCEEDS_NET_RETURN",
+        "Refund amount cannot exceed the return amount left after settling the purchase due.",
+      );
+    }
+
+    if (input.refundAmountMinorUnits === 0) {
+      if (input.refundStatus !== "not_required") {
+        throw buildAppError(
+          400,
+          "REFUND_STATUS_INVALID",
+          "Refund status must be not required when refund amount is zero.",
+        );
+      }
+
+      if (input.refundMethod) {
+        throw buildAppError(
+          400,
+          "REFUND_METHOD_INVALID",
+          "Refund method is only allowed when refund amount is greater than zero.",
+        );
+      }
+
+      return {
+        refundAmountMinorUnits: 0,
+        refundStatus: "not_required" as const,
+      };
+    }
+
+    if (!input.refundMethod) {
+      throw buildAppError(
+        400,
+        "REFUND_METHOD_REQUIRED",
+        "Refund method is required when refund amount is greater than zero.",
+      );
+    }
+
+    if (input.refundStatus === "not_required") {
+      throw buildAppError(
+        400,
+        "REFUND_STATUS_INVALID",
+        "Refund status cannot be not required when refund amount is greater than zero.",
+      );
+    }
+
+    return {
+      refundAmountMinorUnits: input.refundAmountMinorUnits,
+      refundMethod: input.refundMethod,
+      refundStatus: input.refundStatus,
     };
   }
 }

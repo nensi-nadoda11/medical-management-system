@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSettlementState,
+  derivePriorAdvanceMinorUnits,
   getReturnRefundCapMinorUnits,
   mapPaymentStatus,
 } from "../src/shared/utils/financials";
@@ -28,6 +29,12 @@ describe("financial settlement helpers", () => {
       advanceMinorUnits: 0,
       paymentStatus: "partial",
     });
+  });
+
+  it("derives prior advance from the running balance without inventing extra credit", () => {
+    expect(derivePriorAdvanceMinorUnits(1_000, 6_000)).toBe(5_000);
+    expect(derivePriorAdvanceMinorUnits(2_000, 5_000)).toBe(3_000);
+    expect(derivePriorAdvanceMinorUnits(500, 500)).toBe(0);
   });
 
   it("limits refundable sales return amount after adjusting current due", () => {

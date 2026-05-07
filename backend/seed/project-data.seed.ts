@@ -1098,6 +1098,8 @@ const seedPurchaseReturns = async (
       actor.id,
       {
         purchaseId,
+        refundAmount: 0,
+        refundStatus: "not_required",
         notes: `Seed purchase return ${created + 1} for ${args.tag}`,
         items: selectedItems,
       },

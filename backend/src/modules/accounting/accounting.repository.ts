@@ -27,6 +27,7 @@ import {
   users,
 } from "../../db/schema";
 import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import type {
   ListAccountingCustomerPaymentsQuery,
   ListAccountingSupplierPaymentsQuery,
@@ -36,6 +37,32 @@ import type {
 
 const aliasedColumn = (tableAlias: string, columnName: string) =>
   sql.raw(`"${tableAlias}"."${columnName}"`);
+
+const customerReturnAdvanceCredit = () => sql`
+  greatest(
+    ${saleReturns.totalReturnAmount}
+    - case
+        when ${saleReturns.refundMethod} is not null
+          and ${saleReturns.refundMethod} <> 'adjustment'
+          then ${saleReturns.refundAmount}
+        else 0.00
+      end,
+    0.00
+  )
+`;
+
+const supplierReturnAdvanceCredit = () => sql`
+  greatest(
+    ${purchaseReturns.totalReturnAmount}
+    - case
+        when ${purchaseReturns.refundMethod} is not null
+          and ${purchaseReturns.refundMethod} <> 'adjustment'
+          then ${purchaseReturns.refundAmount}
+        else 0.00
+      end,
+    0.00
+  )
+`;
 
 const buildCustomerPaymentFilters = (
   shopId: string,
@@ -191,6 +218,30 @@ const customerAllocationTotalsByPaymentSubquery = (
     .groupBy(customerPaymentAllocations.customerPaymentId)
     .as("customer_allocation_totals_by_payment");
 
+const customerReturnCreditsByCustomerSubquery = (
+  shopId: string,
+  executor?: DbExecutor,
+) =>
+  getDbExecutor(executor)
+    .select({
+      customerId: sales.customerId,
+      effectiveReturnCredit:
+        sql<string>`coalesce(sum(${customerReturnAdvanceCredit()}), 0.00)`.as(
+          "effective_return_credit",
+        ),
+    })
+    .from(saleReturns)
+    .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+    .where(
+      and(
+        eq(saleReturns.shopId, shopId),
+        eq(saleReturns.status, "completed"),
+        sql`${sales.customerId} is not null`,
+      ),
+    )
+    .groupBy(sales.customerId)
+    .as("customer_return_credits_by_customer");
+
 const supplierAllocationTotalsByPurchaseSubquery = (
   shopId: string,
   executor?: DbExecutor,
@@ -248,6 +299,28 @@ const supplierAllocationTotalsByPaymentSubquery = (
     )
     .groupBy(supplierPaymentAllocations.supplierPaymentId)
     .as("supplier_allocation_totals_by_payment");
+
+const supplierReturnCreditsBySupplierSubquery = (
+  shopId: string,
+  executor?: DbExecutor,
+) =>
+  getDbExecutor(executor)
+    .select({
+      supplierId: purchaseReturns.supplierId,
+      effectiveReturnCredit:
+        sql<string>`coalesce(sum(${supplierReturnAdvanceCredit()}), 0.00)`.as(
+          "effective_return_credit",
+        ),
+    })
+    .from(purchaseReturns)
+    .where(
+      and(
+        eq(purchaseReturns.shopId, shopId),
+        eq(purchaseReturns.status, "completed"),
+      ),
+    )
+    .groupBy(purchaseReturns.supplierId)
+    .as("supplier_return_credits_by_supplier");
 
 const supplierReturnTotalsByPurchaseSubquery = (
   shopId: string,
@@ -344,6 +417,10 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
     )
     .groupBy(customerPayments.customerId)
     .as("payments_by_customer");
+  const returnCreditsByCustomer = customerReturnCreditsByCustomerSubquery(
+    shopId,
+    executor,
+  );
 
   const returnTotals = customerReturnTotalsBySaleSubquery(shopId, executor);
   const allocationTotals = customerAllocationTotalsBySaleSubquery(shopId, executor);
@@ -359,6 +436,7 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
               ${sales.grandTotal}
               - coalesce(${aliasedColumn("customer_return_totals_by_sale", "return_amount")}, 0.00)
               - ${sales.initialPaidAmount}
+              - ${sales.advanceAppliedAmount}
               - coalesce(${aliasedColumn("customer_allocation_totals_by_sale", "allocated_amount")}, 0.00),
               0.00
             )
@@ -380,6 +458,7 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
             ${sales.grandTotal}
             - coalesce(${aliasedColumn("customer_return_totals_by_sale", "return_amount")}, 0.00)
             - ${sales.initialPaidAmount}
+            - ${sales.advanceAppliedAmount}
             - coalesce(${aliasedColumn("customer_allocation_totals_by_sale", "allocated_amount")}, 0.00),
             0.00
           ) > 0
@@ -421,14 +500,14 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
         ),
       balanceAmount: sql<string>`
         coalesce(${aliasedColumn("completed_sales_by_customer", "total_sales")}, 0.00)
-        - coalesce(${aliasedColumn("returns_by_customer", "total_returns")}, 0.00)
+        - coalesce(${aliasedColumn("customer_return_credits_by_customer", "effective_return_credit")}, 0.00)
         - coalesce(${aliasedColumn("completed_sales_by_customer", "total_initial_payments")}, 0.00)
         - coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)
       `.as("balance_amount"),
       advanceAmount: sql<string>`
         greatest(
           (
-            coalesce(${aliasedColumn("returns_by_customer", "total_returns")}, 0.00)
+            coalesce(${aliasedColumn("customer_return_credits_by_customer", "effective_return_credit")}, 0.00)
             + coalesce(${aliasedColumn("completed_sales_by_customer", "total_initial_payments")}, 0.00)
             + coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)
             - coalesce(${aliasedColumn("completed_sales_by_customer", "total_sales")}, 0.00)
@@ -459,6 +538,7 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
     .from(customers)
     .leftJoin(completedSalesByCustomer, eq(completedSalesByCustomer.customerId, customers.id))
     .leftJoin(returnsByCustomer, eq(returnsByCustomer.customerId, customers.id))
+    .leftJoin(returnCreditsByCustomer, eq(returnCreditsByCustomer.customerId, customers.id))
     .leftJoin(paymentsByCustomer, eq(paymentsByCustomer.customerId, customers.id))
     .leftJoin(openSalesByCustomer, eq(openSalesByCustomer.customerId, customers.id))
     .where(eq(customers.shopId, shopId))
@@ -533,6 +613,10 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
     )
     .groupBy(supplierPayments.supplierId)
     .as("payments_by_supplier");
+  const returnCreditsBySupplier = supplierReturnCreditsBySupplierSubquery(
+    shopId,
+    executor,
+  );
 
   const allocationTotals = supplierAllocationTotalsByPurchaseSubquery(shopId, executor);
   const returnTotals = supplierReturnTotalsByPurchaseSubquery(shopId, executor);
@@ -548,6 +632,7 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
               ${purchases.grandTotal}
               - coalesce(${aliasedColumn("supplier_return_totals_by_purchase", "return_amount")}, 0.00)
               - ${purchases.initialPaidAmount}
+              - ${purchases.advanceAppliedAmount}
               - coalesce(${aliasedColumn("supplier_allocation_totals_by_purchase", "allocated_amount")}, 0.00),
               0.00
             )
@@ -568,6 +653,7 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
             ${purchases.grandTotal}
             - coalesce(${aliasedColumn("supplier_return_totals_by_purchase", "return_amount")}, 0.00)
             - ${purchases.initialPaidAmount}
+            - ${purchases.advanceAppliedAmount}
             - coalesce(${aliasedColumn("supplier_allocation_totals_by_purchase", "allocated_amount")}, 0.00),
             0.00
           ) > 0
@@ -604,22 +690,20 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
           "outstanding_amount",
         ),
       balanceAmount: sql<string>`
-        coalesce(${suppliers.openingBalance}, 0.00)
-        + coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
-        - coalesce(${aliasedColumn("returns_by_supplier", "total_returns")}, 0.00)
+        coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
+        - coalesce(${aliasedColumn("supplier_return_credits_by_supplier", "effective_return_credit")}, 0.00)
         - coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
         - coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
+        - coalesce(${suppliers.openingBalance}, 0.00)
       `.as("balance_amount"),
       advanceAmount: sql<string>`
         greatest(
           (
-            coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
+            coalesce(${suppliers.openingBalance}, 0.00)
+            + coalesce(${aliasedColumn("supplier_return_credits_by_supplier", "effective_return_credit")}, 0.00)
+            + coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
             + coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
-            - (
-              coalesce(${suppliers.openingBalance}, 0.00)
-              + coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
-              - coalesce(${aliasedColumn("returns_by_supplier", "total_returns")}, 0.00)
-            )
+            - coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
           ),
           0.00
         )
@@ -650,6 +734,7 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
       eq(completedPurchasesBySupplier.supplierId, suppliers.id),
     )
     .leftJoin(returnsBySupplier, eq(returnsBySupplier.supplierId, suppliers.id))
+    .leftJoin(returnCreditsBySupplier, eq(returnCreditsBySupplier.supplierId, suppliers.id))
     .leftJoin(paymentsBySupplier, eq(paymentsBySupplier.supplierId, suppliers.id))
     .leftJoin(
       openPurchasesBySupplier,
@@ -1319,6 +1404,7 @@ export class AccountingRepository {
             ${sales.grandTotal}
             - coalesce(${aliasedColumn("customer_return_totals_by_sale", "return_amount")}, 0.00)
             - ${sales.initialPaidAmount}
+            - ${sales.advanceAppliedAmount}
             - coalesce(${aliasedColumn("customer_allocation_totals_by_sale", "allocated_amount")}, 0.00),
             0.00
           )
@@ -1348,12 +1434,13 @@ export class AccountingRepository {
           eq(sales.status, "completed"),
           sql`
             greatest(
-              ${sales.grandTotal}
-              - coalesce(${aliasedColumn("customer_return_totals_by_sale", "return_amount")}, 0.00)
-              - ${sales.initialPaidAmount}
-              - coalesce(${aliasedColumn("customer_allocation_totals_by_sale", "allocated_amount")}, 0.00),
-              0.00
-            ) > 0
+            ${sales.grandTotal}
+            - coalesce(${aliasedColumn("customer_return_totals_by_sale", "return_amount")}, 0.00)
+            - ${sales.initialPaidAmount}
+            - ${sales.advanceAppliedAmount}
+            - coalesce(${aliasedColumn("customer_allocation_totals_by_sale", "allocated_amount")}, 0.00),
+            0.00
+          ) > 0
           `,
         ),
       )
@@ -1591,6 +1678,7 @@ export class AccountingRepository {
             ${purchases.grandTotal}
             - coalesce(${aliasedColumn("supplier_return_totals_by_purchase", "return_amount")}, 0.00)
             - ${purchases.initialPaidAmount}
+            - ${purchases.advanceAppliedAmount}
             - coalesce(${aliasedColumn("supplier_allocation_totals_by_purchase", "allocated_amount")}, 0.00),
             0.00
           )
@@ -1621,12 +1709,13 @@ export class AccountingRepository {
           eq(purchases.status, "finalized"),
           sql`
             greatest(
-              ${purchases.grandTotal}
-              - coalesce(${aliasedColumn("supplier_return_totals_by_purchase", "return_amount")}, 0.00)
-              - ${purchases.initialPaidAmount}
-              - coalesce(${aliasedColumn("supplier_allocation_totals_by_purchase", "allocated_amount")}, 0.00),
-              0.00
-            ) > 0
+            ${purchases.grandTotal}
+            - coalesce(${aliasedColumn("supplier_return_totals_by_purchase", "return_amount")}, 0.00)
+            - ${purchases.initialPaidAmount}
+            - ${purchases.advanceAppliedAmount}
+            - coalesce(${aliasedColumn("supplier_allocation_totals_by_purchase", "allocated_amount")}, 0.00),
+            0.00
+          ) > 0
           `,
         ),
       )
@@ -1781,6 +1870,25 @@ export class AccountingRepository {
     return sale ?? null;
   }
 
+  async updateSaleAdvanceAppliedAmount(
+    saleId: string,
+    advanceAppliedAmount: string,
+    updatedByUserId: string,
+    executor: DbExecutor,
+  ) {
+    const [sale] = await getDbExecutor(executor)
+      .update(sales)
+      .set({
+        advanceAppliedAmount,
+        updatedByUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(sales.id, saleId))
+      .returning();
+
+    return sale ?? null;
+  }
+
   async updatePurchaseFinancials(
     purchaseId: string,
     payload: Pick<
@@ -1793,6 +1901,25 @@ export class AccountingRepository {
       .update(purchases)
       .set({
         ...payload,
+        updatedAt: new Date(),
+      })
+      .where(eq(purchases.id, purchaseId))
+      .returning();
+
+    return purchase ?? null;
+  }
+
+  async updatePurchaseAdvanceAppliedAmount(
+    purchaseId: string,
+    advanceAppliedAmount: string,
+    updatedByUserId: string,
+    executor: DbExecutor,
+  ) {
+    const [purchase] = await getDbExecutor(executor)
+      .update(purchases)
+      .set({
+        advanceAppliedAmount,
+        updatedByUserId,
         updatedAt: new Date(),
       })
       .where(eq(purchases.id, purchaseId))
@@ -1909,61 +2036,69 @@ export class AccountingRepository {
     customerId: string,
     executor?: DbExecutor,
   ) {
-    const [salesRows, returnRows, paymentRows] = await Promise.all([
-      getDbExecutor(executor)
-        .select({
-          id: sales.id,
-          billNumber: sales.billNumber,
-          amount: sales.grandTotal,
-          initialPaidAmount: sales.initialPaidAmount,
-          entryDate: sql<Date>`coalesce(${sales.completedAt}, ${sales.createdAt})`,
-          createdAt: sales.createdAt,
-          createdByUserId: sales.createdByUserId,
-        })
-        .from(sales)
-        .where(
-          and(
-            eq(sales.shopId, shopId),
-            eq(sales.customerId, customerId),
-            eq(sales.status, "completed"),
-          ),
-        ),
-      getDbExecutor(executor)
-        .select({
-          id: saleReturns.id,
-          returnNumber: saleReturns.returnNumber,
-          amount: saleReturns.totalReturnAmount,
-          entryDate: sql<Date>`coalesce(${saleReturns.completedAt}, ${saleReturns.createdAt})`,
-          createdAt: saleReturns.createdAt,
-          createdByUserId: saleReturns.createdByUserId,
-        })
-        .from(saleReturns)
-        .innerJoin(sales, eq(saleReturns.saleId, sales.id))
-        .where(
-          and(
-            eq(saleReturns.shopId, shopId),
-            eq(sales.customerId, customerId),
-            eq(saleReturns.status, "completed"),
-          ),
-        ),
-      getDbExecutor(executor)
-        .select({
-          id: customerPayments.id,
-          amount: customerPayments.amount,
-          paymentMethod: customerPayments.paymentMethod,
-          entryDate: customerPayments.paymentDate,
-          createdAt: customerPayments.createdAt,
-          createdByUserId: customerPayments.receivedByUserId,
-        })
-        .from(customerPayments)
-        .where(
-          and(
-            eq(customerPayments.shopId, shopId),
-            eq(customerPayments.customerId, customerId),
-            eq(customerPayments.status, "completed"),
-          ),
-        ),
-    ]);
+    const [salesRows, returnRows, paymentRows] = await runDbReads(
+      [
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: sales.id,
+              billNumber: sales.billNumber,
+              amount: sales.grandTotal,
+              initialPaidAmount: sales.initialPaidAmount,
+              entryDate: sql<Date>`coalesce(${sales.completedAt}, ${sales.createdAt})`,
+              createdAt: sales.createdAt,
+              createdByUserId: sales.createdByUserId,
+            })
+            .from(sales)
+            .where(
+              and(
+                eq(sales.shopId, shopId),
+                eq(sales.customerId, customerId),
+                eq(sales.status, "completed"),
+              ),
+            ),
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: saleReturns.id,
+              returnNumber: saleReturns.returnNumber,
+              amount: saleReturns.totalReturnAmount,
+              refundAmount: saleReturns.refundAmount,
+              refundMethod: saleReturns.refundMethod,
+              entryDate: sql<Date>`coalesce(${saleReturns.completedAt}, ${saleReturns.createdAt})`,
+              createdAt: saleReturns.createdAt,
+              createdByUserId: saleReturns.createdByUserId,
+            })
+            .from(saleReturns)
+            .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+            .where(
+              and(
+                eq(saleReturns.shopId, shopId),
+                eq(sales.customerId, customerId),
+                eq(saleReturns.status, "completed"),
+              ),
+            ),
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: customerPayments.id,
+              amount: customerPayments.amount,
+              paymentMethod: customerPayments.paymentMethod,
+              entryDate: customerPayments.paymentDate,
+              createdAt: customerPayments.createdAt,
+              createdByUserId: customerPayments.receivedByUserId,
+            })
+            .from(customerPayments)
+            .where(
+              and(
+                eq(customerPayments.shopId, shopId),
+                eq(customerPayments.customerId, customerId),
+                eq(customerPayments.status, "completed"),
+              ),
+            ),
+      ] as const,
+      executor,
+    );
 
     return {
       sales: salesRows,
@@ -1977,62 +2112,70 @@ export class AccountingRepository {
     supplierId: string,
     executor?: DbExecutor,
   ) {
-    const [supplier, purchaseRows, returnRows, paymentRows] = await Promise.all([
-      this.findSupplierById(shopId, supplierId, executor),
-      getDbExecutor(executor)
-        .select({
-          id: purchases.id,
-          purchaseNumber: purchases.purchaseNumber,
-          amount: purchases.grandTotal,
-          initialPaidAmount: purchases.initialPaidAmount,
-          entryDate: purchases.purchaseDate,
-          createdAt: purchases.createdAt,
-          createdByUserId: purchases.createdByUserId,
-        })
-        .from(purchases)
-        .where(
-          and(
-            eq(purchases.shopId, shopId),
-            eq(purchases.supplierId, supplierId),
-            eq(purchases.status, "finalized"),
-          ),
-        ),
-      getDbExecutor(executor)
-        .select({
-          id: purchaseReturns.id,
-          returnNumber: purchaseReturns.returnNumber,
-          amount: purchaseReturns.totalReturnAmount,
-          entryDate:
-            sql<Date>`coalesce(${purchaseReturns.completedAt}, ${purchaseReturns.createdAt})`,
-          createdAt: purchaseReturns.createdAt,
-          createdByUserId: purchaseReturns.createdByUserId,
-        })
-        .from(purchaseReturns)
-        .where(
-          and(
-            eq(purchaseReturns.shopId, shopId),
-            eq(purchaseReturns.supplierId, supplierId),
-            eq(purchaseReturns.status, "completed"),
-          ),
-        ),
-      getDbExecutor(executor)
-        .select({
-          id: supplierPayments.id,
-          amount: supplierPayments.amount,
-          paymentMethod: supplierPayments.paymentMethod,
-          entryDate: supplierPayments.paymentDate,
-          createdAt: supplierPayments.createdAt,
-          createdByUserId: supplierPayments.paidByUserId,
-        })
-        .from(supplierPayments)
-        .where(
-          and(
-            eq(supplierPayments.shopId, shopId),
-            eq(supplierPayments.supplierId, supplierId),
-            eq(supplierPayments.status, "completed"),
-          ),
-        ),
-    ]);
+    const [supplier, purchaseRows, returnRows, paymentRows] = await runDbReads(
+      [
+        () => this.findSupplierById(shopId, supplierId, executor),
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: purchases.id,
+              purchaseNumber: purchases.purchaseNumber,
+              amount: purchases.grandTotal,
+              initialPaidAmount: purchases.initialPaidAmount,
+              entryDate: purchases.purchaseDate,
+              createdAt: purchases.createdAt,
+              createdByUserId: purchases.createdByUserId,
+            })
+            .from(purchases)
+            .where(
+              and(
+                eq(purchases.shopId, shopId),
+                eq(purchases.supplierId, supplierId),
+                eq(purchases.status, "finalized"),
+              ),
+            ),
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: purchaseReturns.id,
+              returnNumber: purchaseReturns.returnNumber,
+              amount: purchaseReturns.totalReturnAmount,
+              refundAmount: purchaseReturns.refundAmount,
+              refundMethod: purchaseReturns.refundMethod,
+              entryDate:
+                sql<Date>`coalesce(${purchaseReturns.completedAt}, ${purchaseReturns.createdAt})`,
+              createdAt: purchaseReturns.createdAt,
+              createdByUserId: purchaseReturns.createdByUserId,
+            })
+            .from(purchaseReturns)
+            .where(
+              and(
+                eq(purchaseReturns.shopId, shopId),
+                eq(purchaseReturns.supplierId, supplierId),
+                eq(purchaseReturns.status, "completed"),
+              ),
+            ),
+        () =>
+          getDbExecutor(executor)
+            .select({
+              id: supplierPayments.id,
+              amount: supplierPayments.amount,
+              paymentMethod: supplierPayments.paymentMethod,
+              entryDate: supplierPayments.paymentDate,
+              createdAt: supplierPayments.createdAt,
+              createdByUserId: supplierPayments.paidByUserId,
+            })
+            .from(supplierPayments)
+            .where(
+              and(
+                eq(supplierPayments.shopId, shopId),
+                eq(supplierPayments.supplierId, supplierId),
+                eq(supplierPayments.status, "completed"),
+              ),
+            ),
+      ] as const,
+      executor,
+    );
 
     return {
       supplier,

@@ -1167,6 +1167,12 @@ export const purchases = pgTable(
     initialPaidAmount: numeric("initial_paid_amount", { precision: 14, scale: 2 })
       .notNull()
       .default("0.00"),
+    advanceAppliedAmount: numeric("advance_applied_amount", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0.00"),
     paidAmount: numeric("paid_amount", { precision: 14, scale: 2 })
       .notNull()
       .default("0.00"),
@@ -1320,6 +1326,12 @@ export const sales = pgTable(
       .notNull()
       .default("0.00"),
     initialPaidAmount: numeric("initial_paid_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    advanceAppliedAmount: numeric("advance_applied_amount", {
+      precision: 14,
+      scale: 2,
+    })
       .notNull()
       .default("0.00"),
     paidAmount: numeric("paid_amount", { precision: 14, scale: 2 })
@@ -1896,6 +1908,13 @@ export const purchaseReturns = pgTable(
     totalReturnAmount: numeric("total_return_amount", { precision: 14, scale: 2 })
       .notNull()
       .default("0.00"),
+    refundAmount: numeric("refund_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    refundMethod: saleReturnRefundMethodEnum("refund_method"),
+    refundStatus: saleReturnRefundStatusEnum("refund_status")
+      .notNull()
+      .default("not_required"),
     notes: text("notes"),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
@@ -1921,6 +1940,9 @@ export const purchaseReturns = pgTable(
     purchaseIdIdx: index("purchase_returns_purchase_id_idx").on(table.purchaseId),
     supplierIdIdx: index("purchase_returns_supplier_id_idx").on(table.supplierId),
     statusIdx: index("purchase_returns_status_idx").on(table.status),
+    refundStatusIdx: index("purchase_returns_refund_status_idx").on(
+      table.refundStatus,
+    ),
     createdAtIdx: index("purchase_returns_created_at_idx").on(table.createdAt),
     completedAtIdx: index("purchase_returns_completed_at_idx").on(table.completedAt),
     createdByIdx: index("purchase_returns_created_by_user_id_idx").on(

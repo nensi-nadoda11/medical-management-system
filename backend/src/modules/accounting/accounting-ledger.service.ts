@@ -2,12 +2,24 @@ import {
   moneyMinorUnitsToString,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
-import { buildSettlementState } from "../../shared/utils/financials";
+import {
+  buildSettlementState,
+  derivePriorAdvanceMinorUnits,
+} from "../../shared/utils/financials";
 import { AccountingRepository } from "./accounting.repository";
 import type { DbExecutor } from "../../shared/db/executor";
 
 const toDateValue = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
+
+const isNonAdjustmentRefund = (
+  refundAmount: string,
+  refundMethod?: string | null,
+) =>
+  toMoneyMinorUnits(refundAmount) > 0 &&
+  refundMethod !== null &&
+  refundMethod !== undefined &&
+  refundMethod !== "adjustment";
 
 type LedgerSeedEntry = {
   transactionType:
@@ -66,6 +78,7 @@ export class AccountingLedgerService {
     const settlementState = buildSettlementState(
       netReceivableMinorUnits,
       toMoneyMinorUnits(computation.sale.initialPaidAmount) +
+        toMoneyMinorUnits(computation.sale.advanceAppliedAmount) +
         toMoneyMinorUnits(computation.allocatedAmount),
     );
     let remainingDueMinorUnits = settlementState.dueMinorUnits;
@@ -80,6 +93,31 @@ export class AccountingLedgerService {
         computation.sale.customerId,
         executor,
       );
+    const customerSummary = await this.accountingRepository.getCustomerFinancialSummary(
+      shopId,
+      computation.sale.customerId,
+      executor,
+    );
+    const currentBalanceMinorUnits = toMoneyMinorUnits(
+      customerSummary?.summary.balanceAmount ?? 0,
+    );
+    const currentSaleBalanceContributionMinorUnits =
+      netReceivableMinorUnits -
+      toMoneyMinorUnits(computation.sale.initialPaidAmount) -
+      toMoneyMinorUnits(computation.sale.advanceAppliedAmount) -
+      toMoneyMinorUnits(computation.allocatedAmount);
+    const priorOverallAdvanceMinorUnits = derivePriorAdvanceMinorUnits(
+      currentBalanceMinorUnits,
+      currentSaleBalanceContributionMinorUnits,
+    );
+    const paymentSourceAdvanceMinorUnits = advanceSources.reduce(
+      (sum, source) => sum + toMoneyMinorUnits(source.remainingAmount),
+      0,
+    );
+    const nonPaymentAdvanceAvailableMinorUnits = Math.max(
+      priorOverallAdvanceMinorUnits - paymentSourceAdvanceMinorUnits,
+      0,
+    );
 
     const allocations: Array<{
       customerPaymentId: string;
@@ -108,24 +146,43 @@ export class AccountingLedgerService {
       remainingDueMinorUnits -= appliedMinorUnits;
     }
 
-    if (!allocations.length) {
-      return 0;
+    if (allocations.length) {
+      await this.accountingRepository.createCustomerPaymentAllocations(
+        allocations.map((allocation) => ({
+          shopId,
+          customerPaymentId: allocation.customerPaymentId,
+          customerId: computation.sale.customerId!,
+          saleId,
+          amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
+        })),
+        executor,
+      );
     }
 
-    await this.accountingRepository.createCustomerPaymentAllocations(
-      allocations.map((allocation) => ({
-        shopId,
-        customerPaymentId: allocation.customerPaymentId,
-        customerId: computation.sale.customerId!,
-        saleId,
-        amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
-      })),
-      executor,
-    );
+    let appliedNonPaymentAdvanceMinorUnits = 0;
 
-    return allocations.reduce(
-      (sum, allocation) => sum + allocation.amountMinorUnits,
-      0,
+    if (remainingDueMinorUnits > 0 && nonPaymentAdvanceAvailableMinorUnits > 0) {
+      appliedNonPaymentAdvanceMinorUnits = Math.min(
+        remainingDueMinorUnits,
+        nonPaymentAdvanceAvailableMinorUnits,
+      );
+
+      await this.accountingRepository.updateSaleAdvanceAppliedAmount(
+        saleId,
+        moneyMinorUnitsToString(
+          toMoneyMinorUnits(computation.sale.advanceAppliedAmount) +
+            appliedNonPaymentAdvanceMinorUnits,
+        ),
+        computation.sale.updatedByUserId,
+        executor,
+      );
+    }
+
+    return (
+      allocations.reduce(
+        (sum, allocation) => sum + allocation.amountMinorUnits,
+        0,
+      ) + appliedNonPaymentAdvanceMinorUnits
     );
   }
 
@@ -157,6 +214,7 @@ export class AccountingLedgerService {
     const settlementState = buildSettlementState(
       netPayableMinorUnits,
       toMoneyMinorUnits(computation.purchase.initialPaidAmount) +
+        toMoneyMinorUnits(computation.purchase.advanceAppliedAmount) +
         toMoneyMinorUnits(computation.allocatedAmount),
     );
     let remainingDueMinorUnits = settlementState.dueMinorUnits;
@@ -171,6 +229,31 @@ export class AccountingLedgerService {
         computation.purchase.supplierId,
         executor,
       );
+    const supplierSummary = await this.accountingRepository.getSupplierFinancialSummary(
+      shopId,
+      computation.purchase.supplierId,
+      executor,
+    );
+    const currentBalanceMinorUnits = toMoneyMinorUnits(
+      supplierSummary?.summary.balanceAmount ?? 0,
+    );
+    const currentPurchaseBalanceContributionMinorUnits =
+      netPayableMinorUnits -
+      toMoneyMinorUnits(computation.purchase.initialPaidAmount) -
+      toMoneyMinorUnits(computation.purchase.advanceAppliedAmount) -
+      toMoneyMinorUnits(computation.allocatedAmount);
+    const priorOverallAdvanceMinorUnits = derivePriorAdvanceMinorUnits(
+      currentBalanceMinorUnits,
+      currentPurchaseBalanceContributionMinorUnits,
+    );
+    const paymentSourceAdvanceMinorUnits = advanceSources.reduce(
+      (sum, source) => sum + toMoneyMinorUnits(source.remainingAmount),
+      0,
+    );
+    const nonPaymentAdvanceAvailableMinorUnits = Math.max(
+      priorOverallAdvanceMinorUnits - paymentSourceAdvanceMinorUnits,
+      0,
+    );
 
     const allocations: Array<{
       supplierPaymentId: string;
@@ -199,24 +282,43 @@ export class AccountingLedgerService {
       remainingDueMinorUnits -= appliedMinorUnits;
     }
 
-    if (!allocations.length) {
-      return 0;
+    if (allocations.length) {
+      await this.accountingRepository.createSupplierPaymentAllocations(
+        allocations.map((allocation) => ({
+          shopId,
+          supplierPaymentId: allocation.supplierPaymentId,
+          supplierId: computation.purchase.supplierId,
+          purchaseId,
+          amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
+        })),
+        executor,
+      );
     }
 
-    await this.accountingRepository.createSupplierPaymentAllocations(
-      allocations.map((allocation) => ({
-        shopId,
-        supplierPaymentId: allocation.supplierPaymentId,
-        supplierId: computation.purchase.supplierId,
-        purchaseId,
-        amount: moneyMinorUnitsToString(allocation.amountMinorUnits),
-      })),
-      executor,
-    );
+    let appliedNonPaymentAdvanceMinorUnits = 0;
 
-    return allocations.reduce(
-      (sum, allocation) => sum + allocation.amountMinorUnits,
-      0,
+    if (remainingDueMinorUnits > 0 && nonPaymentAdvanceAvailableMinorUnits > 0) {
+      appliedNonPaymentAdvanceMinorUnits = Math.min(
+        remainingDueMinorUnits,
+        nonPaymentAdvanceAvailableMinorUnits,
+      );
+
+      await this.accountingRepository.updatePurchaseAdvanceAppliedAmount(
+        purchaseId,
+        moneyMinorUnitsToString(
+          toMoneyMinorUnits(computation.purchase.advanceAppliedAmount) +
+            appliedNonPaymentAdvanceMinorUnits,
+        ),
+        computation.purchase.updatedByUserId,
+        executor,
+      );
+    }
+
+    return (
+      allocations.reduce(
+        (sum, allocation) => sum + allocation.amountMinorUnits,
+        0,
+      ) + appliedNonPaymentAdvanceMinorUnits
     );
   }
 
@@ -244,6 +346,7 @@ export class AccountingLedgerService {
     const settlementState = buildSettlementState(
       netReceivableMinorUnits,
       toMoneyMinorUnits(computation.sale.initialPaidAmount) +
+        toMoneyMinorUnits(computation.sale.advanceAppliedAmount) +
         toMoneyMinorUnits(computation.allocatedAmount),
     );
 
@@ -289,6 +392,7 @@ export class AccountingLedgerService {
     const settlementState = buildSettlementState(
       netPayableMinorUnits,
       toMoneyMinorUnits(computation.purchase.initialPaidAmount) +
+        toMoneyMinorUnits(computation.purchase.advanceAppliedAmount) +
         toMoneyMinorUnits(computation.allocatedAmount),
     );
 
@@ -362,6 +466,20 @@ export class AccountingLedgerService {
         notes: `Sales return ${saleReturn.returnNumber}`,
         createdByUserId: saleReturn.createdByUserId,
       });
+
+      if (isNonAdjustmentRefund(saleReturn.refundAmount, saleReturn.refundMethod)) {
+        ledgerSeedEntries.push({
+          transactionType: "sale_return",
+          referenceType: "sale_return",
+          referenceId: saleReturn.id,
+          debitMinorUnits: toMoneyMinorUnits(saleReturn.refundAmount),
+          creditMinorUnits: 0,
+          entryDate: saleReturn.entryDate,
+          createdAt: saleReturn.createdAt,
+          notes: `Refund settled for sales return ${saleReturn.returnNumber}`,
+          createdByUserId: saleReturn.createdByUserId,
+        });
+      }
     }
 
     for (const payment of source.payments) {
@@ -407,8 +525,8 @@ export class AccountingLedgerService {
           transactionType: "opening_balance",
           referenceType: "opening_balance",
           referenceId: source.supplier.id,
-          debitMinorUnits: openingBalanceMinorUnits < 0 ? Math.abs(openingBalanceMinorUnits) : 0,
-          creditMinorUnits: openingBalanceMinorUnits > 0 ? openingBalanceMinorUnits : 0,
+          debitMinorUnits: openingBalanceMinorUnits > 0 ? openingBalanceMinorUnits : 0,
+          creditMinorUnits: openingBalanceMinorUnits < 0 ? Math.abs(openingBalanceMinorUnits) : 0,
           entryDate: source.supplier.createdAt,
           createdAt: source.supplier.createdAt,
           notes: "Supplier opening balance",
@@ -459,6 +577,25 @@ export class AccountingLedgerService {
         notes: `Purchase return ${purchaseReturn.returnNumber}`,
         createdByUserId: purchaseReturn.createdByUserId,
       });
+
+      if (
+        isNonAdjustmentRefund(
+          purchaseReturn.refundAmount,
+          purchaseReturn.refundMethod,
+        )
+      ) {
+        ledgerSeedEntries.push({
+          transactionType: "purchase_return",
+          referenceType: "purchase_return",
+          referenceId: purchaseReturn.id,
+          debitMinorUnits: 0,
+          creditMinorUnits: toMoneyMinorUnits(purchaseReturn.refundAmount),
+          entryDate: purchaseReturn.entryDate,
+          createdAt: purchaseReturn.createdAt,
+          notes: `Refund settled for purchase return ${purchaseReturn.returnNumber}`,
+          createdByUserId: purchaseReturn.createdByUserId,
+        });
+      }
     }
 
     for (const payment of source.payments) {

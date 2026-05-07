@@ -307,7 +307,15 @@ export const PurchaseForm = ({
     availableAdvance,
     Math.max(totals.grandTotal - totals.paidAmount, 0),
   );
-  const effectivePaidAmount = totals.paidAmount + previewAdvanceApplied;
+  const settlementAppliedAmount = totals.paidAmount + previewAdvanceApplied;
+  const effectivePaidAmount = Math.min(
+    totals.grandTotal,
+    settlementAppliedAmount,
+  );
+  const newAdvanceAmount = Math.max(
+    settlementAppliedAmount - totals.grandTotal,
+    0,
+  );
   const adjustedDueAmount = Math.max(
     totals.grandTotal - effectivePaidAmount,
     0,
@@ -858,9 +866,25 @@ export const PurchaseForm = ({
                   value: formatCurrency(availableAdvance),
                 },
                 {
-                  label: "Paid amount",
+                  label: "Entered payment",
+                  value: formatCurrency(totals.paidAmount),
+                },
+                {
+                  label: "Advance used",
+                  value: formatCurrency(previewAdvanceApplied),
+                },
+                {
+                  label: "Effective paid",
                   value: formatCurrency(effectivePaidAmount),
                 },
+                ...(newAdvanceAmount > 0
+                  ? [
+                      {
+                        label: "New advance",
+                        value: formatCurrency(newAdvanceAmount),
+                      },
+                    ]
+                  : []),
                 {
                   label: "Due amount",
                   value: formatCurrency(adjustedDueAmount),

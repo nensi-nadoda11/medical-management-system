@@ -19,6 +19,20 @@ const PURCHASE_RETURN_REASONS = [
   "other",
 ] as const;
 
+const PURCHASE_RETURN_REFUND_METHODS = [
+  "cash",
+  "upi",
+  "card",
+  "bank_transfer",
+  "adjustment",
+] as const;
+
+const PURCHASE_RETURN_REFUND_STATUSES = [
+  "pending",
+  "processed",
+  "not_required",
+] as const;
+
 const optionalTrimmedString = (max: number) =>
   z
     .union([z.string(), z.null(), z.undefined()])
@@ -58,6 +72,9 @@ const purchaseReturnItemSchema = z.object({
 });
 
 const purchaseReturnBodySchema = z.object({
+  refundAmount: z.coerce.number().min(0).max(999999999.99).default(0),
+  refundMethod: z.enum(PURCHASE_RETURN_REFUND_METHODS).optional(),
+  refundStatus: z.enum(PURCHASE_RETURN_REFUND_STATUSES).default("not_required"),
   notes: optionalTrimmedString(2000),
   items: z.array(purchaseReturnItemSchema).min(1).max(500),
 });
@@ -118,6 +135,10 @@ export const listPurchaseReturnsSchema = z.object({
 });
 
 export type PurchaseReturnReason = (typeof PURCHASE_RETURN_REASONS)[number];
+export type PurchaseReturnRefundMethod =
+  (typeof PURCHASE_RETURN_REFUND_METHODS)[number];
+export type PurchaseReturnRefundStatus =
+  (typeof PURCHASE_RETURN_REFUND_STATUSES)[number];
 export type PurchaseReturnItemInput = z.infer<typeof purchaseReturnItemSchema>;
 export type CreatePurchaseReturnInput = z.infer<
   typeof createPurchaseReturnSchema

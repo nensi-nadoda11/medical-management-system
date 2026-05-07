@@ -1,4 +1,5 @@
 import { db } from "../../db/client";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import { AppError } from "../../shared/errors/app-error";
 import { logger } from "../../shared/logger";
 import {
@@ -661,10 +662,13 @@ export class SalesReturnsService {
 
   private async buildReturnMeta(shopId: string, executor: DbExecutor) {
     await this.salesReturnsRepository.lockReturnSequence(shopId, executor);
-    const [shop, sequence] = await Promise.all([
-      this.salesReturnsRepository.getShopById(shopId, executor),
-      this.salesReturnsRepository.getNextReturnSequence(shopId, executor),
-    ]);
+    const [shop, sequence] = await runDbReads(
+      [
+        () => this.salesReturnsRepository.getShopById(shopId, executor),
+        () => this.salesReturnsRepository.getNextReturnSequence(shopId, executor),
+      ] as const,
+      executor,
+    );
 
     if (!shop) {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
