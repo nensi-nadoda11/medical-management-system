@@ -156,7 +156,6 @@ export const PurchaseReturnsPage = () => {
               className={inputClassName}
               onChange={(event) => {
                 setDateFrom(event.target.value);
-                setPage(page); // wait, should be setPage(1)
                 setPage(1);
               }}
               type="date"
@@ -290,7 +289,7 @@ export const PurchaseReturnsPage = () => {
                     {item.returnNumber}
                   </Link>
                   <p className="mt-1 text-sm text-slate-600">
-                    {item.purchaseNumber} · {item.supplierName}
+                    {item.purchaseNumber} &middot; {item.supplierName}
                   </p>
                 </div>
                 <p className="text-sm font-semibold text-slate-950">

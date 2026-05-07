@@ -13,3 +13,4 @@ backend/dist
 backend/*.log
 backend/tmp-server-*.out.log
 backend/tmp-server-*.err.log
+/graphify-out

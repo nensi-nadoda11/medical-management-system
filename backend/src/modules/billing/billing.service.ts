@@ -8,6 +8,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { toEndOfDay } from "../../shared/utils/date-range";
 import { buildSettlementState } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
@@ -226,6 +227,7 @@ export class BillingService {
     const normalizedQuery = {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
+      ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
     };
 
     const items = await this.billingRepository.listSales(

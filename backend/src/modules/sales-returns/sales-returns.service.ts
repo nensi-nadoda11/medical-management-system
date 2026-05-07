@@ -7,6 +7,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { toEndOfDay } from "../../shared/utils/date-range";
 import { getReturnRefundCapMinorUnits } from "../../shared/utils/financials";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
@@ -104,6 +105,7 @@ export class SalesReturnsService {
     const normalizedQuery = {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
+      ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
     };
 
     const [items, total] = await Promise.all([

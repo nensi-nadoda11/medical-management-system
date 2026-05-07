@@ -89,7 +89,7 @@ const envSchema = z
     TWILIO_WHATSAPP_SUPPLIER_REORDER_TEMPLATE_SID: optionalString,
     TWILIO_WHATSAPP_SHOP_SENDER_MAP: optionalString,
     ALERT_SYNC_ENABLED: booleanSchema.default(true),
-    ALERT_SYNC_INTERVAL_MS: z.coerce.number().int().min(30000).default(300000),
+    ALERT_SYNC_INTERVAL_MS: z.coerce.number().int().min(30000).default(28800000),
   })
   .superRefine((input, ctx) => {
     if (

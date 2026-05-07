@@ -7,6 +7,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { toEndOfDay } from "../../shared/utils/date-range";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
@@ -93,6 +94,7 @@ export class PurchaseReturnsService {
     const normalizedQuery = {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
+      ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
     };
 
     const [items, total] = await Promise.all([

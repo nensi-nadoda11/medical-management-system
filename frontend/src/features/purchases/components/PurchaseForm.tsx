@@ -16,7 +16,7 @@ import {
 } from "../../accounting/api/accounting";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const purchaseItemSchema = z.object({
   medicineId: z.string().trim().min(1, "Select a medicine."),
@@ -336,7 +336,7 @@ export const PurchaseForm = ({
             description="Capture the header information once, then keep line entry fast and easy to scan."
             title="Purchase order header"
           >
-            <div className="grid gap-3.5 md:grid-cols-2">
+            <div className="grid items-start gap-3.5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Supplier
                 <select className={inputClassName} {...register("supplierId")}>

@@ -5,6 +5,7 @@ import {
   sumMoneyMinorUnits,
   toMoneyMinorUnits,
 } from "../../shared/utils/money";
+import { toEndOfDay } from "../../shared/utils/date-range";
 import { collapseWhitespace } from "../../shared/utils/strings";
 import { CustomersRepository } from "./customers.repository";
 import type {
@@ -369,17 +370,29 @@ export class CustomersService {
     query: ListCustomerPurchasesQuery,
   ) {
     await this.ensureCustomerExists(shopId, customerId);
+    const normalizedQuery = {
+      ...query,
+      ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
+    };
 
     const [items, total] = await Promise.all([
-      this.customersRepository.listCustomerPurchases(shopId, customerId, query),
-      this.customersRepository.countCustomerPurchases(shopId, customerId, query),
+      this.customersRepository.listCustomerPurchases(
+        shopId,
+        customerId,
+        normalizedQuery,
+      ),
+      this.customersRepository.countCustomerPurchases(
+        shopId,
+        customerId,
+        normalizedQuery,
+      ),
     ]);
 
     return buildPaginatedResponse(
       items.map(toCustomerPurchaseResponse),
       total,
-      query.page,
-      query.pageSize,
+      normalizedQuery.page,
+      normalizedQuery.pageSize,
     );
   }
 
@@ -540,9 +553,22 @@ export class CustomersService {
     customerId: string,
     query: ListCustomerPaymentsQuery,
   ) {
+    const normalizedQuery = {
+      ...query,
+      ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
+    };
+
     const [items, total] = await Promise.all([
-      this.customersRepository.listCustomerPayments(shopId, customerId, query),
-      this.customersRepository.countCustomerPayments(shopId, customerId, query),
+      this.customersRepository.listCustomerPayments(
+        shopId,
+        customerId,
+        normalizedQuery,
+      ),
+      this.customersRepository.countCustomerPayments(
+        shopId,
+        customerId,
+        normalizedQuery,
+      ),
     ]);
 
     const allocations = await this.customersRepository.listPaymentAllocationsByPaymentIds(
@@ -566,8 +592,8 @@ export class CustomersService {
         ),
       ),
       total,
-      query.page,
-      query.pageSize,
+      normalizedQuery.page,
+      normalizedQuery.pageSize,
     );
   }
 

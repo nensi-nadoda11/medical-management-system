@@ -506,7 +506,7 @@ export const InventorySummaryPage = () => {
           <EmptyState
             action={
               <Link
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="rounded-2xl bg-black px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-900"
                 to="/app/purchases/new"
               >
                 Create purchase
