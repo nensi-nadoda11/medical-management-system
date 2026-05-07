@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -12,59 +12,89 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDate, formatDateTime } from "../../../lib/utils";
+import { formatCurrency, formatDate } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
+import { useSessionQuery } from "../../auth/hooks/use-session";
 import { billingQueryKeys } from "../../billing/api/billing";
-import { customersQueryKeys } from "../../customers/api/customers";
-import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
+import {
+  customersQueryKeys,
+  listCustomerOptions,
+  listCustomerPurchases,
+} from "../../customers/api/customers";
 import { AccountingModuleNav } from "../components/AccountingModuleNav";
 import { CustomerPaymentEntryModal } from "../components/CustomerPaymentEntryModal";
+import { SearchableOptionSelect } from "../components/SearchableOptionSelect";
 import {
   accountingQueryKeys,
   createAccountingCustomerPayment,
-  listAccountingCustomerPayments,
-  listOutstandingCustomers,
+  getCustomerDueSummary,
 } from "../api/accounting";
 
-const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const secondaryButtonClassName =
+  "rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white";
+
+type CustomerSelectionOption = {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  mobileNumber: string;
+};
+
+const buildCustomerLabel = (customer: {
+  fullName: string;
+  customerCode: string;
+  mobileNumber: string;
+}) => `${customer.fullName} / ${customer.customerCode} / ${customer.mobileNumber}`;
 
 export const CustomerAccountingPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const sessionQuery = useSessionQuery();
+  const user = sessionQuery.data?.user;
+  const canRecordPayments = hasPermission(user, "payments.create");
+
   const [search, setSearch] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"" | "cash" | "upi" | "card" | "bank_transfer" | "cheque">("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [paymentPage, setPaymentPage] = useState(1);
-  const [duePage, setDuePage] = useState(1);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomerLabel, setSelectedCustomerLabel] = useState("");
+  const [billPage, setBillPage] = useState(1);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [paymentPreset, setPaymentPreset] = useState<{
+    customerId: string;
+    customerLabel: string;
+    saleId?: string;
+    saleLabel?: string;
+    lockCustomer?: boolean;
+    lockSale?: boolean;
+  } | null>(null);
   const deferredSearch = useDeferredValue(search);
+  const optionPageSize = 20;
 
-  const paymentParams = {
-    search: deferredSearch || undefined,
-    paymentMethod: paymentMethod || undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    page: paymentPage,
-    pageSize: 10,
-    sortBy: "paymentDate" as const,
-    sortOrder: "desc" as const,
-  };
-  const dueParams = {
-    search: deferredSearch || undefined,
-    page: duePage,
-    pageSize: 8,
-    sortBy: "outstandingAmount" as const,
-    sortOrder: "desc" as const,
-  };
-
-  const paymentsQuery = useQuery({
-    queryKey: accountingQueryKeys.customerPayments(paymentParams),
-    queryFn: () => listAccountingCustomerPayments(paymentParams),
+  const customerOptionsQuery = useQuery({
+    queryKey: customersQueryKeys.options(deferredSearch, optionPageSize),
+    queryFn: () => listCustomerOptions(deferredSearch || undefined, optionPageSize),
   });
-  const dueQuery = useQuery({
-    queryKey: accountingQueryKeys.outstandingCustomers(dueParams),
-    queryFn: () => listOutstandingCustomers(dueParams),
+
+  const customerSummaryQuery = useQuery({
+    queryKey: accountingQueryKeys.customerSummary(selectedCustomerId),
+    queryFn: () => getCustomerDueSummary(selectedCustomerId),
+    enabled: Boolean(selectedCustomerId),
+  });
+
+  const customerBillsQuery = useQuery({
+    queryKey: customersQueryKeys.purchases(selectedCustomerId, {
+      page: billPage,
+      pageSize: 10,
+      sortBy: "billDate",
+      sortOrder: "desc",
+    }),
+    queryFn: () =>
+      listCustomerPurchases(selectedCustomerId, {
+        page: billPage,
+        pageSize: 10,
+        sortBy: "billDate",
+        sortOrder: "desc",
+      }),
+    enabled: Boolean(selectedCustomerId),
   });
 
   const paymentMutation = useMutation({
@@ -77,10 +107,11 @@ export const CustomerAccountingPage = () => {
       ]);
       pushToast({
         title: "Customer payment recorded",
-        description: "Receivable balances and customer ledger were updated successfully.",
+        description: "Customer accounting updated successfully.",
         variant: "success",
       });
       setIsPaymentOpen(false);
+      setPaymentPreset(null);
     },
     onError: (error: Error) => {
       pushToast({
@@ -91,34 +122,79 @@ export const CustomerAccountingPage = () => {
     },
   });
 
-  if (paymentsQuery.isLoading || dueQuery.isLoading) {
+  const handleSelectCustomer = (option: CustomerSelectionOption) => {
+    setSelectedCustomerId(option.id);
+    setSelectedCustomerLabel(buildCustomerLabel(option));
+    setBillPage(1);
+  };
+
+  const customerOptions = useMemo<CustomerSelectionOption[]>(() => {
+    const items = customerOptionsQuery.data?.items ?? [];
+
+    if (!selectedCustomerId || items.some((item) => item.id === selectedCustomerId)) {
+      return items;
+    }
+
+    if (customerSummaryQuery.data) {
+      return [customerSummaryQuery.data.customer, ...items];
+    }
+
+    return [
+      {
+        id: selectedCustomerId,
+        customerCode: "",
+        fullName: selectedCustomerLabel || "Selected customer",
+        mobileNumber: "",
+        city: null,
+        status: "active" as const,
+        totalDueAmount: "0.00",
+        lastPurchaseDate: null,
+      },
+      ...items,
+    ];
+  }, [
+    customerOptionsQuery.data?.items,
+    customerSummaryQuery.data,
+    selectedCustomerId,
+    selectedCustomerLabel,
+  ]);
+
+  const selectedCustomer = customerSummaryQuery.data?.customer ?? null;
+  const selectedCustomerDisplayLabel = selectedCustomer
+    ? buildCustomerLabel(selectedCustomer)
+    : selectedCustomerLabel;
+
+  const openPaymentModal = (preset?: typeof paymentPreset) => {
+    if (!selectedCustomerId) {
+      return;
+    }
+
+    setPaymentPreset(
+      preset ?? {
+        customerId: selectedCustomerId,
+        customerLabel: selectedCustomerDisplayLabel,
+        lockCustomer: true,
+      },
+    );
+    setIsPaymentOpen(true);
+  };
+
+  if (customerOptionsQuery.isLoading && !customerOptionsQuery.data) {
     return <LoadingState title="Loading customer accounting" />;
   }
 
-  if (paymentsQuery.error || dueQuery.error) {
+  if (customerOptionsQuery.error) {
     return (
       <ErrorState
-        description={paymentsQuery.error?.message ?? dueQuery.error?.message ?? "Unable to load customer accounting."}
-        onRetry={() => {
-          paymentsQuery.refetch();
-          dueQuery.refetch();
-        }}
+        description={customerOptionsQuery.error.message}
+        onRetry={() => customerOptionsQuery.refetch()}
         title="Unable to load customer accounting"
       />
     );
   }
 
-  const payments = paymentsQuery.data?.items ?? [];
-  const dueCustomers = dueQuery.data?.items ?? [];
-  const visibleOutstanding = dueCustomers.reduce(
-    (sum, item) => sum + Number(item.summary.outstandingAmount),
-    0,
-  );
-  const visibleAdvance = dueCustomers.reduce(
-    (sum, item) => sum + Number(item.summary.advanceAmount),
-    0,
-  );
-  const visiblePayments = payments.reduce((sum, item) => sum + Number(item.amount), 0);
+  const customerSummary = customerSummaryQuery.data?.summary;
+  const customerBills = customerBillsQuery.data?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -126,315 +202,277 @@ export const CustomerAccountingPage = () => {
         actions={
           <>
             <AccountingModuleNav />
-            <button
-              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              onClick={() => setIsPaymentOpen(true)}
-              type="button"
-            >
-              Record customer payment
-            </button>
+            {canRecordPayments && selectedCustomerId ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => openPaymentModal()}
+                type="button"
+              >
+                Receive payment
+              </button>
+            ) : null}
           </>
         }
-        description="Track receivables, bill-wise collections, customer advances, and ledger-ready payment activity in one clean workspace."
         eyebrow="Accounting / Customers"
-        title="Customer payments"
+        title="Customer Accounting"
       />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint="Outstanding customers matching current filters" label="Customers due" value={dueQuery.data?.pagination.total ?? 0} />
-        <SummaryCard hint="Visible receivable amount" label="Visible outstanding" value={formatCurrency(visibleOutstanding)} />
-        <SummaryCard hint="Visible customer advance balance" label="Visible advance" value={formatCurrency(visibleAdvance)} />
-        <SummaryCard hint="Visible collections on this page" label="Visible receipts" value={formatCurrency(visiblePayments)} />
-      </div>
 
       <FilterBar
         actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setPaymentMethod("");
-              setDateFrom("");
-              setDateTo("");
-              setPaymentPage(1);
-              setDuePage(1);
-            }}
-            type="button"
-          >
-            Clear filters
-          </button>
-        }
-        description="Keep customer accounting compact and readable for both cashier follow-up and accountant review."
-        title="Customer accounting filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPaymentPage(1);
-                setDuePage(1);
+          selectedCustomerId ? (
+            <button
+              className={secondaryButtonClassName}
+              onClick={() => {
+                setSelectedCustomerId("");
+                setSelectedCustomerLabel("");
+                setSearch("");
+                setBillPage(1);
               }}
-              placeholder="Search customer, bill, reference, or mobile"
-              value={search}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Payment method
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setPaymentMethod(event.target.value as typeof paymentMethod);
-                setPaymentPage(1);
-              }}
-              value={paymentMethod}
+              type="button"
             >
-              <option value="">All methods</option>
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="cheque">Cheque</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date from
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setPaymentPage(1);
-              }}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date to
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setPaymentPage(1);
-              }}
-              type="date"
-              value={dateTo}
-            />
-          </label>
-        </div>
+              Clear
+            </button>
+          ) : null
+        }
+        contentClassName="border-0 bg-transparent p-0 shadow-none"
+        title="Customer"
+      >
+        <SearchableOptionSelect
+          emptyMessage="No customer found."
+          isLoading={customerOptionsQuery.isFetching}
+          onSearchChange={setSearch}
+          onSelect={(value) => {
+            const option = customerOptions.find((item) => item.id === value);
+
+            if (!option) {
+              setSelectedCustomerId("");
+              setSelectedCustomerLabel("");
+              setBillPage(1);
+              return;
+            }
+
+            handleSelectCustomer(option);
+          }}
+          options={customerOptions.map((item) => ({
+            id: item.id,
+            label: buildCustomerLabel(item),
+          }))}
+          placeholder="Select customer"
+          search={search}
+          searchPlaceholder="Search customer"
+          value={selectedCustomerId}
+        />
       </FilterBar>
 
-      <SectionCard
-        description="Open customer dues stay visible with direct links into full ledger detail."
-        title="Outstanding customers"
-      >
-        {dueCustomers.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {dueCustomers.map((item) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={item.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link className="text-sm font-semibold text-slate-950 hover:text-teal-700" to={`/app/accounting/customers/${item.id}`}>
-                        {item.fullName}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.customerCode} · {item.mobileNumber}
-                      </p>
-                    </div>
-                    <StatusBadge label={item.status} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Outstanding", formatCurrency(item.summary.outstandingAmount)],
-                      ["Advance", formatCurrency(item.summary.advanceAmount)],
-                      ["Open bills", item.summary.openBillCount.toString()],
-                      ["Last bill", formatDate(item.summary.lastBillDate)],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <div className="mt-3">
-                    <DocumentActionGroup
-                      compact
-                      id={item.id}
-                      kind="customer-receipt"
-                      showPreview={false}
-                    />
-                  </div>
-                </article>
-              ))}
-            </div>
+      {!selectedCustomerId ? (
+        <EmptyState description="Select customer to view accounting." title="No customer selected" />
+      ) : customerSummaryQuery.isLoading || customerBillsQuery.isLoading ? (
+        <LoadingState title="Loading customer details" />
+      ) : customerSummaryQuery.error || customerBillsQuery.error || !selectedCustomer || !customerSummary ? (
+        <ErrorState
+          description={
+            customerSummaryQuery.error?.message ??
+            customerBillsQuery.error?.message ??
+            "Unable to load customer details."
+          }
+          onRetry={() => {
+            customerSummaryQuery.refetch();
+            customerBillsQuery.refetch();
+          }}
+          title="Unable to load customer details"
+        />
+      ) : (
+        <>
+          <SectionCard
+            action={
+              canRecordPayments ? (
+                <button
+                  className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  onClick={() => openPaymentModal()}
+                  type="button"
+                >
+                  Receive payment
+                </button>
+              ) : null
+            }
+            title={selectedCustomer.fullName}
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge label={selectedCustomer.status} />
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                  {selectedCustomer.customerCode}
+                </span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                  {selectedCustomer.mobileNumber}
+                </span>
+              </div>
 
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Customer</th>
-                    <th className="px-4">Mobile</th>
-                    <th className="px-4">Open bills</th>
-                    <th className="px-4">Outstanding</th>
-                    <th className="px-4">Advance</th>
-                    <th className="px-4">Last bill</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dueCustomers.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <SummaryCard label="Total billed" value={formatCurrency(customerSummary.totalSales)} />
+                <SummaryCard label="Total received" value={formatCurrency(customerSummary.totalPayments)} />
+                <SummaryCard
+                  label="Due"
+                  tone={Number(customerSummary.outstandingAmount) > 0 ? "warning" : "default"}
+                  value={formatCurrency(customerSummary.outstandingAmount)}
+                />
+                <SummaryCard
+                  label="Advance"
+                  tone={Number(customerSummary.advanceAmount) > 0 ? "accent" : "default"}
+                  value={formatCurrency(customerSummary.advanceAmount)}
+                />
+                <SummaryCard label="Open bills" value={customerSummary.openBillCount} />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Bills">
+            {customerBills.length ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 xl:hidden">
+                  {customerBills.map((bill) => (
+                    <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={bill.id}>
+                      <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-slate-950">{item.fullName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{item.customerCode}</p>
+                          <p className="text-sm font-semibold text-slate-950">{bill.billNumber}</p>
+                          <p className="mt-1 text-sm text-slate-600">{formatDate(bill.billDate)}</p>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.mobileNumber}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.summary.openBillCount}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-amber-700">{formatCurrency(item.summary.outstandingAmount)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.summary.advanceAmount)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(item.summary.lastBillDate)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <Link className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white" to={`/app/accounting/customers/${item.id}`}>
-                          View ledger
+                        <StatusBadge label={bill.paymentStatus} />
+                      </div>
+
+                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {[
+                          ["Bill amount", formatCurrency(bill.grandTotal)],
+                          ["Paid", formatCurrency(bill.paidAmount)],
+                          ["Due", formatCurrency(bill.dueAmount)],
+                          ["Created by", bill.createdBy.fullName],
+                        ].map(([label, value]) => (
+                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              {label}
+                            </dt>
+                            <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link className={secondaryButtonClassName} to={`/app/billing/${bill.id}`}>
+                          View bill
                         </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {dueQuery.data?.pagination ? (
-              <Pagination
-                onPageChange={setDuePage}
-                page={dueQuery.data.pagination.page}
-                pageSize={dueQuery.data.pagination.pageSize}
-                totalItems={dueQuery.data.pagination.total}
-                totalPages={dueQuery.data.pagination.totalPages}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState description="No outstanding customer receivables match the current filters." title="No customer dues found" />
-        )}
-      </SectionCard>
-
-      <SectionCard
-        description="A compact customer payment register with bill references, operator visibility, and allocation traceability."
-        title="Customer payment register"
-      >
-        {payments.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {payments.map((item) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={item.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{item.customer.fullName}</p>
-                      <p className="mt-1 text-sm text-slate-600">{formatDateTime(item.paymentDate)}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-950">{formatCurrency(item.amount)}</p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusBadge label={item.paymentMethod} />
-                    <StatusBadge label={item.status} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Reference", item.referenceNumber || "Not added"],
-                      ["Linked bill", item.linkedSale?.billNumber || (item.allocations.length ? `${item.allocations.length} bills` : "Advance / general")],
-                      ["Received by", item.receivedBy.fullName],
-                      ["Notes", item.notes || "Not added"],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                        {canRecordPayments && Number(bill.dueAmount) > 0 ? (
+                          <button
+                            className={secondaryButtonClassName}
+                            onClick={() =>
+                              openPaymentModal({
+                                customerId: selectedCustomer.id,
+                                customerLabel: selectedCustomerDisplayLabel,
+                                saleId: bill.id,
+                                saleLabel: `${bill.billNumber} / Due ${formatCurrency(bill.dueAmount)} / ${formatDate(bill.billDate)}`,
+                                lockCustomer: true,
+                                lockSale: true,
+                              })
+                            }
+                            type="button"
+                          >
+                            Receive
+                          </button>
+                        ) : null}
                       </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1220px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Payment date</th>
-                    <th className="px-4">Customer</th>
-                    <th className="px-4">Amount</th>
-                    <th className="px-4">Method</th>
-                    <th className="px-4">Reference</th>
-                    <th className="px-4">Linked bill</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Operator</th>
-                    <th className="px-4">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4 text-sm text-slate-700">{formatDateTime(item.paymentDate)}</td>
-                      <td className="px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">{item.customer.fullName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{item.customer.customerCode}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">{formatCurrency(item.amount)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={item.paymentMethod} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.referenceNumber || "Not added"}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.linkedSale?.billNumber || (item.allocations.length ? `${item.allocations.length} bills` : "Advance / general")}
-                      </td>
-                      <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.receivedBy.fullName}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <DocumentActionGroup
-                          compact
-                          id={item.id}
-                          kind="customer-receipt"
-                          showPreview={false}
-                        />
-                      </td>
-                    </tr>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            {paymentsQuery.data?.pagination ? (
-              <Pagination
-                onPageChange={setPaymentPage}
-                page={paymentsQuery.data.pagination.page}
-                pageSize={paymentsQuery.data.pagination.pageSize}
-                totalItems={paymentsQuery.data.pagination.total}
-                totalPages={paymentsQuery.data.pagination.totalPages}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState description="No customer payments match the current filters." title="No payments found" />
-        )}
-      </SectionCard>
+                <div className="hidden overflow-x-auto xl:block">
+                  <table className="min-w-[1180px] w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <th className="px-4">Bill</th>
+                        <th className="px-4">Date</th>
+                        <th className="px-4">Amount</th>
+                        <th className="px-4">Paid</th>
+                        <th className="px-4">Due</th>
+                        <th className="px-4">Status</th>
+                        <th className="px-4">Created by</th>
+                        <th className="px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerBills.map((bill) => (
+                        <tr className="rounded-3xl bg-slate-50" key={bill.id}>
+                          <td className="rounded-l-3xl px-4 py-4 font-semibold text-slate-950">
+                            {bill.billNumber}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatDate(bill.billDate)}</td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(bill.grandTotal)}</td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(bill.paidAmount)}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-amber-700">
+                            {formatCurrency(bill.dueAmount)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={bill.paymentStatus} />
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{bill.createdBy.fullName}</td>
+                          <td className="rounded-r-3xl px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Link className={secondaryButtonClassName} to={`/app/billing/${bill.id}`}>
+                                View bill
+                              </Link>
+                              {canRecordPayments && Number(bill.dueAmount) > 0 ? (
+                                <button
+                                  className={secondaryButtonClassName}
+                                  onClick={() =>
+                                    openPaymentModal({
+                                      customerId: selectedCustomer.id,
+                                      customerLabel: selectedCustomerDisplayLabel,
+                                      saleId: bill.id,
+                                      saleLabel: `${bill.billNumber} / Due ${formatCurrency(bill.dueAmount)} / ${formatDate(bill.billDate)}`,
+                                      lockCustomer: true,
+                                      lockSale: true,
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  Receive
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {customerBillsQuery.data?.pagination ? (
+                  <Pagination
+                    onPageChange={setBillPage}
+                    page={customerBillsQuery.data.pagination.page}
+                    pageSize={customerBillsQuery.data.pagination.pageSize}
+                    totalItems={customerBillsQuery.data.pagination.total}
+                    totalPages={customerBillsQuery.data.pagination.totalPages}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <EmptyState description="No bills found for this customer." title="No bills" />
+            )}
+          </SectionCard>
+        </>
+      )}
 
       <CustomerPaymentEntryModal
         errorMessage={paymentMutation.error?.message}
         isSubmitting={paymentMutation.isPending}
-        onClose={() => setIsPaymentOpen(false)}
+        onClose={() => {
+          setIsPaymentOpen(false);
+          setPaymentPreset(null);
+        }}
         onSubmit={async (payload) => {
           await paymentMutation.mutateAsync(payload);
         }}
         open={isPaymentOpen}
+        preset={paymentPreset}
       />
     </div>
   );

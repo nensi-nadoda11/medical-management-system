@@ -278,10 +278,18 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
       totalSales: sql<string>`coalesce(sum(${sales.grandTotal}), 0.00)`.as(
         "total_sales",
       ),
+      totalInitialPayments:
+        sql<string>`coalesce(sum(${sales.initialPaidAmount}), 0.00)`.as(
+          "total_initial_payments",
+        ),
       billCount: sql<number>`count(*)`.as("bill_count"),
       lastBillDate:
         sql<Date | null>`max(coalesce(${sales.completedAt}, ${sales.createdAt}))`.as(
           "last_bill_date",
+        ),
+      lastInitialPaymentDate:
+        sql<Date | null>`max(case when ${sales.initialPaidAmount} > 0 then coalesce(${sales.completedAt}, ${sales.createdAt}) else null end)`.as(
+          "last_initial_payment_date",
         ),
     })
     .from(sales)
@@ -393,7 +401,10 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
           "total_returns",
         ),
       totalPayments:
-        sql<string>`coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)`.as(
+        sql<string>`
+          coalesce(${aliasedColumn("completed_sales_by_customer", "total_initial_payments")}, 0.00)
+          + coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)
+        `.as(
           "total_payments",
         ),
       billCount:
@@ -411,12 +422,14 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
       balanceAmount: sql<string>`
         coalesce(${aliasedColumn("completed_sales_by_customer", "total_sales")}, 0.00)
         - coalesce(${aliasedColumn("returns_by_customer", "total_returns")}, 0.00)
+        - coalesce(${aliasedColumn("completed_sales_by_customer", "total_initial_payments")}, 0.00)
         - coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)
       `.as("balance_amount"),
       advanceAmount: sql<string>`
         greatest(
           (
             coalesce(${aliasedColumn("returns_by_customer", "total_returns")}, 0.00)
+            + coalesce(${aliasedColumn("completed_sales_by_customer", "total_initial_payments")}, 0.00)
             + coalesce(${aliasedColumn("payments_by_customer", "total_payments")}, 0.00)
             - coalesce(${aliasedColumn("completed_sales_by_customer", "total_sales")}, 0.00)
           ),
@@ -428,7 +441,18 @@ const customerSummarySubquery = (shopId: string, executor?: DbExecutor) => {
           "last_bill_date",
         ),
       lastPaymentDate:
-        sql<Date | null>`${aliasedColumn("payments_by_customer", "last_payment_date")}`.as(
+        sql<Date | null>`
+          case
+            when ${aliasedColumn("completed_sales_by_customer", "last_initial_payment_date")} is null
+              then ${aliasedColumn("payments_by_customer", "last_payment_date")}
+            when ${aliasedColumn("payments_by_customer", "last_payment_date")} is null
+              then ${aliasedColumn("completed_sales_by_customer", "last_initial_payment_date")}
+            else greatest(
+              ${aliasedColumn("completed_sales_by_customer", "last_initial_payment_date")},
+              ${aliasedColumn("payments_by_customer", "last_payment_date")}
+            )
+          end
+        `.as(
           "last_payment_date",
         ),
     })
@@ -449,10 +473,18 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
         sql<string>`coalesce(sum(${purchases.grandTotal}), 0.00)`.as(
           "total_purchases",
         ),
+      totalInitialPayments:
+        sql<string>`coalesce(sum(${purchases.initialPaidAmount}), 0.00)`.as(
+          "total_initial_payments",
+        ),
       purchaseCount: sql<number>`count(*)`.as("purchase_count"),
       lastPurchaseDate:
         sql<Date | null>`max(${purchases.purchaseDate})`.as(
           "last_purchase_date",
+        ),
+      lastInitialPaymentDate:
+        sql<Date | null>`max(case when ${purchases.initialPaidAmount} > 0 then ${purchases.purchaseDate} else null end)`.as(
+          "last_initial_payment_date",
         ),
     })
     .from(purchases)
@@ -553,7 +585,10 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
           "total_purchases",
         ),
       totalPayments:
-        sql<string>`coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)`.as(
+        sql<string>`
+          coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
+          + coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
+        `.as(
           "total_payments",
         ),
       purchaseCount:
@@ -572,12 +607,14 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
         coalesce(${suppliers.openingBalance}, 0.00)
         + coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
         - coalesce(${aliasedColumn("returns_by_supplier", "total_returns")}, 0.00)
+        - coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
         - coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
       `.as("balance_amount"),
       advanceAmount: sql<string>`
         greatest(
           (
-            coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
+            coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_initial_payments")}, 0.00)
+            + coalesce(${aliasedColumn("payments_by_supplier", "total_payments")}, 0.00)
             - (
               coalesce(${suppliers.openingBalance}, 0.00)
               + coalesce(${aliasedColumn("completed_purchases_by_supplier", "total_purchases")}, 0.00)
@@ -592,7 +629,18 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
           "last_purchase_date",
         ),
       lastPaymentDate:
-        sql<Date | null>`${aliasedColumn("payments_by_supplier", "last_payment_date")}`.as(
+        sql<Date | null>`
+          case
+            when ${aliasedColumn("completed_purchases_by_supplier", "last_initial_payment_date")} is null
+              then ${aliasedColumn("payments_by_supplier", "last_payment_date")}
+            when ${aliasedColumn("payments_by_supplier", "last_payment_date")} is null
+              then ${aliasedColumn("completed_purchases_by_supplier", "last_initial_payment_date")}
+            else greatest(
+              ${aliasedColumn("completed_purchases_by_supplier", "last_initial_payment_date")},
+              ${aliasedColumn("payments_by_supplier", "last_payment_date")}
+            )
+          end
+        `.as(
           "last_payment_date",
         ),
     })
@@ -610,6 +658,14 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
     .where(eq(suppliers.shopId, shopId))
     .as("supplier_financial_summary");
 };
+
+const hasCustomerAccountingBalance = (
+  summary: ReturnType<typeof customerSummarySubquery>,
+) => sql`(${summary.outstandingAmount} > 0 or ${summary.advanceAmount} > 0)`;
+
+const hasSupplierAccountingBalance = (
+  summary: ReturnType<typeof supplierSummarySubquery>,
+) => sql`(${summary.outstandingAmount} > 0 or ${summary.advanceAmount} > 0)`;
 
 export class AccountingRepository {
   async findCustomerById(shopId: string, customerId: string, executor?: DbExecutor) {
@@ -752,6 +808,26 @@ export class AccountingRepository {
       .where(buildCustomerPaymentFilters(shopId, query));
 
     return result?.total ?? 0;
+  }
+
+  async getCustomerPaymentsSummary(
+    shopId: string,
+    query: ListAccountingCustomerPaymentsQuery,
+  ) {
+    const [result] = await getDbExecutor()
+      .select({
+        totalPayments: count(),
+        totalAmount: sql<string>`coalesce(sum(${customerPayments.amount}), 0.00)`,
+      })
+      .from(customerPayments)
+      .innerJoin(customers, eq(customerPayments.customerId, customers.id))
+      .leftJoin(sales, eq(customerPayments.saleId, sales.id))
+      .where(buildCustomerPaymentFilters(shopId, query));
+
+    return {
+      totalPayments: result?.totalPayments ?? 0,
+      totalAmount: result?.totalAmount ?? "0.00",
+    };
   }
 
   async listCustomerPaymentAllocationsByPaymentIds(
@@ -936,6 +1012,26 @@ export class AccountingRepository {
     return result?.total ?? 0;
   }
 
+  async getSupplierPaymentsSummary(
+    shopId: string,
+    query: ListAccountingSupplierPaymentsQuery,
+  ) {
+    const [result] = await getDbExecutor()
+      .select({
+        totalPayments: count(),
+        totalAmount: sql<string>`coalesce(sum(${supplierPayments.amount}), 0.00)`,
+      })
+      .from(supplierPayments)
+      .innerJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
+      .leftJoin(purchases, eq(supplierPayments.purchaseId, purchases.id))
+      .where(buildSupplierPaymentFilters(shopId, query));
+
+    return {
+      totalPayments: result?.totalPayments ?? 0,
+      totalAmount: result?.totalAmount ?? "0.00",
+    };
+  }
+
   async listSupplierPaymentAllocationsByPaymentIds(
     shopId: string,
     paymentIds: string[],
@@ -1045,7 +1141,7 @@ export class AccountingRepository {
 
     const filters = [
       eq(customers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasCustomerAccountingBalance(summary),
     ];
 
     if (query.search) {
@@ -1101,7 +1197,7 @@ export class AccountingRepository {
     const summary = customerSummarySubquery(shopId);
     const filters = [
       eq(customers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasCustomerAccountingBalance(summary),
     ];
 
     if (query.search) {
@@ -1131,7 +1227,7 @@ export class AccountingRepository {
     const summary = customerSummarySubquery(shopId);
     const filters = [
       eq(customers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasCustomerAccountingBalance(summary),
     ];
 
     if (query.search) {
@@ -1317,7 +1413,7 @@ export class AccountingRepository {
 
     const filters = [
       eq(suppliers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasSupplierAccountingBalance(summary),
     ];
 
     if (query.search) {
@@ -1371,7 +1467,7 @@ export class AccountingRepository {
     const summary = supplierSummarySubquery(shopId);
     const filters = [
       eq(suppliers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasSupplierAccountingBalance(summary),
     ];
 
     if (query.search) {
@@ -1401,7 +1497,7 @@ export class AccountingRepository {
     const summary = supplierSummarySubquery(shopId);
     const filters = [
       eq(suppliers.shopId, shopId),
-      sql`${summary.outstandingAmount} > 0`,
+      hasSupplierAccountingBalance(summary),
     ];
 
     if (query.search) {

@@ -171,5 +171,12 @@ export interface BillingMedicineSearchParams {
   sortOrder?: "asc" | "desc";
 }
 
-export type BillsResponse = PaginatedResponse<BillListItem>;
+export interface BillsResponse extends PaginatedResponse<BillListItem> {
+  summary: {
+    totalBills: number;
+    grandTotal: string;
+    paidAmount: string;
+    dueAmount: string;
+  };
+}
 export type BillingMedicineSearchResponse = PaginatedResponse<BillingMedicineSearchItem>;

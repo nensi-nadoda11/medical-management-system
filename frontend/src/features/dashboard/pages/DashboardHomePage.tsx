@@ -130,9 +130,6 @@ const defaultOutstandingSuppliersSummary = {
   totalAdvanceAmount: "0.00",
 };
 
-const sumMoneyValues = (values: Array<string | number | null | undefined>) =>
-  values.reduce<number>((total, value) => total + parseMoney(value), 0);
-
 const renderSectionError = (message: string) => (
   <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
     {message}
@@ -325,7 +322,7 @@ export const DashboardHomePage = () => {
     dateFrom: todayParam,
     dateTo: todayParam,
     page: 1,
-    pageSize: 250,
+    pageSize: 1,
     sortBy: "completedAt" as const,
     sortOrder: "desc" as const,
   };
@@ -397,7 +394,7 @@ export const DashboardHomePage = () => {
     dateFrom: todayParam,
     dateTo: todayParam,
     page: 1,
-    pageSize: 250,
+    pageSize: 1,
     sortBy: "paymentDate" as const,
     sortOrder: "desc" as const,
   };
@@ -427,7 +424,7 @@ export const DashboardHomePage = () => {
     dateFrom: todayParam,
     dateTo: todayParam,
     page: 1,
-    pageSize: 250,
+    pageSize: 1,
     sortBy: "paymentDate" as const,
     sortOrder: "desc" as const,
   };
@@ -772,20 +769,18 @@ export const DashboardHomePage = () => {
 
   const todaySalesAmount = canViewReports
     ? reportsSummary.todaySales.totalSales
-    : sumMoneyValues((todayBillsQuery.data?.items ?? []).map((item) => item.grandTotal));
+    : todayBillsQuery.data?.summary.grandTotal ?? "0.00";
   const todayBillsCount = canViewReports
     ? reportsSummary.todaySales.totalBills
-    : todayBillsQuery.data?.pagination.total ?? 0;
+    : todayBillsQuery.data?.summary.totalBills ?? 0;
   const heldBillsCount = heldBillsQuery.data?.pagination.total ?? 0;
-  const todayCollectionsAmount = sumMoneyValues(
-    (todayCustomerPaymentsQuery.data?.items ?? []).map((item) => item.amount),
-  );
-  const todayCollectionsCount = todayCustomerPaymentsQuery.data?.pagination.total ?? 0;
-  const todaySupplierPaymentsAmount = sumMoneyValues(
-    (todaySupplierPaymentsQuery.data?.items ?? []).map((item) => item.amount),
-  );
+  const todayCollectionsAmount = todayCustomerPaymentsQuery.data?.summary.totalAmount ?? "0.00";
+  const todayCollectionsCount =
+    todayCustomerPaymentsQuery.data?.summary.totalPayments ?? 0;
+  const todaySupplierPaymentsAmount =
+    todaySupplierPaymentsQuery.data?.summary.totalAmount ?? "0.00";
   const todaySupplierPaymentsCount =
-    todaySupplierPaymentsQuery.data?.pagination.total ?? 0;
+    todaySupplierPaymentsQuery.data?.summary.totalPayments ?? 0;
 
   const staffTopMetrics = [
     canViewBilling

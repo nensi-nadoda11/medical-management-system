@@ -316,6 +316,25 @@ export class BillingRepository {
     return result?.total ?? 0;
   }
 
+  async getSalesSummary(shopId: string, branchId: string, query: ListBillsQuery) {
+    const [result] = await getDbExecutor()
+      .select({
+        totalBills: count(),
+        grandTotal: sql<string>`coalesce(sum(${sales.grandTotal}), 0.00)`,
+        paidAmount: sql<string>`coalesce(sum(${sales.paidAmount}), 0.00)`,
+        dueAmount: sql<string>`coalesce(sum(${sales.dueAmount}), 0.00)`,
+      })
+      .from(sales)
+      .where(buildSaleFilters(shopId, branchId, query));
+
+    return {
+      totalBills: result?.totalBills ?? 0,
+      grandTotal: result?.grandTotal ?? "0.00",
+      paidAmount: result?.paidAmount ?? "0.00",
+      dueAmount: result?.dueAmount ?? "0.00",
+    };
+  }
+
   async createSale(
     payload: typeof sales.$inferInsert,
     items: Array<Omit<typeof saleItems.$inferInsert, "saleId" | "shopId" | "branchId">>,

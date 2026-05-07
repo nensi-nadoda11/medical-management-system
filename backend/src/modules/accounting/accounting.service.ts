@@ -118,9 +118,10 @@ export class AccountingService {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
-    const [items, total] = await Promise.all([
+    const [items, total, summary] = await Promise.all([
       this.accountingRepository.listCustomerPayments(shopId, normalizedQuery),
       this.accountingRepository.countCustomerPayments(shopId, normalizedQuery),
+      this.accountingRepository.getCustomerPaymentsSummary(shopId, normalizedQuery),
     ]);
     const allocations =
       await this.accountingRepository.listCustomerPaymentAllocationsByPaymentIds(
@@ -139,17 +140,20 @@ export class AccountingService {
       allocationsByPaymentId.set(allocation.allocation.customerPaymentId, existing);
     }
 
-    return buildPaginatedResponse(
-      items.map((item) =>
-        toCustomerPaymentResponse(
-          item,
-          allocationsByPaymentId.get(item.payment.id) ?? [],
+    return {
+      summary,
+      ...buildPaginatedResponse(
+        items.map((item) =>
+          toCustomerPaymentResponse(
+            item,
+            allocationsByPaymentId.get(item.payment.id) ?? [],
+          ),
         ),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
       ),
-      total,
-      normalizedQuery.page,
-      normalizedQuery.pageSize,
-    );
+    };
   }
 
   async createCustomerPayment(
@@ -437,9 +441,10 @@ export class AccountingService {
       ...query,
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
-    const [items, total] = await Promise.all([
+    const [items, total, summary] = await Promise.all([
       this.accountingRepository.listSupplierPayments(shopId, normalizedQuery),
       this.accountingRepository.countSupplierPayments(shopId, normalizedQuery),
+      this.accountingRepository.getSupplierPaymentsSummary(shopId, normalizedQuery),
     ]);
     const allocations =
       await this.accountingRepository.listSupplierPaymentAllocationsByPaymentIds(
@@ -458,17 +463,20 @@ export class AccountingService {
       allocationsByPaymentId.set(allocation.allocation.supplierPaymentId, existing);
     }
 
-    return buildPaginatedResponse(
-      items.map((item) =>
-        toSupplierPaymentResponse(
-          item,
-          allocationsByPaymentId.get(item.payment.id) ?? [],
+    return {
+      summary,
+      ...buildPaginatedResponse(
+        items.map((item) =>
+          toSupplierPaymentResponse(
+            item,
+            allocationsByPaymentId.get(item.payment.id) ?? [],
+          ),
         ),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
       ),
-      total,
-      normalizedQuery.page,
-      normalizedQuery.pageSize,
-    );
+    };
   }
 
   async createSupplierPayment(

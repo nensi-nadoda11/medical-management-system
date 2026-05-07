@@ -18,9 +18,11 @@ import {
   formatDateTime,
   humanizeLabel,
 } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { billingQueryKeys } from "../../billing/api/billing";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { customersQueryKeys } from "../../customers/api/customers";
+import { buildDocumentPreviewPath } from "../../documents/api/documents";
 import {
   accountingQueryKeys,
   createAccountingCustomerPayment,
@@ -33,19 +35,27 @@ import { CustomerPaymentEntryModal } from "../components/CustomerPaymentEntryMod
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
+const secondaryButtonClassName =
+  "rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white";
+
 export const CustomerLedgerPage = () => {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
-  const role = sessionQuery.data?.user.role;
-  const canRecordPayments = role === "admin" || role === "accountant";
+  const user = sessionQuery.data?.user;
+  const canRecordPayments = hasPermission(user, "payments.create");
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [paymentPreset, setPaymentPreset] = useState<{
+    saleId?: string;
+    saleLabel?: string;
+    lockSale?: boolean;
+  } | null>(null);
 
   const ledgerParams = {
     page: ledgerPage,
@@ -77,10 +87,11 @@ export const CustomerLedgerPage = () => {
       ]);
       pushToast({
         title: "Customer payment recorded",
-        description: "Ledger and receivable balances were refreshed successfully.",
+        description: "Customer ledger, due amount, and advance balance were refreshed successfully.",
         variant: "success",
       });
       setIsPaymentOpen(false);
+      setPaymentPreset(null);
     },
     onError: (error: Error) => {
       pushToast({
@@ -115,6 +126,12 @@ export const CustomerLedgerPage = () => {
   const { customer, ledger } = ledgerQuery.data;
   const summary = dueSummaryQuery.data.summary;
   const openSales = dueSummaryQuery.data.openSales;
+  const customerLabel = `${customer.fullName} / ${customer.customerCode} / ${customer.mobileNumber}`;
+
+  const openPaymentModal = (preset?: typeof paymentPreset) => {
+    setPaymentPreset(preset ?? null);
+    setIsPaymentOpen(true);
+  };
 
   const renderReference = (referenceType: string, referenceId: string, notes: string | null) => {
     if (referenceType === "sale") {
@@ -123,7 +140,7 @@ export const CustomerLedgerPage = () => {
           className="font-semibold text-slate-950 hover:text-teal-700"
           to={`/app/billing/${referenceId}`}
         >
-          {notes || "View bill"}
+          {notes || "Open bill"}
         </Link>
       );
     }
@@ -134,8 +151,21 @@ export const CustomerLedgerPage = () => {
           className="font-semibold text-slate-950 hover:text-teal-700"
           to={`/app/billing/returns/${referenceId}`}
         >
-          {notes || "View return"}
+          {notes || "Open return"}
         </Link>
+      );
+    }
+
+    if (referenceType === "customer_payment") {
+      return (
+        <a
+          className="font-semibold text-slate-950 hover:text-teal-700"
+          href={buildDocumentPreviewPath("customer-receipt", referenceId)}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {notes || "Open receipt"}
+        </a>
       );
     }
 
@@ -157,7 +187,7 @@ export const CustomerLedgerPage = () => {
             {canRecordPayments ? (
               <button
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => setIsPaymentOpen(true)}
+                onClick={() => openPaymentModal()}
                 type="button"
               >
                 Record payment
@@ -165,29 +195,29 @@ export const CustomerLedgerPage = () => {
             ) : null}
           </>
         }
-        description="Ledger-ready receivable visibility with open bills, running balance movement, and payment history that stays easy to scan."
+        description="Single-customer ledger statement with open bills, running balance movement, and chronological transaction history for reconciliation."
         eyebrow="Accounting / Customer Ledger"
         title={customer.fullName}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint={customer.customerCode} label="Customer code" value={customer.customerCode} />
+        <SummaryCard hint="Customer code" label="Code" value={customer.customerCode} />
         <SummaryCard
-          hint="Current receivable"
-          label="Outstanding"
+          hint="Total billed to this customer."
+          label="Total billed"
+          value={formatCurrency(summary.totalSales)}
+        />
+        <SummaryCard
+          hint="Current receivable still pending."
+          label="Current due"
           tone={Number(summary.outstandingAmount) > 0 ? "warning" : "default"}
           value={formatCurrency(summary.outstandingAmount)}
         />
         <SummaryCard
-          hint="Unused customer credit"
-          label="Advance"
+          hint="Extra money currently lying as customer advance."
+          label="Advance balance"
           tone={Number(summary.advanceAmount) > 0 ? "accent" : "default"}
           value={formatCurrency(summary.advanceAmount)}
-        />
-        <SummaryCard
-          hint="Open bills pending collection"
-          label="Open bills"
-          value={summary.openBillCount}
         />
       </div>
 
@@ -206,7 +236,7 @@ export const CustomerLedgerPage = () => {
             Clear filters
           </button>
         }
-        description="Keep date-range review and running-balance inspection compact for collection follow-up."
+        description="Review the statement by date range and switch between newest-first or oldest-first transaction order."
         title="Ledger filters"
       >
         <div className="grid gap-3 md:grid-cols-3">
@@ -251,81 +281,126 @@ export const CustomerLedgerPage = () => {
         </div>
       </FilterBar>
 
-      <SectionCard
-        description="Open customer bills remain visible here so collections can be recorded against the exact receivable when needed."
-        title="Open bills"
-      >
-        {openSales.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {openSales.map((sale) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={sale.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link className="text-sm font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
-                        {sale.billNumber}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-600">{formatDate(sale.billDate)}</p>
-                    </div>
-                    <StatusBadge label={sale.paymentStatus} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Net amount", formatCurrency(sale.netTotal)],
-                      ["Returned", formatCurrency(sale.returnedAmount)],
-                      ["Allocated", formatCurrency(sale.allocatedAmount)],
-                      ["Due", formatCurrency(sale.dueAmount)],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1080px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Bill</th>
-                    <th className="px-4">Date</th>
-                    <th className="px-4">Net amount</th>
-                    <th className="px-4">Returned</th>
-                    <th className="px-4">Allocated</th>
-                    <th className="px-4">Due</th>
-                    <th className="px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openSales.map((sale) => (
-                    <tr className="rounded-3xl bg-slate-50" key={sale.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
-                        <Link className="font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
+      <div id="open-bills">
+        <SectionCard
+          description="Open customer bills stay visible here so receipt entry can be done against the exact bill whenever needed."
+          title="Open bills"
+        >
+          {openSales.length ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 xl:hidden">
+                {openSales.map((sale) => (
+                  <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={sale.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <Link className="text-sm font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
                           {sale.billNumber}
                         </Link>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(sale.billDate)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.netTotal)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.returnedAmount)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.allocatedAmount)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-amber-700">{formatCurrency(sale.dueAmount)}</td>
-                      <td className="rounded-r-3xl px-4 py-4"><StatusBadge label={sale.paymentStatus} /></td>
+                        <p className="mt-1 text-sm text-slate-600">{formatDate(sale.billDate)}</p>
+                      </div>
+                      <StatusBadge label={sale.paymentStatus} />
+                    </div>
+                    <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        ["Net amount", formatCurrency(sale.netTotal)],
+                        ["Returned", formatCurrency(sale.returnedAmount)],
+                        ["Allocated", formatCurrency(sale.allocatedAmount)],
+                        ["Due", formatCurrency(sale.dueAmount)],
+                      ].map(([label, value]) => (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
+                          <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
+                          <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link className={secondaryButtonClassName} to={`/app/billing/${sale.id}`}>
+                        Open bill
+                      </Link>
+                      {canRecordPayments ? (
+                        <button
+                          className={secondaryButtonClassName}
+                          onClick={() =>
+                            openPaymentModal({
+                              saleId: sale.id,
+                              saleLabel: `${sale.billNumber} / Due ${formatCurrency(sale.dueAmount)} / ${formatDate(sale.billDate)}`,
+                              lockSale: true,
+                            })
+                          }
+                          type="button"
+                        >
+                          Record payment
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto xl:block">
+                <table className="min-w-[1240px] w-full border-separate border-spacing-y-3">
+                  <thead>
+                    <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-4">Bill</th>
+                      <th className="px-4">Date</th>
+                      <th className="px-4">Net amount</th>
+                      <th className="px-4">Returned</th>
+                      <th className="px-4">Allocated</th>
+                      <th className="px-4">Due</th>
+                      <th className="px-4">Status</th>
+                      <th className="px-4">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {openSales.map((sale) => (
+                      <tr className="rounded-3xl bg-slate-50" key={sale.id}>
+                        <td className="rounded-l-3xl px-4 py-4">
+                          <Link className="font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
+                            {sale.billNumber}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-700">{formatDate(sale.billDate)}</td>
+                        <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.netTotal)}</td>
+                        <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.returnedAmount)}</td>
+                        <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.allocatedAmount)}</td>
+                        <td className="px-4 py-4 text-sm font-semibold text-amber-700">{formatCurrency(sale.dueAmount)}</td>
+                        <td className="px-4 py-4"><StatusBadge label={sale.paymentStatus} /></td>
+                        <td className="rounded-r-3xl px-4 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            <Link className={secondaryButtonClassName} to={`/app/billing/${sale.id}`}>
+                              Open bill
+                            </Link>
+                            {canRecordPayments ? (
+                              <button
+                                className={secondaryButtonClassName}
+                                onClick={() =>
+                                  openPaymentModal({
+                                    saleId: sale.id,
+                                    saleLabel: `${sale.billNumber} / Due ${formatCurrency(sale.dueAmount)} / ${formatDate(sale.billDate)}`,
+                                    lockSale: true,
+                                  })
+                                }
+                                type="button"
+                              >
+                                Record payment
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ) : (
-          <EmptyState description="This customer has no open receivable bills right now." title="No open bills" />
-        )}
-      </SectionCard>
+          ) : (
+            <EmptyState description="This customer has no open receivable bills right now." title="No open bills" />
+          )}
+        </SectionCard>
+      </div>
 
       <SectionCard
-        description="Every ledger movement shows debit, credit, running balance, and source reference for clean financial traceability."
+        description="Chronological ledger statement showing invoice, return, payment, debit, credit, and running balance for audit and reconciliation."
         title="Ledger activity"
       >
         {ledger.items.length ? (
@@ -404,11 +479,20 @@ export const CustomerLedgerPage = () => {
       <CustomerPaymentEntryModal
         errorMessage={paymentMutation.error?.message}
         isSubmitting={paymentMutation.isPending}
-        onClose={() => setIsPaymentOpen(false)}
+        onClose={() => {
+          setIsPaymentOpen(false);
+          setPaymentPreset(null);
+        }}
         onSubmit={async (payload) => {
           await paymentMutation.mutateAsync(payload);
         }}
         open={isPaymentOpen}
+        preset={{
+          customerId: customer.id,
+          customerLabel,
+          lockCustomer: true,
+          ...paymentPreset,
+        }}
       />
     </div>
   );

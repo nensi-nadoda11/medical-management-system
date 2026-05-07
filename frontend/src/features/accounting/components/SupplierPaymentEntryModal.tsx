@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -28,6 +28,14 @@ interface SupplierPaymentEntryModalProps {
   open: boolean;
   isSubmitting: boolean;
   errorMessage?: string;
+  preset?: {
+    supplierId: string;
+    supplierLabel: string;
+    purchaseId?: string;
+    purchaseLabel?: string;
+    lockSupplier?: boolean;
+    lockPurchase?: boolean;
+  } | null;
   onClose: () => void;
   onSubmit: (payload: SaveSupplierAccountingPaymentPayload) => Promise<void>;
 }
@@ -36,6 +44,7 @@ export const SupplierPaymentEntryModal = ({
   open,
   isSubmitting,
   errorMessage,
+  preset,
   onClose,
   onSubmit,
 }: SupplierPaymentEntryModalProps) => {
@@ -53,7 +62,7 @@ export const SupplierPaymentEntryModal = ({
 
   const supplierOptionsQuery = useQuery({
     enabled: open,
-    queryKey: accountingQueryKeys.supplierOptions(deferredSearch),
+    queryKey: accountingQueryKeys.supplierOptions(deferredSearch, 8),
     queryFn: () => listAccountingSupplierOptions(deferredSearch || undefined),
   });
 
@@ -65,8 +74,8 @@ export const SupplierPaymentEntryModal = ({
 
   const resetState = () => {
     setSearch("");
-    setSupplierId("");
-    setPurchaseId("");
+    setSupplierId(preset?.supplierId ?? "");
+    setPurchaseId(preset?.purchaseId ?? "");
     setAmount("");
     setPaymentMethod("cash");
     setReferenceNumber("");
@@ -75,11 +84,53 @@ export const SupplierPaymentEntryModal = ({
     setLocalError(null);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    resetState();
+  }, [open, preset?.supplierId, preset?.purchaseId]);
+
+  const supplierOptions = useMemo(() => {
+    const items = supplierOptionsQuery.data?.items ?? [];
+
+    if (!preset?.supplierId) {
+      return items;
+    }
+
+    const exists = items.some((item) => item.id === preset.supplierId);
+
+    if (exists) {
+      return items;
+    }
+
+    return [
+      {
+        id: preset.supplierId,
+        supplierName: preset.supplierLabel,
+        companyName: null,
+        mobileNumber: "",
+        status: "active" as const,
+        openingBalance: "0.00",
+      },
+      ...items,
+    ];
+  }, [preset?.supplierId, preset?.supplierLabel, supplierOptionsQuery.data?.items]);
+
   const selectedSupplier = useMemo(
-    () =>
-      supplierOptionsQuery.data?.items.find((item) => item.id === supplierId) ?? null,
-    [supplierId, supplierOptionsQuery.data?.items],
+    () => supplierOptions.find((item) => item.id === supplierId) ?? null,
+    [supplierId, supplierOptions],
   );
+
+  const selectedPurchase = dueSummaryQuery.data?.openPurchases.find(
+    (purchase) => purchase.id === purchaseId,
+  );
+  const selectedPurchaseLabel =
+    preset?.purchaseLabel ||
+    (selectedPurchase
+      ? `${selectedPurchase.purchaseNumber} / Due ${formatCurrency(selectedPurchase.dueAmount)} / ${formatDate(selectedPurchase.purchaseDate)}`
+      : "");
 
   return (
     <Modal
@@ -137,36 +188,43 @@ export const SupplierPaymentEntryModal = ({
       title="Record supplier payment"
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Search supplier
-            <input
-              className={inputClassName}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by supplier name or mobile"
-              value={search}
-            />
-          </label>
-
+        {preset?.lockSupplier ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Supplier
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSupplierId(event.target.value);
-                setPurchaseId("");
-              }}
-              value={supplierId}
-            >
-              <option value="">Select supplier</option>
-              {supplierOptionsQuery.data?.items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.supplierName} / {item.companyName || "Independent"} / {item.mobileNumber}
-                </option>
-              ))}
-            </select>
+            <input className={inputClassName} readOnly value={preset.supplierLabel} />
           </label>
-        </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Search supplier
+              <input
+                className={inputClassName}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by supplier name or mobile"
+                value={search}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Supplier
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSupplierId(event.target.value);
+                  setPurchaseId("");
+                }}
+                value={supplierId}
+              >
+                <option value="">Select supplier</option>
+                {supplierOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.supplierName} / {item.companyName || "Independent"} / {item.mobileNumber || "No mobile"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
 
         {selectedSupplier && dueSummaryQuery.data ? (
           <div className="grid gap-3 md:grid-cols-3">
@@ -189,22 +247,33 @@ export const SupplierPaymentEntryModal = ({
         ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-            Apply to purchase
-            <select
-              className={inputClassName}
-              disabled={!supplierId}
-              onChange={(event) => setPurchaseId(event.target.value)}
-              value={purchaseId}
-            >
-              <option value="">General / auto allocation / advance</option>
-              {dueSummaryQuery.data?.openPurchases.map((purchase) => (
-                <option key={purchase.id} value={purchase.id}>
-                  {purchase.purchaseNumber} / Due {formatCurrency(purchase.dueAmount)} / {formatDate(purchase.purchaseDate)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {preset?.lockPurchase && preset?.purchaseId ? (
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              Apply to purchase
+              <input
+                className={inputClassName}
+                readOnly
+                value={selectedPurchaseLabel || "Selected purchase"}
+              />
+            </label>
+          ) : (
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              Apply to purchase
+              <select
+                className={inputClassName}
+                disabled={!supplierId}
+                onChange={(event) => setPurchaseId(event.target.value)}
+                value={purchaseId}
+              >
+                <option value="">General / auto allocation / advance</option>
+                {dueSummaryQuery.data?.openPurchases.map((purchase) => (
+                  <option key={purchase.id} value={purchase.id}>
+                    {purchase.purchaseNumber} / Due {formatCurrency(purchase.dueAmount)} / {formatDate(purchase.purchaseDate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Amount

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -7,7 +7,7 @@ import type {
   AccountingPaymentMethod,
   SaveCustomerAccountingPaymentPayload,
 } from "../../../types/accounting";
-import { listCustomerOptions } from "../../customers/api/customers";
+import { customersQueryKeys, listCustomerOptions } from "../../customers/api/customers";
 import { accountingQueryKeys, getCustomerDueSummary } from "../api/accounting";
 
 const inputClassName =
@@ -25,6 +25,14 @@ interface CustomerPaymentEntryModalProps {
   open: boolean;
   isSubmitting: boolean;
   errorMessage?: string;
+  preset?: {
+    customerId: string;
+    customerLabel: string;
+    saleId?: string;
+    saleLabel?: string;
+    lockCustomer?: boolean;
+    lockSale?: boolean;
+  } | null;
   onClose: () => void;
   onSubmit: (payload: SaveCustomerAccountingPaymentPayload) => Promise<void>;
 }
@@ -33,6 +41,7 @@ export const CustomerPaymentEntryModal = ({
   open,
   isSubmitting,
   errorMessage,
+  preset,
   onClose,
   onSubmit,
 }: CustomerPaymentEntryModalProps) => {
@@ -50,7 +59,7 @@ export const CustomerPaymentEntryModal = ({
 
   const customerOptionsQuery = useQuery({
     enabled: open,
-    queryKey: ["customers", "options", deferredSearch],
+    queryKey: customersQueryKeys.options(deferredSearch, 8),
     queryFn: () => listCustomerOptions(deferredSearch || undefined),
   });
 
@@ -62,8 +71,8 @@ export const CustomerPaymentEntryModal = ({
 
   const resetState = () => {
     setSearch("");
-    setCustomerId("");
-    setSaleId("");
+    setCustomerId(preset?.customerId ?? "");
+    setSaleId(preset?.saleId ?? "");
     setAmount("");
     setPaymentMethod("cash");
     setReferenceNumber("");
@@ -72,11 +81,53 @@ export const CustomerPaymentEntryModal = ({
     setLocalError(null);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    resetState();
+  }, [open, preset?.customerId, preset?.saleId]);
+
+  const customerOptions = useMemo(() => {
+    const items = customerOptionsQuery.data?.items ?? [];
+
+    if (!preset?.customerId) {
+      return items;
+    }
+
+    const exists = items.some((item) => item.id === preset.customerId);
+
+    if (exists) {
+      return items;
+    }
+
+    return [
+      {
+        id: preset.customerId,
+        fullName: preset.customerLabel,
+        customerCode: "",
+        mobileNumber: "",
+        city: null,
+        status: "active" as const,
+        totalDueAmount: "0.00",
+        lastPurchaseDate: null,
+      },
+      ...items,
+    ];
+  }, [customerOptionsQuery.data?.items, preset?.customerId, preset?.customerLabel]);
+
   const selectedCustomer = useMemo(
-    () =>
-      customerOptionsQuery.data?.items.find((item) => item.id === customerId) ?? null,
-    [customerId, customerOptionsQuery.data?.items],
+    () => customerOptions.find((item) => item.id === customerId) ?? null,
+    [customerId, customerOptions],
   );
+
+  const selectedSale = dueSummaryQuery.data?.openSales.find((sale) => sale.id === saleId);
+  const selectedSaleLabel =
+    preset?.saleLabel ||
+    (selectedSale
+      ? `${selectedSale.billNumber} / Due ${formatCurrency(selectedSale.dueAmount)} / ${formatDate(selectedSale.billDate)}`
+      : "");
 
   return (
     <Modal
@@ -134,36 +185,43 @@ export const CustomerPaymentEntryModal = ({
       title="Record customer payment"
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Search customer
-            <input
-              className={inputClassName}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, code, or mobile"
-              value={search}
-            />
-          </label>
-
+        {preset?.lockCustomer ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Customer
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setCustomerId(event.target.value);
-                setSaleId("");
-              }}
-              value={customerId}
-            >
-              <option value="">Select customer</option>
-              {customerOptionsQuery.data?.items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.fullName} / {item.customerCode} / {item.mobileNumber}
-                </option>
-              ))}
-            </select>
+            <input className={inputClassName} readOnly value={preset.customerLabel} />
           </label>
-        </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Search customer
+              <input
+                className={inputClassName}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name, code, or mobile"
+                value={search}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Customer
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setCustomerId(event.target.value);
+                  setSaleId("");
+                }}
+                value={customerId}
+              >
+                <option value="">Select customer</option>
+                {customerOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.fullName} / {item.customerCode || "No code"} / {item.mobileNumber || "No mobile"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
 
         {selectedCustomer && dueSummaryQuery.data ? (
           <div className="grid gap-3 md:grid-cols-3">
@@ -186,22 +244,33 @@ export const CustomerPaymentEntryModal = ({
         ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-            Apply to bill
-            <select
-              className={inputClassName}
-              disabled={!customerId}
-              onChange={(event) => setSaleId(event.target.value)}
-              value={saleId}
-            >
-              <option value="">General / auto allocation / advance</option>
-              {dueSummaryQuery.data?.openSales.map((sale) => (
-                <option key={sale.id} value={sale.id}>
-                  {sale.billNumber} / Due {formatCurrency(sale.dueAmount)} / {formatDate(sale.billDate)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {preset?.lockSale && preset?.saleId ? (
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              Apply to bill
+              <input
+                className={inputClassName}
+                readOnly
+                value={selectedSaleLabel || "Selected bill"}
+              />
+            </label>
+          ) : (
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              Apply to bill
+              <select
+                className={inputClassName}
+                disabled={!customerId}
+                onChange={(event) => setSaleId(event.target.value)}
+                value={saleId}
+              >
+                <option value="">General / auto allocation / advance</option>
+                {dueSummaryQuery.data?.openSales.map((sale) => (
+                  <option key={sale.id} value={sale.id}>
+                    {sale.billNumber} / Due {formatCurrency(sale.dueAmount)} / {formatDate(sale.billDate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Amount

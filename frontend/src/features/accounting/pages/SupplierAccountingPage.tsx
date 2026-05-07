@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -12,59 +12,90 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDate, formatDateTime } from "../../../lib/utils";
-import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
-import { purchasesQueryKeys } from "../../purchases/api/purchases";
+import { formatCurrency, formatDate } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
+import { useSessionQuery } from "../../auth/hooks/use-session";
+import { purchasesQueryKeys, listPurchases } from "../../purchases/api/purchases";
 import { suppliersQueryKeys } from "../../suppliers/api/suppliers";
 import { AccountingModuleNav } from "../components/AccountingModuleNav";
+import { SearchableOptionSelect } from "../components/SearchableOptionSelect";
 import { SupplierPaymentEntryModal } from "../components/SupplierPaymentEntryModal";
 import {
   accountingQueryKeys,
   createAccountingSupplierPayment,
-  listAccountingSupplierPayments,
-  listOutstandingSuppliers,
+  getSupplierDueSummary,
+  listAccountingSupplierOptions,
 } from "../api/accounting";
 
-const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const secondaryButtonClassName =
+  "rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white";
+
+type SupplierSelectionOption = {
+  id: string;
+  supplierName: string;
+  companyName: string | null;
+  mobileNumber: string;
+};
+
+const buildSupplierLabel = (supplier: {
+  supplierName: string;
+  companyName: string | null;
+  mobileNumber: string;
+}) => `${supplier.supplierName} / ${supplier.companyName || "Independent"} / ${supplier.mobileNumber}`;
 
 export const SupplierAccountingPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const sessionQuery = useSessionQuery();
+  const user = sessionQuery.data?.user;
+  const canRecordPayments = hasPermission(user, "payments.create");
+
   const [search, setSearch] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"" | "cash" | "upi" | "card" | "bank_transfer" | "cheque">("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [paymentPage, setPaymentPage] = useState(1);
-  const [duePage, setDuePage] = useState(1);
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [selectedSupplierLabel, setSelectedSupplierLabel] = useState("");
+  const [purchasePage, setPurchasePage] = useState(1);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [paymentPreset, setPaymentPreset] = useState<{
+    supplierId: string;
+    supplierLabel: string;
+    purchaseId?: string;
+    purchaseLabel?: string;
+    lockSupplier?: boolean;
+    lockPurchase?: boolean;
+  } | null>(null);
   const deferredSearch = useDeferredValue(search);
+  const optionPageSize = 20;
 
-  const paymentParams = {
-    search: deferredSearch || undefined,
-    paymentMethod: paymentMethod || undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    page: paymentPage,
-    pageSize: 10,
-    sortBy: "paymentDate" as const,
-    sortOrder: "desc" as const,
-  };
-  const dueParams = {
-    search: deferredSearch || undefined,
-    page: duePage,
-    pageSize: 8,
-    sortBy: "outstandingAmount" as const,
-    sortOrder: "desc" as const,
-  };
-
-  const paymentsQuery = useQuery({
-    queryKey: accountingQueryKeys.supplierPayments(paymentParams),
-    queryFn: () => listAccountingSupplierPayments(paymentParams),
+  const supplierOptionsQuery = useQuery({
+    queryKey: accountingQueryKeys.supplierOptions(deferredSearch, optionPageSize),
+    queryFn: () => listAccountingSupplierOptions(deferredSearch || undefined, optionPageSize),
   });
-  const dueQuery = useQuery({
-    queryKey: accountingQueryKeys.outstandingSuppliers(dueParams),
-    queryFn: () => listOutstandingSuppliers(dueParams),
+
+  const supplierSummaryQuery = useQuery({
+    queryKey: accountingQueryKeys.supplierSummary(selectedSupplierId),
+    queryFn: () => getSupplierDueSummary(selectedSupplierId),
+    enabled: Boolean(selectedSupplierId),
+  });
+
+  const supplierPurchasesQuery = useQuery({
+    queryKey: purchasesQueryKeys.list({
+      supplierId: selectedSupplierId,
+      status: "finalized",
+      page: purchasePage,
+      pageSize: 10,
+      sortBy: "purchaseDate",
+      sortOrder: "desc",
+    }),
+    queryFn: () =>
+      listPurchases({
+        supplierId: selectedSupplierId,
+        status: "finalized",
+        page: purchasePage,
+        pageSize: 10,
+        sortBy: "purchaseDate",
+        sortOrder: "desc",
+      }),
+    enabled: Boolean(selectedSupplierId),
   });
 
   const paymentMutation = useMutation({
@@ -77,10 +108,11 @@ export const SupplierAccountingPage = () => {
       ]);
       pushToast({
         title: "Supplier payment recorded",
-        description: "Payables and supplier ledger balances were updated successfully.",
+        description: "Supplier accounting updated successfully.",
         variant: "success",
       });
       setIsPaymentOpen(false);
+      setPaymentPreset(null);
     },
     onError: (error: Error) => {
       pushToast({
@@ -91,34 +123,77 @@ export const SupplierAccountingPage = () => {
     },
   });
 
-  if (paymentsQuery.isLoading || dueQuery.isLoading) {
+  const handleSelectSupplier = (option: SupplierSelectionOption) => {
+    setSelectedSupplierId(option.id);
+    setSelectedSupplierLabel(buildSupplierLabel(option));
+    setPurchasePage(1);
+  };
+
+  const supplierOptions = useMemo<SupplierSelectionOption[]>(() => {
+    const items = supplierOptionsQuery.data?.items ?? [];
+
+    if (!selectedSupplierId || items.some((item) => item.id === selectedSupplierId)) {
+      return items;
+    }
+
+    if (supplierSummaryQuery.data) {
+      return [supplierSummaryQuery.data.supplier, ...items];
+    }
+
+    return [
+      {
+        id: selectedSupplierId,
+        supplierName: selectedSupplierLabel || "Selected supplier",
+        companyName: null,
+        mobileNumber: "",
+        status: "active" as const,
+        openingBalance: "0.00",
+      },
+      ...items,
+    ];
+  }, [
+    selectedSupplierId,
+    selectedSupplierLabel,
+    supplierOptionsQuery.data?.items,
+    supplierSummaryQuery.data,
+  ]);
+
+  const selectedSupplier = supplierSummaryQuery.data?.supplier ?? null;
+  const selectedSupplierDisplayLabel = selectedSupplier
+    ? buildSupplierLabel(selectedSupplier)
+    : selectedSupplierLabel;
+
+  const openPaymentModal = (preset?: typeof paymentPreset) => {
+    if (!selectedSupplierId) {
+      return;
+    }
+
+    setPaymentPreset(
+      preset ?? {
+        supplierId: selectedSupplierId,
+        supplierLabel: selectedSupplierDisplayLabel,
+        lockSupplier: true,
+      },
+    );
+    setIsPaymentOpen(true);
+  };
+
+  if (supplierOptionsQuery.isLoading && !supplierOptionsQuery.data) {
     return <LoadingState title="Loading supplier accounting" />;
   }
 
-  if (paymentsQuery.error || dueQuery.error) {
+  if (supplierOptionsQuery.error) {
     return (
       <ErrorState
-        description={paymentsQuery.error?.message ?? dueQuery.error?.message ?? "Unable to load supplier accounting."}
-        onRetry={() => {
-          paymentsQuery.refetch();
-          dueQuery.refetch();
-        }}
+        description={supplierOptionsQuery.error.message}
+        onRetry={() => supplierOptionsQuery.refetch()}
         title="Unable to load supplier accounting"
       />
     );
   }
 
-  const payments = paymentsQuery.data?.items ?? [];
-  const dueSuppliers = dueQuery.data?.items ?? [];
-  const visibleOutstanding = dueSuppliers.reduce(
-    (sum, item) => sum + Number(item.summary.outstandingAmount),
-    0,
-  );
-  const visibleAdvance = dueSuppliers.reduce(
-    (sum, item) => sum + Number(item.summary.advanceAmount),
-    0,
-  );
-  const visiblePayments = payments.reduce((sum, item) => sum + Number(item.amount), 0);
+  const supplierSummary = supplierSummaryQuery.data?.summary;
+  const supplierPurchases = supplierPurchasesQuery.data?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -126,315 +201,279 @@ export const SupplierAccountingPage = () => {
         actions={
           <>
             <AccountingModuleNav />
-            <button
-              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              onClick={() => setIsPaymentOpen(true)}
-              type="button"
-            >
-              Record supplier payment
-            </button>
+            {canRecordPayments && selectedSupplierId ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => openPaymentModal()}
+                type="button"
+              >
+                Pay supplier
+              </button>
+            ) : null}
           </>
         }
-        description="Track supplier payables, purchase-wise settlements, and advance balances with compact ledger-ready visibility."
         eyebrow="Accounting / Suppliers"
-        title="Supplier payments"
+        title="Supplier Accounting"
       />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint="Suppliers with current payables" label="Suppliers payable" value={dueQuery.data?.pagination.total ?? 0} />
-        <SummaryCard hint="Visible payable amount" label="Visible payable" value={formatCurrency(visibleOutstanding)} />
-        <SummaryCard hint="Visible supplier advances" label="Visible advance" value={formatCurrency(visibleAdvance)} />
-        <SummaryCard hint="Visible payments on this page" label="Visible paid" value={formatCurrency(visiblePayments)} />
-      </div>
 
       <FilterBar
         actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setPaymentMethod("");
-              setDateFrom("");
-              setDateTo("");
-              setPaymentPage(1);
-              setDuePage(1);
-            }}
-            type="button"
-          >
-            Clear filters
-          </button>
-        }
-        description="Keep supplier accounting compact enough for daily purchase follow-up and accountant review."
-        title="Supplier accounting filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPaymentPage(1);
-                setDuePage(1);
+          selectedSupplierId ? (
+            <button
+              className={secondaryButtonClassName}
+              onClick={() => {
+                setSelectedSupplierId("");
+                setSelectedSupplierLabel("");
+                setSearch("");
+                setPurchasePage(1);
               }}
-              placeholder="Search supplier, purchase number, reference, or mobile"
-              value={search}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Payment method
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setPaymentMethod(event.target.value as typeof paymentMethod);
-                setPaymentPage(1);
-              }}
-              value={paymentMethod}
+              type="button"
             >
-              <option value="">All methods</option>
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="cheque">Cheque</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date from
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setPaymentPage(1);
-              }}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date to
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setPaymentPage(1);
-              }}
-              type="date"
-              value={dateTo}
-            />
-          </label>
-        </div>
+              Clear
+            </button>
+          ) : null
+        }
+        contentClassName="border-0 bg-transparent p-0 shadow-none"
+        title="Supplier"
+      >
+        <SearchableOptionSelect
+          emptyMessage="No supplier found."
+          isLoading={supplierOptionsQuery.isFetching}
+          onSearchChange={setSearch}
+          onSelect={(value) => {
+            const option = supplierOptions.find((item) => item.id === value);
+
+            if (!option) {
+              setSelectedSupplierId("");
+              setSelectedSupplierLabel("");
+              setPurchasePage(1);
+              return;
+            }
+
+            handleSelectSupplier(option);
+          }}
+          options={supplierOptions.map((item) => ({
+            id: item.id,
+            label: buildSupplierLabel(item),
+          }))}
+          placeholder="Select supplier"
+          search={search}
+          searchPlaceholder="Search supplier"
+          value={selectedSupplierId}
+        />
       </FilterBar>
 
-      <SectionCard
-        description="Open supplier balances stay visible with direct ledger access for every payable partner."
-        title="Outstanding suppliers"
-      >
-        {dueSuppliers.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {dueSuppliers.map((item) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={item.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link className="text-sm font-semibold text-slate-950 hover:text-teal-700" to={`/app/accounting/suppliers/${item.id}`}>
-                        {item.supplierName}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.companyName || "Independent"} · {item.mobileNumber}
-                      </p>
-                    </div>
-                    <StatusBadge label={item.status} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Outstanding", formatCurrency(item.summary.outstandingAmount)],
-                      ["Advance", formatCurrency(item.summary.advanceAmount)],
-                      ["Open purchases", item.summary.openPurchaseCount.toString()],
-                      ["Last purchase", formatDate(item.summary.lastPurchaseDate)],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <div className="mt-3">
-                    <DocumentActionGroup
-                      compact
-                      id={item.id}
-                      kind="supplier-receipt"
-                      showPreview={false}
-                    />
-                  </div>
-                </article>
-              ))}
-            </div>
+      {!selectedSupplierId ? (
+        <EmptyState description="Select supplier to view accounting." title="No supplier selected" />
+      ) : supplierSummaryQuery.isLoading || supplierPurchasesQuery.isLoading ? (
+        <LoadingState title="Loading supplier details" />
+      ) : supplierSummaryQuery.error || supplierPurchasesQuery.error || !selectedSupplier || !supplierSummary ? (
+        <ErrorState
+          description={
+            supplierSummaryQuery.error?.message ??
+            supplierPurchasesQuery.error?.message ??
+            "Unable to load supplier details."
+          }
+          onRetry={() => {
+            supplierSummaryQuery.refetch();
+            supplierPurchasesQuery.refetch();
+          }}
+          title="Unable to load supplier details"
+        />
+      ) : (
+        <>
+          <SectionCard
+            action={
+              canRecordPayments ? (
+                <button
+                  className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  onClick={() => openPaymentModal()}
+                  type="button"
+                >
+                  Pay supplier
+                </button>
+              ) : null
+            }
+            title={selectedSupplier.supplierName}
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge label={selectedSupplier.status} />
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                  {selectedSupplier.companyName || "Independent"}
+                </span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                  {selectedSupplier.mobileNumber}
+                </span>
+              </div>
 
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Supplier</th>
-                    <th className="px-4">Mobile</th>
-                    <th className="px-4">Open purchases</th>
-                    <th className="px-4">Payable</th>
-                    <th className="px-4">Advance</th>
-                    <th className="px-4">Last purchase</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dueSuppliers.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <SummaryCard label="Total purchased" value={formatCurrency(supplierSummary.totalPurchases)} />
+                <SummaryCard label="Total paid" value={formatCurrency(supplierSummary.totalPayments)} />
+                <SummaryCard
+                  label="Due"
+                  tone={Number(supplierSummary.outstandingAmount) > 0 ? "warning" : "default"}
+                  value={formatCurrency(supplierSummary.outstandingAmount)}
+                />
+                <SummaryCard
+                  label="Advance"
+                  tone={Number(supplierSummary.advanceAmount) > 0 ? "accent" : "default"}
+                  value={formatCurrency(supplierSummary.advanceAmount)}
+                />
+                <SummaryCard label="Open purchases" value={supplierSummary.openPurchaseCount} />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Recent purchases">
+            {supplierPurchases.length ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 xl:hidden">
+                  {supplierPurchases.map((purchase) => (
+                    <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={purchase.id}>
+                      <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-slate-950">{item.supplierName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{item.companyName || "Independent"}</p>
+                          <p className="text-sm font-semibold text-slate-950">{purchase.purchaseNumber}</p>
+                          <p className="mt-1 text-sm text-slate-600">{formatDate(purchase.purchaseDate)}</p>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.mobileNumber}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.summary.openPurchaseCount}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-amber-700">{formatCurrency(item.summary.outstandingAmount)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.summary.advanceAmount)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(item.summary.lastPurchaseDate)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <Link className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white" to={`/app/accounting/suppliers/${item.id}`}>
-                          View ledger
+                        <StatusBadge label={purchase.paymentStatus} />
+                      </div>
+
+                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {[
+                          ["Amount", formatCurrency(purchase.grandTotal)],
+                          ["Paid", formatCurrency(purchase.paidAmount)],
+                          ["Due", formatCurrency(purchase.dueAmount)],
+                          ["Status", purchase.status],
+                        ].map(([label, value]) => (
+                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              {label}
+                            </dt>
+                            <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link className={secondaryButtonClassName} to={`/app/purchases/${purchase.id}`}>
+                          View purchase
                         </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {dueQuery.data?.pagination ? (
-              <Pagination
-                onPageChange={setDuePage}
-                page={dueQuery.data.pagination.page}
-                pageSize={dueQuery.data.pagination.pageSize}
-                totalItems={dueQuery.data.pagination.total}
-                totalPages={dueQuery.data.pagination.totalPages}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState description="No outstanding supplier payables match the current filters." title="No supplier payables found" />
-        )}
-      </SectionCard>
-
-      <SectionCard
-        description="A compact supplier payment register with purchase references and operator visibility."
-        title="Supplier payment register"
-      >
-        {payments.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {payments.map((item) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={item.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{item.supplier.supplierName}</p>
-                      <p className="mt-1 text-sm text-slate-600">{formatDateTime(item.paymentDate)}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-950">{formatCurrency(item.amount)}</p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusBadge label={item.paymentMethod} />
-                    <StatusBadge label={item.status} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Reference", item.referenceNumber || "Not added"],
-                      ["Linked purchase", item.linkedPurchase?.purchaseNumber || (item.allocations.length ? `${item.allocations.length} purchases` : "Advance / general")],
-                      ["Paid by", item.paidBy.fullName],
-                      ["Notes", item.notes || "Not added"],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+                        {canRecordPayments && Number(purchase.dueAmount) > 0 ? (
+                          <button
+                            className={secondaryButtonClassName}
+                            onClick={() =>
+                              openPaymentModal({
+                                supplierId: selectedSupplier.id,
+                                supplierLabel: selectedSupplierDisplayLabel,
+                                purchaseId: purchase.id,
+                                purchaseLabel: `${purchase.purchaseNumber} / Due ${formatCurrency(purchase.dueAmount)} / ${formatDate(purchase.purchaseDate)}`,
+                                lockSupplier: true,
+                                lockPurchase: true,
+                              })
+                            }
+                            type="button"
+                          >
+                            Pay now
+                          </button>
+                        ) : null}
                       </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1240px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Payment date</th>
-                    <th className="px-4">Supplier</th>
-                    <th className="px-4">Amount</th>
-                    <th className="px-4">Method</th>
-                    <th className="px-4">Reference</th>
-                    <th className="px-4">Linked purchase</th>
-                    <th className="px-4">Status</th>
-                    <th className="px-4">Operator</th>
-                    <th className="px-4">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4 text-sm text-slate-700">{formatDateTime(item.paymentDate)}</td>
-                      <td className="px-4 py-4">
-                        <div>
-                          <p className="font-semibold text-slate-950">{item.supplier.supplierName}</p>
-                          <p className="mt-1 text-sm text-slate-600">{item.supplier.companyName || "Independent"}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">{formatCurrency(item.amount)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={item.paymentMethod} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.referenceNumber || "Not added"}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.linkedPurchase?.purchaseNumber || (item.allocations.length ? `${item.allocations.length} purchases` : "Advance / general")}
-                      </td>
-                      <td className="px-4 py-4"><StatusBadge label={item.status} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {item.paidBy.fullName}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4">
-                        <DocumentActionGroup
-                          compact
-                          id={item.id}
-                          kind="supplier-receipt"
-                          showPreview={false}
-                        />
-                      </td>
-                    </tr>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            {paymentsQuery.data?.pagination ? (
-              <Pagination
-                onPageChange={setPaymentPage}
-                page={paymentsQuery.data.pagination.page}
-                pageSize={paymentsQuery.data.pagination.pageSize}
-                totalItems={paymentsQuery.data.pagination.total}
-                totalPages={paymentsQuery.data.pagination.totalPages}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <EmptyState description="No supplier payments match the current filters." title="No payments found" />
-        )}
-      </SectionCard>
+                <div className="hidden overflow-x-auto xl:block">
+                  <table className="min-w-[1240px] w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <th className="px-4">Purchase</th>
+                        <th className="px-4">Date</th>
+                        <th className="px-4">Amount</th>
+                        <th className="px-4">Paid</th>
+                        <th className="px-4">Due</th>
+                        <th className="px-4">Payment</th>
+                        <th className="px-4">Status</th>
+                        <th className="px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {supplierPurchases.map((purchase) => (
+                        <tr className="rounded-3xl bg-slate-50" key={purchase.id}>
+                          <td className="rounded-l-3xl px-4 py-4 font-semibold text-slate-950">
+                            {purchase.purchaseNumber}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatDate(purchase.purchaseDate)}</td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(purchase.grandTotal)}</td>
+                          <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(purchase.paidAmount)}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-amber-700">
+                            {formatCurrency(purchase.dueAmount)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={purchase.paymentStatus} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={purchase.status} />
+                          </td>
+                          <td className="rounded-r-3xl px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Link className={secondaryButtonClassName} to={`/app/purchases/${purchase.id}`}>
+                                View purchase
+                              </Link>
+                              {canRecordPayments && Number(purchase.dueAmount) > 0 ? (
+                                <button
+                                  className={secondaryButtonClassName}
+                                  onClick={() =>
+                                    openPaymentModal({
+                                      supplierId: selectedSupplier.id,
+                                      supplierLabel: selectedSupplierDisplayLabel,
+                                      purchaseId: purchase.id,
+                                      purchaseLabel: `${purchase.purchaseNumber} / Due ${formatCurrency(purchase.dueAmount)} / ${formatDate(purchase.purchaseDate)}`,
+                                      lockSupplier: true,
+                                      lockPurchase: true,
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  Pay now
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {supplierPurchasesQuery.data?.pagination ? (
+                  <Pagination
+                    onPageChange={setPurchasePage}
+                    page={supplierPurchasesQuery.data.pagination.page}
+                    pageSize={supplierPurchasesQuery.data.pagination.pageSize}
+                    totalItems={supplierPurchasesQuery.data.pagination.total}
+                    totalPages={supplierPurchasesQuery.data.pagination.totalPages}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <EmptyState description="No purchases found for this supplier." title="No purchases" />
+            )}
+          </SectionCard>
+        </>
+      )}
 
       <SupplierPaymentEntryModal
         errorMessage={paymentMutation.error?.message}
         isSubmitting={paymentMutation.isPending}
-        onClose={() => setIsPaymentOpen(false)}
+        onClose={() => {
+          setIsPaymentOpen(false);
+          setPaymentPreset(null);
+        }}
         onSubmit={async (payload) => {
           await paymentMutation.mutateAsync(payload);
         }}
         open={isPaymentOpen}
+        preset={paymentPreset}
       />
     </div>
   );

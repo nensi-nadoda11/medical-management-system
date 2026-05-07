@@ -300,8 +300,21 @@ export interface SaveSupplierAccountingPaymentPayload {
   paymentDate: string;
 }
 
-export type CustomerPaymentsResponse = PaginatedResponse<CustomerPaymentListItem>;
-export type SupplierPaymentsResponse = PaginatedResponse<SupplierPaymentListItem>;
+export interface CustomerPaymentsResponse
+  extends PaginatedResponse<CustomerPaymentListItem> {
+  summary: {
+    totalPayments: number;
+    totalAmount: string;
+  };
+}
+
+export interface SupplierPaymentsResponse
+  extends PaginatedResponse<SupplierPaymentListItem> {
+  summary: {
+    totalPayments: number;
+    totalAmount: string;
+  };
+}
 export interface OutstandingCustomersResponse
   extends PaginatedResponse<CustomerOutstandingSummaryItem> {
   summary: OutstandingCustomersListSummary;

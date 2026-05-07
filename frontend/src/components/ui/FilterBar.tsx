@@ -5,6 +5,7 @@ interface FilterBarProps extends PropsWithChildren {
   description?: string;
   actions?: ReactNode;
   className?: string;
+  contentClassName?: string;
 }
 
 export const FilterBar = ({
@@ -12,6 +13,7 @@ export const FilterBar = ({
   description,
   actions,
   className,
+  contentClassName,
   children,
 }: FilterBarProps) => (
   <section
@@ -30,7 +32,11 @@ export const FilterBar = ({
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
-    <div className="rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-[1.125rem]">
+    <div
+      className={`rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-[1.125rem] ${
+        contentClassName ?? ""
+      }`}
+    >
       {children}
     </div>
   </section>

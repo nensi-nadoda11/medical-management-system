@@ -68,8 +68,8 @@ export const accountingQueryKeys = {
     supplierId: string,
     params: { page: number; pageSize: number; sortOrder: "asc" | "desc"; dateFrom?: string; dateTo?: string },
   ) => [...accountingQueryKeys.all, "supplier-ledger", supplierId, params] as const,
-  supplierOptions: (search?: string) =>
-    [...accountingQueryKeys.all, "supplier-options", search ?? ""] as const,
+  supplierOptions: (search?: string, pageSize = 8) =>
+    [...accountingQueryKeys.all, "supplier-options", search ?? "", pageSize] as const,
 };
 
 export const listAccountingCustomerPayments = (params: CustomerPaymentsParams) =>
@@ -198,12 +198,12 @@ export const listOutstandingSuppliers = (params: OutstandingSuppliersParams) =>
     }),
   });
 
-export const listAccountingSupplierOptions = (search?: string) =>
+export const listAccountingSupplierOptions = (search?: string, pageSize = 8) =>
   apiRequest<{ items: SupplierOption[] }>({
     method: "GET",
     url: "/accounting/suppliers/options",
     params: cleanParams({
       search,
-      pageSize: 8,
+      pageSize,
     }),
   });

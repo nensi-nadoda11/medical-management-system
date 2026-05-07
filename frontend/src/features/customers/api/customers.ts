@@ -29,7 +29,8 @@ export const customersQueryKeys = {
   list: (params: CustomerListParams) => [...customersQueryKeys.lists(), params] as const,
   details: () => [...customersQueryKeys.all, "detail"] as const,
   detail: (id: string) => [...customersQueryKeys.details(), id] as const,
-  options: (search?: string) => [...customersQueryKeys.all, "options", search ?? ""] as const,
+  options: (search?: string, pageSize = 8) =>
+    [...customersQueryKeys.all, "options", search ?? "", pageSize] as const,
   dueSummary: (params: CustomerDueSummaryParams) =>
     [...customersQueryKeys.all, "due-summary", params] as const,
   purchases: (id: string, params: CustomerHistoryParams) =>
@@ -52,13 +53,13 @@ export const listCustomers = (params: CustomerListParams) =>
     }),
   });
 
-export const listCustomerOptions = (search?: string) =>
+export const listCustomerOptions = (search?: string, pageSize = 8) =>
   apiRequest<{ items: CustomerOption[] }>({
     method: "GET",
     url: "/customers/options",
     params: cleanParams({
       search,
-      pageSize: 8,
+      pageSize,
     }),
   });
 

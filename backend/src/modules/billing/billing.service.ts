@@ -230,23 +230,21 @@ export class BillingService {
       ...(query.dateTo ? { dateTo: toEndOfDay(query.dateTo) } : {}),
     };
 
-    const items = await this.billingRepository.listSales(
-      shopId,
-      branchId,
-      normalizedQuery,
-    );
-    const total = await this.billingRepository.countSales(
-      shopId,
-      branchId,
-      normalizedQuery,
-    );
+    const [items, total, summary] = await Promise.all([
+      this.billingRepository.listSales(shopId, branchId, normalizedQuery),
+      this.billingRepository.countSales(shopId, branchId, normalizedQuery),
+      this.billingRepository.getSalesSummary(shopId, branchId, normalizedQuery),
+    ]);
 
-    return buildPaginatedResponse(
-      items.map(toSaleListResponse),
-      total,
-      normalizedQuery.page,
-      normalizedQuery.pageSize,
-    );
+    return {
+      summary,
+      ...buildPaginatedResponse(
+        items.map(toSaleListResponse),
+        total,
+        normalizedQuery.page,
+        normalizedQuery.pageSize,
+      ),
+    };
   }
 
   async getBillById(shopId: string, branchId: string, saleId: string) {
