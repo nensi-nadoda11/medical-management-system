@@ -1,6 +1,7 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
 import type { DbExecutor } from "../../shared/db/executor";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { AdminSettingsService } from "../admin-settings/admin-settings.service";
 import type { PublicUser, UserRole } from "../auth/auth.types";
@@ -449,10 +450,13 @@ export class BranchesService {
     branchId: string,
     executor?: DbExecutor,
   ) {
-    const [shopSettings, branchOverride] = await Promise.all([
-      this.adminSettingsService.getResolvedShopSettings(shopId, executor),
-      this.branchesRepository.findBranchSettings(branchId, executor),
-    ]);
+    const [shopSettings, branchOverride] = await runDbReads(
+      [
+        () => this.adminSettingsService.getResolvedShopSettings(shopId, executor),
+        () => this.branchesRepository.findBranchSettings(branchId, executor),
+      ] as const,
+      executor,
+    );
 
     return {
       ...shopSettings,
@@ -473,5 +477,34 @@ export class BranchesService {
       invoicePrefix: branchOverride?.invoicePrefix ?? shopSettings.invoicePrefix,
       branchId,
     };
+  }
+
+  async listResolvedBranchLowStockThresholds(
+    shopId: string,
+    branchIds: string[],
+    executor?: DbExecutor,
+  ) {
+    if (!branchIds.length) {
+      return new Map<string, number>();
+    }
+
+    const [shopSettings, branchOverrides] = await runDbReads(
+      [
+        () => this.adminSettingsService.getResolvedShopSettings(shopId, executor),
+        () => this.branchesRepository.listBranchSettingsByIds(branchIds, executor),
+      ] as const,
+      executor,
+    );
+    const branchSettingsMap = new Map(
+      branchOverrides.map((settings) => [settings.branchId, settings]),
+    );
+
+    return new Map(
+      branchIds.map((branchId) => [
+        branchId,
+        branchSettingsMap.get(branchId)?.lowStockThreshold ??
+          shopSettings.defaultLowStockThreshold,
+      ]),
+    );
   }
 }

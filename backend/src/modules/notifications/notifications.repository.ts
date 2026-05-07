@@ -29,6 +29,7 @@ export type NotificationSeverity = "info" | "warning" | "critical";
 export type NotificationEmailStatus = "pending" | "sent" | "failed" | "skipped";
 
 type NotificationListFilters = {
+  branchId?: string;
   allowedTypes?: NotificationType[];
   type?: NotificationType;
   severity?: NotificationSeverity;
@@ -39,6 +40,15 @@ type NotificationListFilters = {
 
 const buildFilters = (shopId: string, filters: NotificationListFilters) => {
   const conditions = [eq(notifications.shopId, shopId)];
+
+  if (filters.branchId) {
+    conditions.push(
+      or(
+        eq(notifications.branchId, filters.branchId),
+        isNull(notifications.branchId),
+      )!,
+    );
+  }
 
   if (filters.allowedTypes?.length) {
     conditions.push(inArray(notifications.type, filters.allowedTypes));
@@ -259,6 +269,7 @@ export class NotificationsRepository {
 
   async countUnread(
     shopId: string,
+    branchId: string,
     allowedTypes: NotificationType[],
     executor?: DbExecutor,
   ) {
@@ -272,6 +283,10 @@ export class NotificationsRepository {
       .where(
         and(
           eq(notifications.shopId, shopId),
+          or(
+            eq(notifications.branchId, branchId),
+            isNull(notifications.branchId),
+          )!,
           inArray(notifications.type, allowedTypes),
           eq(notifications.isActive, true),
           isNull(notifications.readAt),
@@ -283,6 +298,7 @@ export class NotificationsRepository {
 
   async countCriticalActive(
     shopId: string,
+    branchId: string,
     allowedTypes: NotificationType[],
     executor?: DbExecutor,
   ) {
@@ -296,6 +312,10 @@ export class NotificationsRepository {
       .where(
         and(
           eq(notifications.shopId, shopId),
+          or(
+            eq(notifications.branchId, branchId),
+            isNull(notifications.branchId),
+          )!,
           inArray(notifications.type, allowedTypes),
           eq(notifications.severity, "critical"),
           eq(notifications.isActive, true),
@@ -307,6 +327,7 @@ export class NotificationsRepository {
 
   async listLatest(
     shopId: string,
+    branchId: string,
     allowedTypes: NotificationType[],
     limit: number,
     executor?: DbExecutor,
@@ -326,6 +347,10 @@ export class NotificationsRepository {
       .where(
         and(
           eq(notifications.shopId, shopId),
+          or(
+            eq(notifications.branchId, branchId),
+            isNull(notifications.branchId),
+          )!,
           inArray(notifications.type, allowedTypes),
           eq(notifications.isActive, true),
           freshnessCondition,
@@ -388,6 +413,7 @@ export class NotificationsRepository {
 
   async bulkMarkRead(
     shopId: string,
+    branchId: string,
     allowedTypes: NotificationType[],
     ids?: string[],
     executor?: DbExecutor,
@@ -398,6 +424,10 @@ export class NotificationsRepository {
 
     const conditions = [
       eq(notifications.shopId, shopId),
+      or(
+        eq(notifications.branchId, branchId),
+        isNull(notifications.branchId),
+      )!,
       inArray(notifications.type, allowedTypes),
       isNull(notifications.readAt),
     ];

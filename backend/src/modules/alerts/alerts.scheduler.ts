@@ -1,4 +1,8 @@
 import { env } from "../../config/env";
+import {
+  getDatabaseConnectivityErrorCode,
+  isDatabaseConnectivityError,
+} from "../../shared/db/connectivity";
 import { logger } from "../../shared/logger";
 import { BranchesRepository } from "../branches/branches.repository";
 import { InventoryRepository } from "../inventory/inventory.repository";
@@ -9,6 +13,7 @@ export class AlertsScheduler {
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
   private hasLoggedBranchSchemaSkip = false;
+  private hasLoggedDatabaseConnectivityFailure = false;
 
   constructor(
     private readonly branchesRepository = new BranchesRepository(),
@@ -91,7 +96,23 @@ export class AlertsScheduler {
           this.alertsService.dispatchPendingInventoryAlertEmails(shopId),
         ),
       );
+
+      if (this.hasLoggedDatabaseConnectivityFailure) {
+        logger.info("Alerts scheduler database connectivity recovered");
+        this.hasLoggedDatabaseConnectivityFailure = false;
+      }
     } catch (error) {
+      if (isDatabaseConnectivityError(error)) {
+        if (!this.hasLoggedDatabaseConnectivityFailure) {
+          logger.error("Alerts scheduler cycle failed due to database connectivity", {
+            code: getDatabaseConnectivityErrorCode(error),
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+          this.hasLoggedDatabaseConnectivityFailure = true;
+        }
+        return;
+      }
+
       logger.error("Alerts scheduler cycle failed", {
         message: error instanceof Error ? error.message : "Unknown error",
       });

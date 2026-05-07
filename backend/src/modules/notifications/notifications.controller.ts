@@ -63,6 +63,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.markAsRead(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
         getNotificationId(req),
       );
@@ -80,6 +81,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.acknowledge(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
         getNotificationId(req),
       );
@@ -97,6 +99,7 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.bulkMarkRead(
         getShopId(req),
+        getBranchId(req),
         getUser(req),
         req.body,
       );

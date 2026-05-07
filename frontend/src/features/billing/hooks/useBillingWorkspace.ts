@@ -275,7 +275,7 @@ export const useBillingWorkspace = () => {
 
   // Load held bill logic
   useEffect(() => {
-    if (!heldBillId) {
+    if (!validHeldBillId) {
       Promise.resolve().then(() => {
         setLoadedHeldBillId(null);
         setDraft(emptyDraft());
@@ -283,7 +283,7 @@ export const useBillingWorkspace = () => {
       return;
     }
 
-    if (!heldBillQuery.data || loadedHeldBillId === heldBillId) {
+    if (!heldBillQuery.data || loadedHeldBillId === validHeldBillId) {
       return;
     }
 
@@ -291,18 +291,29 @@ export const useBillingWorkspace = () => {
       const medicineIds = [
         ...new Set(heldBillQuery.data.items.map((item) => item.medicine.id)),
       ];
-      const optionEntries = await Promise.all(
-        medicineIds.map(async (medicineId: string) => [
+      const optionResults = await Promise.allSettled(
+        medicineIds.map(async (medicineId: string) => ({
           medicineId,
-          await queryClient.fetchQuery({
+          options: await queryClient.fetchQuery({
             queryKey: billingQueryKeys.medicineOptions(medicineId),
             queryFn: () => getSellableMedicineOptions(medicineId),
             staleTime: 30_000,
           }),
-        ] as [string, BillingMedicineOptions]),
+        })),
       );
 
-      const optionMap = new Map<string, BillingMedicineOptions>(optionEntries);
+      const optionMap = new Map<string, BillingMedicineOptions>(
+        optionResults
+          .filter(
+            (
+              result,
+            ): result is PromiseFulfilledResult<{
+              medicineId: string;
+              options: BillingMedicineOptions;
+            }> => result.status === "fulfilled",
+          )
+          .map((result) => [result.value.medicineId, result.value.options]),
+      );
       const selectedCustomer = heldBillQuery.data.customerId
         ? await queryClient
             .fetchQuery({
@@ -331,7 +342,7 @@ export const useBillingWorkspace = () => {
         setDraft(
           loadHeldBillIntoDraft(heldBillQuery.data, optionMap, selectedCustomer),
         );
-        setLoadedHeldBillId(heldBillId);
+        setLoadedHeldBillId(validHeldBillId);
       });
     })().catch((error: Error) => {
       pushToast({
@@ -340,7 +351,7 @@ export const useBillingWorkspace = () => {
         variant: "error",
       });
     });
-  }, [heldBillId, heldBillQuery.data, loadedHeldBillId, pushToast, queryClient]);
+  }, [validHeldBillId, heldBillQuery.data, loadedHeldBillId, pushToast, queryClient]);
 
   // Totals calculation
   const totals = useMemo(() => {

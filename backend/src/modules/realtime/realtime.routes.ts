@@ -17,6 +17,7 @@ router.get("/stock-events", requireAuth, (req, res) => {
 
   const unsubscribe = realtimeService.subscribe({
     shopId,
+    branchId,
     response: res,
   });
   const heartbeat = setInterval(() => {

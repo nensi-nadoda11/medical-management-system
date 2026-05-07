@@ -2,6 +2,7 @@ import { db } from "../../db/client";
 import { env } from "../../config/env";
 import { AppError } from "../../shared/errors/app-error";
 import type { DbExecutor } from "../../shared/db/executor";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { UsersRepository } from "../users/users.repository";
 import type { PublicUser, UserRole } from "../auth/auth.types";
@@ -357,10 +358,13 @@ export class AdminSettingsService {
     role: UserRole,
     executor?: DbExecutor,
   ) {
-    const [configs, rows] = await Promise.all([
-      this.adminSettingsRepository.listRolePermissionConfigs(shopId, executor),
-      this.adminSettingsRepository.listRolePermissions(shopId, executor),
-    ]);
+    const [configs, rows] = await runDbReads(
+      [
+        () => this.adminSettingsRepository.listRolePermissionConfigs(shopId, executor),
+        () => this.adminSettingsRepository.listRolePermissions(shopId, executor),
+      ] as const,
+      executor,
+    );
 
     const hasCustomRoleConfig = configs.some((config) => config.role === role);
 
@@ -379,14 +383,18 @@ export class AdminSettingsService {
     role: UserRole;
     executor?: DbExecutor;
   }) {
-    const [rolePermissions, overrides] = await Promise.all([
-      this.resolveRolePermissions(input.shopId, input.role, input.executor),
-      this.adminSettingsRepository.listUserPermissionOverrides(
-        input.shopId,
-        input.userId,
-        input.executor,
-      ),
-    ]);
+    const [rolePermissions, overrides] = await runDbReads(
+      [
+        () => this.resolveRolePermissions(input.shopId, input.role, input.executor),
+        () =>
+          this.adminSettingsRepository.listUserPermissionOverrides(
+            input.shopId,
+            input.userId,
+            input.executor,
+          ),
+      ] as const,
+      input.executor,
+    );
 
     return resolveEffectivePermissions({
       rolePermissions,
@@ -418,11 +426,14 @@ export class AdminSettingsService {
   }
 
   async getResolvedShopSettings(shopId: string, executor?: DbExecutor) {
-    const [shop, settings, recipients] = await Promise.all([
-      this.adminSettingsRepository.findShopById(shopId, executor),
-      this.adminSettingsRepository.findShopSettings(shopId, executor),
-      this.adminSettingsRepository.listAdminEmailRecipients(shopId, executor),
-    ]);
+    const [shop, settings, recipients] = await runDbReads(
+      [
+        () => this.adminSettingsRepository.findShopById(shopId, executor),
+        () => this.adminSettingsRepository.findShopSettings(shopId, executor),
+        () => this.adminSettingsRepository.listAdminEmailRecipients(shopId, executor),
+      ] as const,
+      executor,
+    );
 
     if (!shop) {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");

@@ -568,7 +568,7 @@ export const AppLayout = () => {
                     </button>
 
                     {isNotificationMenuOpen ? (
-                      <div className="absolute right-0 top-14 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.42)] backdrop-blur-xl">
+                      <div className="absolute right-0 top-14 z-20 w-[min(30rem,calc(100vw-1.5rem))] rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.42)] backdrop-blur-xl">
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div>
                             <p className="text-sm font-bold text-slate-900">
@@ -587,7 +587,7 @@ export const AppLayout = () => {
                           </Link>
                         </div>
 
-                        <div className="mt-2 max-h-[16rem] overflow-y-auto">
+                        <div className="mt-2 max-h-[16rem] overflow-x-hidden overflow-y-auto">
                           {notificationsSummaryQuery.isLoading ? (
                             <p className="text-sm text-slate-500">
                               Loading notifications...
@@ -613,10 +613,10 @@ export const AppLayout = () => {
                                     }
                                     to={item.actionPath ?? "/app/notifications"}
                                   >
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex min-w-0 items-start gap-2">
                                       <span
                                         className={cn(
-                                          "h-2.5 w-2.5 rounded-full",
+                                          "mt-1 h-2.5 w-2.5 shrink-0 rounded-full",
                                           item.severity === "critical"
                                             ? "bg-rose-500"
                                             : item.severity === "warning"
@@ -624,11 +624,11 @@ export const AppLayout = () => {
                                               : "bg-slate-400",
                                         )}
                                       />
-                                      <p className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                                      <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-slate-900">
                                         {item.title}
                                       </p>
                                     </div>
-                                    <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">
+                                    <p className="mt-2 break-words text-sm leading-5 text-slate-600">
                                       {item.message}
                                     </p>
                                   </Link>

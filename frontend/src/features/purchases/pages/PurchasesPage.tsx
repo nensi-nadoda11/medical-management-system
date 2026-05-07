@@ -19,6 +19,8 @@ import {
   formatDate,
   formatDateTime,
 } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
+import { useSessionQuery } from "../../auth/hooks/use-session";
 import { listSuppliers, suppliersQueryKeys } from "../../suppliers/api/suppliers";
 import { inventoryQueryKeys } from "../../inventory/api/inventory";
 import {
@@ -52,9 +54,24 @@ const getPurchaseWorkflowLabel = (workflowStage: PurchaseListItem["workflowStage
   }
 };
 
+const canDeletePurchase = (
+  purchase: Pick<PurchaseListItem, "workflowStage">,
+  permissions: string[],
+) => {
+  const canCreatePurchases = permissions.includes("purchases.create");
+  const canFinalizePurchases = permissions.includes("purchases.finalize");
+
+  if (purchase.workflowStage === "draft") {
+    return canCreatePurchases || canFinalizePurchases;
+  }
+
+  return canFinalizePurchases;
+};
+
 export const PurchasesPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const sessionQuery = useSessionQuery();
 
   const [search, setSearch] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -186,6 +203,10 @@ export const PurchasesPage = () => {
 
   const purchases = purchasesQuery.data?.items ?? [];
   const pagination = purchasesQuery.data?.pagination;
+  const user = sessionQuery.data?.user;
+  const permissions = user?.permissions ?? [];
+  const canCreatePurchases = hasPermission(user, "purchases.create");
+  const canFinalizePurchases = hasPermission(user, "purchases.finalize");
   const visibleGrandTotal = purchases.reduce(
     (sum, item) => sum + Number(item.grandTotal),
     0,
@@ -484,7 +505,7 @@ export const PurchasesPage = () => {
                     <Eye className="h-4 w-4" />
                   </Link>
                   
-                  {purchase.workflowStage === "draft" && (
+                  {purchase.workflowStage === "draft" && canFinalizePurchases && (
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                       disabled={approveMutation.isPending}
@@ -495,7 +516,7 @@ export const PurchasesPage = () => {
                     </button>
                   )}
 
-                  {purchase.workflowStage === "draft" && (
+                  {purchase.workflowStage === "draft" && canCreatePurchases && (
                     <Link
                       className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
                       title="Edit Purchase"
@@ -505,16 +526,18 @@ export const PurchasesPage = () => {
                     </Link>
                   )}
 
-                  <button
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
-                    onClick={() => setDeleteTarget(purchase)}
-                    title="Delete Purchase"
-                    type="button"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canDeletePurchase(purchase, permissions) ? (
+                    <button
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
+                      onClick={() => setDeleteTarget(purchase)}
+                      title="Delete Purchase"
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
 
-                  {purchase.status === "draft" && (
+                  {purchase.status === "draft" && canFinalizePurchases && (
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                       onClick={() => setFinalizeTarget(purchase)}
@@ -598,7 +621,7 @@ export const PurchasesPage = () => {
                   View
                 </Link>
                 
-                {purchase.workflowStage === "draft" && (
+                {purchase.workflowStage === "draft" && canFinalizePurchases && (
                   <button
                     className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                     disabled={approveMutation.isPending}
@@ -609,7 +632,7 @@ export const PurchasesPage = () => {
                   </button>
                 )}
 
-                {purchase.workflowStage === "draft" && (
+                {purchase.workflowStage === "draft" && canCreatePurchases && (
                   <Link
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-teal-600"
                     title="Edit Purchase"
@@ -619,16 +642,18 @@ export const PurchasesPage = () => {
                   </Link>
                 )}
 
-                <button
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
-                  onClick={() => setDeleteTarget(purchase)}
-                  title="Delete Purchase"
-                  type="button"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {canDeletePurchase(purchase, permissions) ? (
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 text-rose-600 transition hover:border-rose-200 hover:bg-rose-50"
+                    onClick={() => setDeleteTarget(purchase)}
+                    title="Delete Purchase"
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
 
-                {purchase.status === "draft" ? (
+                {purchase.status === "draft" && canFinalizePurchases ? (
                   <>
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"

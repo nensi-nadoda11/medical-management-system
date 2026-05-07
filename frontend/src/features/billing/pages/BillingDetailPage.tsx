@@ -15,6 +15,7 @@ import {
   formatDateTime,
   humanizeLabel,
 } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { billingQueryKeys, getBill, type BillDetailItem } from "../api/billing";
 import { BillingModuleNav } from "../components/BillingModuleNav";
@@ -23,7 +24,9 @@ import { listSalesReturns, salesReturnsQueryKeys, type SalesReturnListItem } fro
 export const BillingDetailPage = () => {
   const { id = "" } = useParams();
   const sessionQuery = useSessionQuery();
-  const canCreateBills = sessionQuery.data?.user.role !== "accountant";
+  const user = sessionQuery.data?.user;
+  const canCreateBills = hasPermission(user, "billing.create");
+  const canCreateSalesReturn = hasPermission(user, "billing.return");
 
   const billQuery = useQuery({
     queryKey: billingQueryKeys.detail(id),
@@ -92,7 +95,7 @@ export const BillingDetailPage = () => {
                 Open in POS
               </Link>
             ) : null}
-            {canCreateBills && bill.status === "completed" ? (
+            {canCreateSalesReturn && bill.status === "completed" ? (
               <Link
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                 to={`/app/billing/returns/new?saleId=${bill.id}`}

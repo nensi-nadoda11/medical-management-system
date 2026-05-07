@@ -8,6 +8,7 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { formatCurrency } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { billingQueryKeys, listBills, type BillListItem } from "../api/billing";
 import { BillsRegister } from "../components/BillsRegister";
@@ -18,7 +19,7 @@ const inputClassName =
 
 export const HeldBillsPage = () => {
   const sessionQuery = useSessionQuery();
-  const canCreateBills = sessionQuery.data?.user.role !== "accountant";
+  const canCreateBills = hasPermission(sessionQuery.data?.user, "billing.create");
   const [search, setSearch] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"" | "unpaid" | "partial" | "paid">("");
   const [page, setPage] = useState(1);

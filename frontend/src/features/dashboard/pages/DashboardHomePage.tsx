@@ -130,6 +130,15 @@ const defaultOutstandingSuppliersSummary = {
   totalAdvanceAmount: "0.00",
 };
 
+const sumMoneyValues = (values: Array<string | number | null | undefined>) =>
+  values.reduce<number>((total, value) => total + parseMoney(value), 0);
+
+const renderSectionError = (message: string) => (
+  <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
+    {message}
+  </div>
+);
+
 export const DashboardHomePage = () => {
   const sessionQuery = useSessionQuery();
   const session = sessionQuery.data;
@@ -145,6 +154,14 @@ export const DashboardHomePage = () => {
   });
   const canViewPayments = canAccessModule(user, {
     permissions: ["payments.view"],
+    permissionMode: "all",
+  });
+  const canCreateBills = canAccessModule(user, {
+    permissions: ["billing.create"],
+    permissionMode: "all",
+  });
+  const canCreatePayments = canAccessModule(user, {
+    permissions: ["payments.create"],
     permissionMode: "all",
   });
   const canViewBilling = canAccessModule(user, {
@@ -303,6 +320,36 @@ export const DashboardHomePage = () => {
     staleTime: 60_000,
   });
 
+  const todayBillsParams = {
+    status: "completed" as const,
+    dateFrom: todayParam,
+    dateTo: todayParam,
+    page: 1,
+    pageSize: 250,
+    sortBy: "completedAt" as const,
+    sortOrder: "desc" as const,
+  };
+  const todayBillsQuery = useQuery({
+    queryKey: billingQueryKeys.list(todayBillsParams),
+    queryFn: () => listBills(todayBillsParams),
+    enabled: canViewBilling && !canViewReports,
+    staleTime: 60_000,
+  });
+
+  const heldBillsParams = {
+    status: "held" as const,
+    page: 1,
+    pageSize: 1,
+    sortBy: "createdAt" as const,
+    sortOrder: "desc" as const,
+  };
+  const heldBillsQuery = useQuery({
+    queryKey: billingQueryKeys.list(heldBillsParams),
+    queryFn: () => listBills(heldBillsParams),
+    enabled: canViewBilling,
+    staleTime: 60_000,
+  });
+
   const salesReturnParams = {
     status: "completed" as const,
     page: 1,
@@ -345,6 +392,22 @@ export const DashboardHomePage = () => {
     staleTime: 60_000,
   });
 
+  const todayCustomerPaymentParams = {
+    status: "completed" as const,
+    dateFrom: todayParam,
+    dateTo: todayParam,
+    page: 1,
+    pageSize: 250,
+    sortBy: "paymentDate" as const,
+    sortOrder: "desc" as const,
+  };
+  const todayCustomerPaymentsQuery = useQuery({
+    queryKey: accountingQueryKeys.customerPayments(todayCustomerPaymentParams),
+    queryFn: () => listAccountingCustomerPayments(todayCustomerPaymentParams),
+    enabled: canViewPayments,
+    staleTime: 60_000,
+  });
+
   const supplierPaymentParams = {
     status: "completed" as const,
     page: 1,
@@ -355,6 +418,22 @@ export const DashboardHomePage = () => {
   const supplierPaymentsQuery = useQuery({
     queryKey: accountingQueryKeys.supplierPayments(supplierPaymentParams),
     queryFn: () => listAccountingSupplierPayments(supplierPaymentParams),
+    enabled: canViewPayments,
+    staleTime: 60_000,
+  });
+
+  const todaySupplierPaymentParams = {
+    status: "completed" as const,
+    dateFrom: todayParam,
+    dateTo: todayParam,
+    page: 1,
+    pageSize: 250,
+    sortBy: "paymentDate" as const,
+    sortOrder: "desc" as const,
+  };
+  const todaySupplierPaymentsQuery = useQuery({
+    queryKey: accountingQueryKeys.supplierPayments(todaySupplierPaymentParams),
+    queryFn: () => listAccountingSupplierPayments(todaySupplierPaymentParams),
     enabled: canViewPayments,
     staleTime: 60_000,
   });
@@ -654,6 +733,280 @@ export const DashboardHomePage = () => {
     )
     .slice(0, 8);
 
+  const recentBillItems: DashboardActivityItem[] = (billsQuery.data?.items ?? []).map(
+    (item: BillListItem) => ({
+      id: `recent-bill-${item.id}`,
+      label: item.status,
+      tone: item.paymentStatus,
+      title: item.billNumber,
+      description: `${item.customerLabel} • ${item.paymentMethod}`,
+      amount: formatCurrency(item.grandTotal),
+      occurredAt: item.completedAt ?? item.createdAt,
+      to: `/app/billing/${item.id}`,
+    }),
+  );
+
+  const recentCustomerPaymentItems: DashboardActivityItem[] = (
+    customerPaymentsQuery.data?.items ?? []
+  ).map((item: AccountingCustomerPayment) => ({
+    id: `recent-customer-payment-${item.id}`,
+    label: "payment_received",
+    title: item.customer.fullName,
+    description: `${item.paymentMethod} payment${item.linkedSale ? ` • ${item.linkedSale.billNumber}` : ""}`,
+    amount: formatCurrency(item.amount),
+    occurredAt: item.paymentDate,
+    to: `/app/accounting/customers/${item.customer.id}`,
+  }));
+
+  const recentSupplierPaymentItems: DashboardActivityItem[] = (
+    supplierPaymentsQuery.data?.items ?? []
+  ).map((item: AccountingSupplierPayment) => ({
+    id: `recent-supplier-payment-${item.id}`,
+    label: "payment_made",
+    title: item.supplier.supplierName,
+    description: `${item.paymentMethod} payment${item.linkedPurchase ? ` • ${item.linkedPurchase.purchaseNumber}` : ""}`,
+    amount: formatCurrency(item.amount),
+    occurredAt: item.paymentDate,
+    to: `/app/accounting/suppliers/${item.supplier.id}`,
+  }));
+
+  const todaySalesAmount = canViewReports
+    ? reportsSummary.todaySales.totalSales
+    : sumMoneyValues((todayBillsQuery.data?.items ?? []).map((item) => item.grandTotal));
+  const todayBillsCount = canViewReports
+    ? reportsSummary.todaySales.totalBills
+    : todayBillsQuery.data?.pagination.total ?? 0;
+  const heldBillsCount = heldBillsQuery.data?.pagination.total ?? 0;
+  const todayCollectionsAmount = sumMoneyValues(
+    (todayCustomerPaymentsQuery.data?.items ?? []).map((item) => item.amount),
+  );
+  const todayCollectionsCount = todayCustomerPaymentsQuery.data?.pagination.total ?? 0;
+  const todaySupplierPaymentsAmount = sumMoneyValues(
+    (todaySupplierPaymentsQuery.data?.items ?? []).map((item) => item.amount),
+  );
+  const todaySupplierPaymentsCount =
+    todaySupplierPaymentsQuery.data?.pagination.total ?? 0;
+
+  const staffTopMetrics = [
+    canViewBilling
+      ? {
+          label: "Today bills",
+          value: formatNumber(todayBillsCount),
+          hint: "Completed bills processed today",
+          to: "/app/billing/history",
+          tone: "accent" as const,
+        }
+      : null,
+    canViewBilling
+      ? {
+          label: "Today sales",
+          value: formatCurrency(todaySalesAmount),
+          hint: "Completed billing value for today",
+          to: "/app/billing/history",
+          tone: "default" as const,
+        }
+      : null,
+    canViewBilling
+      ? {
+          label: "Held bills",
+          value: formatNumber(heldBillsCount),
+          hint: "Bills waiting to be reopened",
+          to: "/app/billing/held",
+          tone: heldBillsCount > 0 ? ("warning" as const) : ("default" as const),
+        }
+      : null,
+    canViewInventory
+      ? {
+          label: "Low stock alerts",
+          value: formatNumber(lowStockTotal),
+          hint: "Medicines at reorder level",
+          to: "/app/inventory/low-stock",
+          tone: lowStockTotal > 0 ? ("warning" as const) : ("default" as const),
+        }
+      : null,
+    canViewInventory
+      ? {
+          label: "Near expiry alerts",
+          value: formatNumber(nearExpiryTotal),
+          hint: "Batches expiring in 30 days",
+          to: "/app/inventory/expiry",
+          tone: nearExpiryTotal > 0 ? ("danger" as const) : ("default" as const),
+        }
+      : null,
+  ].filter(isPresent);
+
+  const staffQuickLinks = [
+    canCreateBills
+      ? {
+          title: "Start billing",
+          description: "Open POS and create a fresh bill without leaving the dashboard.",
+          to: "/app/billing",
+          metric: `${formatNumber(todayBillsCount)} bills today`,
+          tone: "accent" as const,
+        }
+      : null,
+    canViewBilling
+      ? {
+          title: "Held bills",
+          description: "Resume paused bills and complete customer checkout faster.",
+          to: "/app/billing/held",
+          metric: `${formatNumber(heldBillsCount)} pending`,
+          tone: heldBillsCount > 0 ? ("warning" as const) : ("default" as const),
+        }
+      : null,
+    canViewBilling
+      ? {
+          title: "Billing history",
+          description: "Review completed bills and reopen recent customer details when needed.",
+          to: "/app/billing/history",
+          metric: formatCurrency(todaySalesAmount),
+          tone: "default" as const,
+        }
+      : null,
+    canViewInventory
+      ? {
+          title: "Low stock queue",
+          description: "See medicines that need restock attention before they run out.",
+          to: "/app/inventory/low-stock",
+          metric: `${formatNumber(lowStockTotal)} items`,
+          tone: lowStockTotal > 0 ? ("warning" as const) : ("default" as const),
+        }
+      : null,
+    canViewInventory
+      ? {
+          title: "Expiry report",
+          description: "Monitor batches nearing expiry so day-to-day sales stay safe.",
+          to: "/app/inventory/expiry",
+          metric: `${formatNumber(nearExpiryTotal)} batches`,
+          tone: nearExpiryTotal > 0 ? ("danger" as const) : ("default" as const),
+        }
+      : null,
+  ].filter(isPresent);
+
+  const accountantTopMetrics = [
+    canViewPayments
+      ? {
+          label: "Customer outstanding",
+          value: formatCurrency(customerDueSummary.totalOutstandingAmount),
+          hint: "Open receivables across customers",
+          to: "/app/accounting/customers",
+          tone:
+            customerDueSummary.entityCount > 0
+              ? ("warning" as const)
+              : ("default" as const),
+        }
+      : null,
+    canViewPayments
+      ? {
+          label: "Supplier payable",
+          value: formatCurrency(supplierPayableSummary.totalOutstandingAmount),
+          hint: "Open payables across suppliers",
+          to: "/app/accounting/suppliers",
+          tone:
+            supplierPayableSummary.entityCount > 0
+              ? ("warning" as const)
+              : ("default" as const),
+        }
+      : null,
+    canViewPayments
+      ? {
+          label: "Today collections",
+          value: formatCurrency(todayCollectionsAmount),
+          hint: `${formatNumber(todayCollectionsCount)} received today`,
+          to: "/app/accounting/customers",
+          tone: "accent" as const,
+        }
+      : null,
+    canViewPayments
+      ? {
+          label: "Today supplier payments",
+          value: formatCurrency(todaySupplierPaymentsAmount),
+          hint: `${formatNumber(todaySupplierPaymentsCount)} settlements today`,
+          to: "/app/accounting/suppliers",
+          tone: "default" as const,
+        }
+      : null,
+    canViewPayments
+      ? {
+          label: "Due customers",
+          value: formatNumber(customerDueSummary.entityCount),
+          hint: `${formatNumber(customerDueSummary.openBillCount)} open bills`,
+          to: "/app/accounting/customers",
+          tone:
+            customerDueSummary.entityCount > 0
+              ? ("warning" as const)
+              : ("default" as const),
+        }
+      : null,
+    canViewPayments
+      ? {
+          label: "Payable suppliers",
+          value: formatNumber(supplierPayableSummary.entityCount),
+          hint: `${formatNumber(supplierPayableSummary.openPurchaseCount)} open purchases`,
+          to: "/app/accounting/suppliers",
+          tone:
+            supplierPayableSummary.entityCount > 0
+              ? ("warning" as const)
+              : ("default" as const),
+        }
+      : null,
+  ].filter(isPresent);
+
+  const accountantQuickLinks = [
+    canCreatePayments
+      ? {
+          title: "Customer collections",
+          description: "Open receivables and record incoming customer payments quickly.",
+          to: "/app/accounting/customers",
+          metric: formatCurrency(customerDueSummary.totalOutstandingAmount),
+          tone: "accent" as const,
+        }
+      : null,
+    canCreatePayments
+      ? {
+          title: "Supplier settlements",
+          description: "Review outstanding supplier balances and record payment entries.",
+          to: "/app/accounting/suppliers",
+          metric: formatCurrency(supplierPayableSummary.totalOutstandingAmount),
+          tone: "default" as const,
+        }
+      : null,
+    canViewPayments
+      ? {
+          title: "Customer ledger follow-up",
+          description: "Check customer balances, open bills, and latest payment movement.",
+          to: "/app/accounting/customers",
+          metric: `${formatNumber(customerDueSummary.entityCount)} customers`,
+          tone: customerDueSummary.entityCount > 0 ? ("warning" as const) : ("default" as const),
+        }
+      : null,
+    canViewPayments
+      ? {
+          title: "Supplier ledger follow-up",
+          description: "Monitor payable suppliers, open purchases, and last settlement activity.",
+          to: "/app/accounting/suppliers",
+          metric: `${formatNumber(supplierPayableSummary.entityCount)} suppliers`,
+          tone:
+            supplierPayableSummary.entityCount > 0
+              ? ("warning" as const)
+              : ("default" as const),
+        }
+      : null,
+  ].filter(isPresent);
+
+  const staffVisibleSections =
+    staffTopMetrics.length ||
+    staffQuickLinks.length ||
+    recentBillItems.length ||
+    canViewInventory;
+
+  const accountantVisibleSections =
+    accountantTopMetrics.length ||
+    accountantQuickLinks.length ||
+    recentCustomerPaymentItems.length ||
+    recentSupplierPaymentItems.length ||
+    canViewPayments;
+
   const visibleSections =
     topMetrics.length ||
     quickLinks.length ||
@@ -667,18 +1020,375 @@ export const DashboardHomePage = () => {
     return null;
   }
 
+  if (user.role === "staff") {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Staff dashboard"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge label={user.role} tone={user.role} />
+              {lowStockTotal > 0 || nearExpiryTotal > 0 || heldBillsCount > 0 ? (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+                  Action queue active
+                </span>
+              ) : null}
+            </div>
+          }
+        />
+
+        {!staffVisibleSections ? (
+          <EmptyState
+            title="No dashboard modules available"
+            description="Your current role does not have any dashboard-enabled modules yet."
+          />
+        ) : null}
+
+        {staffTopMetrics.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {staffTopMetrics.map((item) => (
+              <MetricCard
+                hint={item.hint}
+                key={item.label}
+                label={item.label}
+                to={item.to}
+                tone={item.tone}
+                value={item.value}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {staffQuickLinks.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {staffQuickLinks.map((item) => (
+              <QuickLinkCard
+                description={item.description}
+                key={item.title}
+                metric={item.metric}
+                title={item.title}
+                to={item.to}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+          {canViewBilling ? (
+            <SectionCard
+              title="Recent bills"
+              action={
+                <Link
+                  className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3.5 !py-2"
+                  to="/app/billing/history"
+                >
+                  Open billing history
+                </Link>
+              }
+            >
+              {billsQuery.error ? (
+                renderSectionError("Recent billing activity is not available right now.")
+              ) : (
+                <ActivityList items={recentBillItems} />
+              )}
+            </SectionCard>
+          ) : null}
+
+          {canViewInventory ? (
+            <SectionCard
+              title="Stock attention"
+              contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
+              action={
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3 !py-2"
+                    to="/app/inventory/low-stock"
+                  >
+                    Low stock
+                  </Link>
+                  <Link
+                    className="ui-btn ui-btn--secondary !min-h-[2.4rem] !px-3 !py-2"
+                    to="/app/inventory/expiry"
+                  >
+                    Expiry report
+                  </Link>
+                </div>
+              }
+            >
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="ui-feed-list lg:!max-h-[25rem]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Low stock
+                  </p>
+                  {lowStockQuery.error ? (
+                    renderSectionError("Low stock medicines could not be loaded.")
+                  ) : (lowStockQuery.data?.items ?? []).length ? (
+                    lowStockQuery.data!.items.map((item) => (
+                      <Link
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
+                        key={item.medicine.id}
+                        to={`/app/inventory/${item.medicine.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">
+                              {item.medicine.medicineName}
+                            </p>
+                            <p className="mt-1.5 text-sm text-slate-600">
+                              {item.category.name} • {item.manufacturer.name}
+                            </p>
+                          </div>
+                          <StatusBadge label="low_stock" tone="low_stock" />
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600">
+                          {formatNumber(item.availableQuantity)} available against reorder level{" "}
+                          {formatNumber(item.reorderLevel)}.
+                        </p>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No low stock medicines need attention right now.
+                    </div>
+                  )}
+                </div>
+
+                <div className="ui-feed-list lg:!max-h-[25rem]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Near expiry
+                  </p>
+                  {expiryQuery.error ? (
+                    renderSectionError("Near-expiry batches could not be loaded.")
+                  ) : (expiryQuery.data?.items ?? []).length ? (
+                    expiryQuery.data!.items.map((item) => {
+                      const daysUntilExpiry = getDaysUntil(item.expiryDate);
+
+                      return (
+                        <Link
+                          className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
+                          key={item.id}
+                          to={`/app/inventory/${item.medicine.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-950">
+                                {item.medicine.medicineName}
+                              </p>
+                              <p className="mt-1.5 text-sm text-slate-600">
+                                Batch {item.batchNumber} • expires {formatDate(item.expiryDate)}
+                              </p>
+                            </div>
+                            <StatusBadge label={item.expiryStatus} tone={item.expiryStatus} />
+                          </div>
+                          <p className="mt-3 text-sm text-slate-600">
+                            {formatNumber(item.quantityAvailable)} units available
+                            {daysUntilExpiry !== null
+                              ? ` • ${
+                                  daysUntilExpiry <= 0
+                                    ? "expired"
+                                    : `${daysUntilExpiry} day${daysUntilExpiry === 1 ? "" : "s"} left`
+                                }`
+                              : ""}
+                          </p>
+                        </Link>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No near-expiry batches are visible right now.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (user.role === "accountant") {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Accountant dashboard"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge label={user.role} tone={user.role} />
+              {customerDueSummary.entityCount > 0 || supplierPayableSummary.entityCount > 0 ? (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+                  Follow-up pending
+                </span>
+              ) : null}
+            </div>
+          }
+        />
+
+        {!accountantVisibleSections ? (
+          <EmptyState
+            title="No dashboard modules available"
+            description="Your current role does not have any dashboard-enabled modules yet."
+          />
+        ) : null}
+
+        {accountantTopMetrics.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {accountantTopMetrics.map((item) => (
+              <MetricCard
+                hint={item.hint}
+                key={item.label}
+                label={item.label}
+                to={item.to}
+                tone={item.tone}
+                value={item.value}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {accountantQuickLinks.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {accountantQuickLinks.map((item) => (
+              <QuickLinkCard
+                description={item.description}
+                key={item.title}
+                metric={item.metric}
+                title={item.title}
+                to={item.to}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          {canViewPayments ? (
+            <SectionCard title="Recent customer payments">
+              {customerPaymentsQuery.error ? (
+                renderSectionError("Recent customer payments are not available right now.")
+              ) : (
+                <ActivityList items={recentCustomerPaymentItems} />
+              )}
+            </SectionCard>
+          ) : null}
+
+          {canViewPayments ? (
+            <SectionCard title="Recent supplier payments">
+              {supplierPaymentsQuery.error ? (
+                renderSectionError("Recent supplier payments are not available right now.")
+              ) : (
+                <ActivityList items={recentSupplierPaymentItems} />
+              )}
+            </SectionCard>
+          ) : null}
+        </div>
+
+        {canViewPayments ? (
+          <SectionCard title="Pending follow-up">
+            {customerDueQuery.error || supplierPayableQuery.error ? (
+              renderSectionError("Outstanding follow-up lists are not available right now.")
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="ui-feed-list lg:!max-h-[25rem]">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Customer dues
+                    </p>
+                    <Link className="ui-link-inline" to="/app/accounting/customers">
+                      View all
+                    </Link>
+                  </div>
+                  {(customerDueQuery.data?.items ?? []).length ? (
+                    customerDueQuery.data!.items.map((item) => (
+                      <Link
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
+                        key={item.id}
+                        to={`/app/accounting/customers/${item.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">
+                              {item.fullName}
+                            </p>
+                            <p className="mt-1.5 text-sm text-slate-600">
+                              {item.customerCode} • {item.mobileNumber}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-amber-700">
+                            {formatCurrency(item.summary.outstandingAmount)}
+                          </p>
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600">
+                          {formatNumber(item.summary.openBillCount)} open bills • last bill{" "}
+                          {formatDate(item.summary.lastBillDate)}
+                        </p>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No outstanding customer dues right now.
+                    </div>
+                  )}
+                </div>
+
+                <div className="ui-feed-list lg:!max-h-[25rem]">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Supplier payables
+                    </p>
+                    <Link className="ui-link-inline" to="/app/accounting/suppliers">
+                      View all
+                    </Link>
+                  </div>
+                  {(supplierPayableQuery.data?.items ?? []).length ? (
+                    supplierPayableQuery.data!.items.map((item) => (
+                      <Link
+                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
+                        key={item.id}
+                        to={`/app/accounting/suppliers/${item.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">
+                              {item.supplierName}
+                            </p>
+                            <p className="mt-1.5 text-sm text-slate-600">
+                              {item.companyName || "Independent"} • {item.mobileNumber}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-amber-700">
+                            {formatCurrency(item.summary.outstandingAmount)}
+                          </p>
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600">
+                          {formatNumber(item.summary.openPurchaseCount)} open purchases • last purchase{" "}
+                          {formatDate(item.summary.lastPurchaseDate)}
+                        </p>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No supplier payables are outstanding right now.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </SectionCard>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Dashboard"
         title={`${shop.name} operations`}
-        description={
-          user.role === "accountant"
-            ? "Keep collections, payables, profit movement, and operational alerts under one clean financial dashboard."
-            : user.role === "staff"
-              ? "Stay on top of bills, stock pressure, expiry risk, and the latest operational actions without extra noise."
-              : "Review sales, profit, inventory risk, dues, alerts, and recent activity from one compact operational dashboard."
-        }
+        description="Review sales, profit, inventory risk, dues, alerts, and recent activity from one compact operational dashboard."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={user.role} tone={user.role} />

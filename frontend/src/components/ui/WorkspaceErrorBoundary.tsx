@@ -7,7 +7,6 @@ type WorkspaceErrorBoundaryProps = {
 
 type WorkspaceErrorBoundaryState = {
   hasError: boolean;
-  errorMessage?: string;
 };
 
 export class WorkspaceErrorBoundary extends Component<
@@ -28,16 +27,12 @@ export class WorkspaceErrorBoundary extends Component<
     if (this.props.resetKey !== prevProps.resetKey && this.state.hasError) {
       this.setState({
         hasError: false,
-        errorMessage: undefined,
       });
     }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Workspace render failed", error, errorInfo);
-    this.setState({
-      errorMessage: error.message,
-    });
   }
 
   render() {
@@ -55,17 +50,14 @@ export class WorkspaceErrorBoundary extends Component<
               We blocked a blank screen and stopped the failed render. Reload the
               workspace once to recover with the latest code.
             </p>
-            {this.state.errorMessage ? (
-              <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-600">
-                {this.state.errorMessage}
-              </p>
-            ) : null}
+            <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-600">
+              Technical details were hidden from the workspace to keep the screen safe for daily use.
+            </p>
             <button
               className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               onClick={() =>
                 this.setState({
                   hasError: false,
-                  errorMessage: undefined,
                 })
               }
               type="button"

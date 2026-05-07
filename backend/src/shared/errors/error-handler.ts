@@ -2,6 +2,10 @@ import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 
 import { env } from "../../config/env";
+import {
+  getDatabaseConnectivityErrorCode,
+  isDatabaseConnectivityError,
+} from "../db/connectivity";
 import { logger } from "../logger";
 import { AppError, isAppError } from "./app-error";
 
@@ -88,6 +92,22 @@ export const errorHandler = (
       error: {
         code: "RESOURCE_CONFLICT",
         message: "A record with the provided details already exists.",
+      },
+    });
+  }
+
+  if (isDatabaseConnectivityError(error)) {
+    logger.warn("Database connectivity error", {
+      code: getDatabaseConnectivityErrorCode(error),
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    return res.status(503).json({
+      success: false,
+      error: {
+        code: "DATABASE_UNAVAILABLE",
+        message:
+          "Database connection is temporarily unavailable. Please try again in a moment.",
       },
     });
   }

@@ -12,7 +12,13 @@ import {
   or,
 } from "drizzle-orm";
 
-import { medicines, purchaseItems, purchases, suppliers } from "../../db/schema";
+import {
+  medicines,
+  purchaseItems,
+  purchases,
+  supplierPaymentAllocations,
+  suppliers,
+} from "../../db/schema";
 import { getDbExecutor, type DbExecutor } from "../../shared/db/executor";
 import type { ListPurchasesQuery } from "./purchases.validation";
 
@@ -344,6 +350,25 @@ export class PurchasesRepository {
         ),
       )
       .orderBy(asc(purchaseItems.createdAt), asc(purchaseItems.id));
+  }
+
+  async countSupplierPaymentAllocationsByPurchaseId(
+    shopId: string,
+    purchaseId: string,
+    executor?: DbExecutor,
+  ) {
+    const database = getDbExecutor(executor);
+    const [result] = await database
+      .select({ total: count() })
+      .from(supplierPaymentAllocations)
+      .where(
+        and(
+          eq(supplierPaymentAllocations.shopId, shopId),
+          eq(supplierPaymentAllocations.purchaseId, purchaseId),
+        ),
+      );
+
+    return result?.total ?? 0;
   }
 
   async assignPurchaseItemBatch(

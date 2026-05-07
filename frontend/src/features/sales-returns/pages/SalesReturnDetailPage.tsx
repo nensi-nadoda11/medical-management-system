@@ -11,6 +11,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime, humanizeLabel } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { billingQueryKeys } from "../../billing/api/billing";
 import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
 import { DocumentActionGroup } from "../../documents/components/DocumentActionGroup";
@@ -27,7 +28,9 @@ export const SalesReturnDetailPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
-  const canManageReturns = sessionQuery.data?.user.role !== "accountant";
+  const user = sessionQuery.data?.user;
+  const canManageReturns = hasPermission(user, "billing.return");
+  const canCreateBills = hasPermission(user, "billing.create");
 
   const salesReturnQuery = useQuery({
     queryKey: salesReturnsQueryKeys.detail(id),
@@ -110,7 +113,7 @@ export const SalesReturnDetailPage = () => {
       <PageHeader
         actions={
           <>
-            <BillingModuleNav canCreateBills={canManageReturns} />
+            <BillingModuleNav canCreateBills={canCreateBills} />
             {salesReturn.status === "completed" ? (
               <DocumentActionGroup id={salesReturn.id} kind="sale-return" />
             ) : null}

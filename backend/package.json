@@ -12,7 +12,8 @@
     "test:run": "vitest run --pool threads",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/scripts/migrate.ts"
+    "db:migrate": "tsx src/scripts/migrate.ts",
+    "seed:project-data": "tsx seed/project-data.seed.ts"
   },
   "keywords": [],
   "author": "",

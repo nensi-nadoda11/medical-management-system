@@ -176,7 +176,7 @@ export class PurchasesController {
         getShopId(req),
         getBranchId(req),
         getRouteId(req),
-        getUserId(req),
+        req.authenticatedUser ?? req.authSession!.user,
       );
 
       return res.status(200).json({

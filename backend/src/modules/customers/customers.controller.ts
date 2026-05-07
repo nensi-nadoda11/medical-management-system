@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { AccountingService } from "../accounting/accounting.service";
 import { CustomersService } from "./customers.service";
 
 const getShopId = (req: Request) =>
@@ -9,7 +10,10 @@ const getUserId = (req: Request) =>
 const getRouteId = (req: Request) => req.params.id as string;
 
 export class CustomersController {
-  constructor(private readonly customersService = new CustomersService()) {}
+  constructor(
+    private readonly customersService = new CustomersService(),
+    private readonly accountingService = new AccountingService(),
+  ) {}
 
   listCustomers = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -167,11 +171,13 @@ export class CustomersController {
     next: NextFunction,
   ) => {
     try {
-      const result = await this.customersService.createCustomerPayment(
+      const result = await this.accountingService.createCustomerPayment(
         getShopId(req),
-        getRouteId(req),
         getUserId(req),
-        req.body,
+        {
+          ...req.body,
+          customerId: getRouteId(req),
+        },
       );
 
       return res.status(201).json({

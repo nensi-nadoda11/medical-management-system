@@ -1,9 +1,6 @@
 import { AppError } from "../../shared/errors/app-error";
-import { logger } from "../../shared/logger";
 import type { Notification } from "../../db/schema";
-import { AlertsService } from "../alerts/alerts.service";
 import type { PublicUser } from "../auth/auth.types";
-import { BranchesRepository } from "../branches/branches.repository";
 import { NotificationsRepository, type NotificationType } from "./notifications.repository";
 import type {
   BulkMarkNotificationsReadInput,
@@ -33,8 +30,6 @@ const getString = (value: unknown) => (typeof value === "string" ? value : undef
 export class NotificationsService {
   constructor(
     private readonly notificationsRepository = new NotificationsRepository(),
-    private readonly alertsService = new AlertsService(),
-    private readonly branchesRepository = new BranchesRepository(),
   ) {}
 
   async listNotifications(
@@ -43,9 +38,6 @@ export class NotificationsService {
     user: PublicUser,
     query: ListNotificationsQuery,
   ) {
-    await this.syncShopAlertsSafely(shopId, branchId);
-    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
-
     const allowedTypes = this.getAllowedTypes(user);
 
     if (!allowedTypes.length) {
@@ -53,6 +45,7 @@ export class NotificationsService {
     }
 
     const filters = {
+      branchId,
       page: query.page,
       pageSize: query.pageSize,
       activeOnly: query.activeOnly,
@@ -79,23 +72,18 @@ export class NotificationsService {
   }
 
   async getUnreadCount(shopId: string, branchId: string, user: PublicUser) {
-    await this.syncShopAlertsSafely(shopId, branchId);
-    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
-
     const allowedTypes = this.getAllowedTypes(user);
 
     return {
       unreadCount: await this.notificationsRepository.countUnread(
         shopId,
+        branchId,
         allowedTypes,
       ),
     };
   }
 
   async getSummary(shopId: string, branchId: string, user: PublicUser) {
-    await this.syncShopAlertsSafely(shopId, branchId);
-    this.dispatchPendingInventoryAlertEmailsInBackground(shopId, branchId);
-
     const allowedTypes = this.getAllowedTypes(user);
 
     if (!allowedTypes.length) {
@@ -107,9 +95,13 @@ export class NotificationsService {
     }
 
     const [unreadCount, criticalCount, latest] = await Promise.all([
-      this.notificationsRepository.countUnread(shopId, allowedTypes),
-      this.notificationsRepository.countCriticalActive(shopId, allowedTypes),
-      this.notificationsRepository.listLatest(shopId, allowedTypes, 6),
+      this.notificationsRepository.countUnread(shopId, branchId, allowedTypes),
+      this.notificationsRepository.countCriticalActive(
+        shopId,
+        branchId,
+        allowedTypes,
+      ),
+      this.notificationsRepository.listLatest(shopId, branchId, allowedTypes, 6),
     ]);
 
     return {
@@ -119,8 +111,18 @@ export class NotificationsService {
     };
   }
 
-  async markAsRead(shopId: string, user: PublicUser, notificationId: string) {
-    const current = await this.getAccessibleNotification(shopId, user, notificationId);
+  async markAsRead(
+    shopId: string,
+    branchId: string,
+    user: PublicUser,
+    notificationId: string,
+  ) {
+    const current = await this.getAccessibleNotification(
+      shopId,
+      branchId,
+      user,
+      notificationId,
+    );
 
     const updated =
       (await this.notificationsRepository.markAsRead(shopId, notificationId)) ??
@@ -131,10 +133,16 @@ export class NotificationsService {
 
   async acknowledge(
     shopId: string,
+    branchId: string,
     user: PublicUser,
     notificationId: string,
   ) {
-    const current = await this.getAccessibleNotification(shopId, user, notificationId);
+    const current = await this.getAccessibleNotification(
+      shopId,
+      branchId,
+      user,
+      notificationId,
+    );
 
     const updated =
       (await this.notificationsRepository.acknowledge(
@@ -148,12 +156,14 @@ export class NotificationsService {
 
   async bulkMarkRead(
     shopId: string,
+    branchId: string,
     user: PublicUser,
     input: BulkMarkNotificationsReadInput,
   ) {
     const allowedTypes = this.getAllowedTypes(user);
     const updated = await this.notificationsRepository.bulkMarkRead(
       shopId,
+      branchId,
       allowedTypes,
       input.ids,
     );
@@ -165,6 +175,7 @@ export class NotificationsService {
 
   private async getAccessibleNotification(
     shopId: string,
+    branchId: string,
     user: PublicUser,
     notificationId: string,
   ) {
@@ -180,6 +191,14 @@ export class NotificationsService {
     const allowedTypes = this.getAllowedTypes(user);
 
     if (!allowedTypes.includes(notification.type)) {
+      throw buildAppError(
+        404,
+        "NOTIFICATION_NOT_FOUND",
+        "Notification not found.",
+      );
+    }
+
+    if (notification.branchId && notification.branchId !== branchId) {
       throw buildAppError(
         404,
         "NOTIFICATION_NOT_FOUND",
@@ -260,39 +279,5 @@ export class NotificationsService {
         totalPages: Math.ceil(total / pageSize) || 1,
       },
     };
-  }
-
-  private dispatchPendingInventoryAlertEmailsInBackground(
-    shopId: string,
-    branchId: string,
-  ) {
-    void this.alertsService
-      .dispatchPendingInventoryAlertEmails(shopId, branchId)
-      .catch((error) => {
-        logger.error("Background inventory alert dispatch failed", {
-          shopId,
-          branchId,
-          message: error instanceof Error ? error.message : "Unknown error",
-        });
-      });
-  }
-
-  private async syncShopAlertsSafely(shopId: string, branchId: string) {
-    try {
-      const isBranchingSchemaReady =
-        await this.branchesRepository.isBranchingSchemaReady();
-
-      if (!isBranchingSchemaReady) {
-        return;
-      }
-
-      await this.alertsService.syncShopAlerts(shopId, branchId);
-    } catch (error) {
-      logger.warn("Notifications alert sync skipped after recoverable failure", {
-        shopId,
-        branchId,
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
   }
 }

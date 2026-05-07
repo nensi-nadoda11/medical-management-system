@@ -372,11 +372,6 @@ export const AuthPage = ({ initialView }: AuthPageProps) => {
           <span className="hero-powder hero-powder--a" />
           <span className="hero-powder hero-powder--b" />
           <span className="hero-powder hero-powder--c" />
-          <div className="hero-medicine-copy">
-            <span>Calm setup</span>
-            <strong>Inventory-ready access</strong>
-            <p>Capsules, tablets, and small motion details keep the welcome side lighter without adding clutter.</p>
-          </div>
         </div>
       </section>
 

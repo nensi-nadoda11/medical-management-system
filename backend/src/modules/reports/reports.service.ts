@@ -107,12 +107,9 @@ export class ReportsService {
     await Promise.all(
       branchIds.map((branchId) => this.inventoryRepository.syncBatchStatuses(shopId, branchId)),
     );
-    const branchThresholds = await Promise.all(
-      branchIds.map((branchId) =>
-        this.branchesService
-          .getResolvedBranchSettings(shopId, branchId)
-          .then((settings) => settings.defaultLowStockThreshold),
-      ),
+    const branchThresholds = await this.branchesService.listResolvedBranchLowStockThresholds(
+      shopId,
+      branchIds,
     );
 
     const [todaySales, monthlySales, lowStockCount, expirySummary, monthlyProfit] =
@@ -120,7 +117,7 @@ export class ReportsService {
         this.reportsRepository.getTodaySalesSummary(shopId, branchIds, accessScope),
         this.reportsRepository.getMonthlySalesSummary(shopId, branchIds, accessScope),
         Promise.all(
-          branchIds.map((branchId, index) =>
+          branchIds.map((branchId) =>
             this.inventoryRepository.countInventorySummary(
               shopId,
               branchId,
@@ -132,7 +129,7 @@ export class ReportsService {
                 search: undefined,
                 lowStockOnly: true,
               },
-              branchThresholds[index] ?? 10,
+              branchThresholds.get(branchId) ?? 10,
             ),
           ),
         ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),
@@ -357,18 +354,15 @@ export class ReportsService {
       ...query,
       search: normalizeSearch(query.search),
     };
-    const branchThresholds = await Promise.all(
-      branchIds.map((branchId) =>
-        this.branchesService
-          .getResolvedBranchSettings(shopId, branchId)
-          .then((settings) => settings.defaultLowStockThreshold),
-      ),
+    const branchThresholds = await this.branchesService.listResolvedBranchLowStockThresholds(
+      shopId,
+      branchIds,
     );
 
     const [summary, lowStockCount, rows, total] = await Promise.all([
       this.reportsRepository.getStockSummary(shopId, branchIds, normalizedQuery),
       Promise.all(
-        branchIds.map((branchId, index) =>
+        branchIds.map((branchId) =>
           this.inventoryRepository.countInventorySummary(
             shopId,
             branchId,
@@ -387,7 +381,7 @@ export class ReportsService {
                 : {}),
               ...(normalizedQuery.search ? { search: normalizedQuery.search } : {}),
             },
-            branchThresholds[index] ?? 10,
+            branchThresholds.get(branchId) ?? 10,
           ),
         ),
       ).then((counts) => counts.reduce((sum, count) => sum + count, 0)),

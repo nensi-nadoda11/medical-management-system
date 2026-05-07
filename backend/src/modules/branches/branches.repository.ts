@@ -233,6 +233,17 @@ export class BranchesRepository {
     return settings ?? null;
   }
 
+  async listBranchSettingsByIds(branchIds: string[], executor?: DbExecutor) {
+    if (!branchIds.length) {
+      return [];
+    }
+
+    return getDbExecutor(executor)
+      .select()
+      .from(branchSettings)
+      .where(inArray(branchSettings.branchId, branchIds));
+  }
+
   async listUsersByIds(ids: string[], executor?: DbExecutor) {
     if (!ids.length) {
       return [];

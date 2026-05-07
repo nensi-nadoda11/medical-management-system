@@ -60,8 +60,11 @@ export const PurchaseDetailPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
+  const user = sessionQuery.data?.user;
+  const canCreatePurchases = hasPermission(user, "purchases.create");
+  const canFinalizePurchases = hasPermission(user, "purchases.finalize");
   const canCreatePurchaseReturn = hasPermission(
-    sessionQuery.data?.user,
+    user,
     "purchaseReturns.create",
   );
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
@@ -175,9 +178,12 @@ export const PurchaseDetailPage = () => {
 
   const purchase = purchaseQuery.data;
   const isDraft = purchase.status === "draft";
-  const canEditDraft = purchase.workflowStage === "draft";
-  const canApprove = purchase.workflowStage === "draft";
-  const canMarkSupplierNotified = purchase.workflowStage === "approved";
+  const canEditDraft = purchase.workflowStage === "draft" && canCreatePurchases;
+  const canApprove = purchase.workflowStage === "draft" && canFinalizePurchases;
+  const canMarkSupplierNotified =
+    purchase.workflowStage === "approved" && canFinalizePurchases;
+  const canCancelDraft = isDraft && canFinalizePurchases;
+  const canReceiveIntoStock = isDraft && canFinalizePurchases;
   const hasReturnableItems = purchase.items.some(
     (item) => item.remainingReturnableQuantity > 0,
   );
@@ -224,7 +230,7 @@ export const PurchaseDetailPage = () => {
                 Mark supplier notified
               </button>
             ) : null}
-            {isDraft ? (
+            {canCancelDraft ? (
               <button
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 onClick={() => setIsCancelOpen(true)}
@@ -233,7 +239,7 @@ export const PurchaseDetailPage = () => {
                 Cancel purchase order
               </button>
             ) : null}
-            {isDraft ? (
+            {canReceiveIntoStock ? (
               <button
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800"
                 onClick={() => setIsFinalizeOpen(true)}

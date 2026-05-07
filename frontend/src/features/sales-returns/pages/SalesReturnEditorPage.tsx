@@ -11,6 +11,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime, humanizeLabel } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { billingQueryKeys, listBills, type BillListItem } from "../../billing/api/billing";
 import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
 import { useSessionQuery } from "../../auth/hooks/use-session";
@@ -90,7 +91,8 @@ export const SalesReturnEditorPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
-  const canManageReturns = sessionQuery.data?.user.role !== "accountant";
+  const user = sessionQuery.data?.user;
+  const canCreateBills = hasPermission(user, "billing.create");
   const [saleSearch, setSaleSearch] = useState(searchParams.get("saleId") ? "" : "");
   const [selectedSaleId, setSelectedSaleId] = useState(searchParams.get("saleId") ?? "");
   const [refundAmount, setRefundAmount] = useState("0");
@@ -443,7 +445,7 @@ export const SalesReturnEditorPage = () => {
       <PageHeader
         actions={
           <>
-            <BillingModuleNav canCreateBills={canManageReturns} />
+            <BillingModuleNav canCreateBills={canCreateBills} />
             {activeSaleId ? (
               <Link
                 className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"

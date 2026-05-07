@@ -16,6 +16,6 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "drizzle.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "seed/**/*.ts", "drizzle.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

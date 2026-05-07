@@ -12,6 +12,7 @@ import { collapseWhitespace } from "../../shared/utils/strings";
 import { AlertsService } from "../alerts/alerts.service";
 import { AccountingLedgerService } from "../accounting/accounting-ledger.service";
 import { AdminSettingsService } from "../admin-settings/admin-settings.service";
+import type { PublicUser } from "../auth/auth.types";
 import { InventoryStockService } from "../inventory/inventory.stock.service";
 import { PurchaseReturnsRepository } from "../purchase-returns/purchase-returns.repository";
 import { PurchasesRepository } from "./purchases.repository";
@@ -125,6 +126,31 @@ const resolvePurchaseWorkflowStage = (purchase: {
 
   return "draft" as const;
 };
+
+export const canDeletePurchaseForPermissions = (
+  purchase: {
+    status: "draft" | "finalized" | "cancelled";
+    purchaseOrderApprovedAt: Date | null;
+    supplierNotifiedAt: Date | null;
+  },
+  permissions: string[],
+) => {
+  const workflowStage = resolvePurchaseWorkflowStage(purchase);
+  const canCreatePurchases = permissions.includes("purchases.create");
+  const canFinalizePurchases = permissions.includes("purchases.finalize");
+
+  if (workflowStage === "draft") {
+    return canCreatePurchases || canFinalizePurchases;
+  }
+
+  return canFinalizePurchases;
+};
+
+export const requiresFinalizeAccessForDeletion = (purchase: {
+  status: "draft" | "finalized" | "cancelled";
+  purchaseOrderApprovedAt: Date | null;
+  supplierNotifiedAt: Date | null;
+}) => resolvePurchaseWorkflowStage(purchase) !== "draft";
 
 const toPurchaseListResponse = (record: Awaited<
   ReturnType<PurchasesRepository["listPurchases"]>
@@ -1121,11 +1147,26 @@ export class PurchasesService {
     return this.getPurchaseById(shopId, branchId, purchaseId);
   }
 
-  async deletePurchase(shopId: string, branchId: string, purchaseId: string, userId: string) {
+  async deletePurchase(
+    shopId: string,
+    branchId: string,
+    purchaseId: string,
+    user: PublicUser,
+  ) {
     const purchase = await this.purchasesRepository.findPurchaseById(shopId, branchId, purchaseId);
 
     if (!purchase) {
       throw buildAppError(404, "PURCHASE_NOT_FOUND", "Purchase not found.");
+    }
+
+    if (!canDeletePurchaseForPermissions(purchase, user.permissions)) {
+      throw buildAppError(
+        403,
+        "PERMISSION_DENIED",
+        requiresFinalizeAccessForDeletion(purchase)
+          ? "You need purchase finalize access to delete approved, notified, received, or cancelled purchases."
+          : "You do not have permission to delete this purchase.",
+      );
     }
 
     // 1. Check for Purchase Returns
@@ -1138,11 +1179,20 @@ export class PurchasesService {
       );
     }
 
-    // 2. Check for Payment Allocations (if we have a table for it)
-    // Looking at the schema, supplierPaymentAllocations references purchaseId.
-    // I'll need to check this in the repository or directly here if I have the repo.
-    // Let's check if the service has access to a repository for this.
-    // Actually, I'll just check if there's a record in supplier_payment_allocations.
+    // 2. Check for linked supplier payment allocations before hitting the FK restriction.
+    const supplierPaymentAllocationCount =
+      await this.purchasesRepository.countSupplierPaymentAllocationsByPurchaseId(
+        shopId,
+        purchaseId,
+      );
+
+    if (supplierPaymentAllocationCount > 0) {
+      throw buildAppError(
+        400,
+        "PURCHASE_HAS_PAYMENT_ALLOCATIONS",
+        "Cannot delete purchase because supplier payments are allocated against it. Reverse or remove the linked supplier payments first.",
+      );
+    }
 
     // 3. If Finalized, check stock movement
     if (purchase.status === "finalized") {

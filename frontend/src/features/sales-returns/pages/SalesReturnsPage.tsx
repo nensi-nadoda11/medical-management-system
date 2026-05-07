@@ -11,6 +11,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { formatCurrency, formatDateTime, humanizeLabel } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
 import { listSalesReturns, salesReturnsQueryKeys } from "../api/salesReturns";
@@ -20,7 +21,9 @@ const inputClassName =
 
 export const SalesReturnsPage = () => {
   const sessionQuery = useSessionQuery();
-  const canCreateReturns = sessionQuery.data?.user.role !== "accountant";
+  const user = sessionQuery.data?.user;
+  const canCreateReturns = hasPermission(user, "billing.return");
+  const canCreateBills = hasPermission(user, "billing.create");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"" | "draft" | "completed" | "cancelled">("");
   const [refundStatus, setRefundStatus] = useState<
@@ -76,7 +79,7 @@ export const SalesReturnsPage = () => {
       <PageHeader
         actions={
           <>
-            <BillingModuleNav canCreateBills={canCreateReturns} />
+            <BillingModuleNav canCreateBills={canCreateBills} />
             {canCreateReturns ? (
               <Link
                 className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"

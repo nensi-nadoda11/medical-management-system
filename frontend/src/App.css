@@ -1,9 +1,13 @@
 .auth-shell {
   position: relative;
   min-height: 100svh;
-  height: 100svh;
+  height: auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(400px, 0.88fr);
+  align-items: center;
+  gap: clamp(1rem, 1.8vw, 2rem);
+  padding: clamp(0.75rem, 1.6vh, 1.25rem);
+  box-sizing: border-box;
   overflow: hidden;
   background:
     radial-gradient(circle at top left, rgb(255 255 255 / 0.24), transparent 28%),
@@ -45,18 +49,18 @@
 .auth-hero {
   position: relative;
   z-index: 1;
-  padding: clamp(1.75rem, 2.6vw, 3rem);
+  padding: clamp(1rem, 1.8vw, 2rem);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1rem;
+  gap: clamp(0.75rem, 1.2vh, 1rem);
   color: #f8fafc;
 }
 
 .auth-hero h1 {
   max-width: 12ch;
   margin: 0;
-  font-size: clamp(2.3rem, 4.1vw, 4.1rem);
+  font-size: clamp(2.3rem, min(4.1vw, 9.5vh), 4.1rem);
   line-height: 0.94;
   letter-spacing: -0.06em;
 }
@@ -77,15 +81,15 @@
 .auth-hero__lead {
   max-width: 31rem;
   margin: 0;
-  font-size: 0.98rem;
-  line-height: 1.7;
+  font-size: clamp(0.92rem, 1vw, 0.98rem);
+  line-height: 1.62;
   color: rgb(226 232 240 / 0.86);
 }
 
 .hero-medicine-scatter {
   position: relative;
-  min-height: 18rem;
-  margin-top: 0.6rem;
+  min-height: clamp(14rem, 28vh, 18rem);
+  margin-top: clamp(0.25rem, 0.8vh, 0.6rem);
   border-radius: 2rem;
   border: 1px solid rgb(255 255 255 / 0.08);
   background:
@@ -283,8 +287,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  min-height: 100svh;
+  padding: clamp(0.75rem, 1.8vh, 1rem);
+  min-height: 0;
 }
 
 .auth-card,
@@ -298,7 +302,7 @@
 }
 
 .auth-card {
-  padding: 2rem;
+  padding: clamp(1.4rem, 1.8vw, 2rem);
 }
 
 .loading-card {
@@ -685,6 +689,9 @@
     grid-template-columns: 1fr;
     height: auto;
     min-height: 100svh;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
     overflow: visible;
     background:
       linear-gradient(180deg, #090c11 0%, #101722 34%, #eef2f5 34%, #f6f8fa 100%);

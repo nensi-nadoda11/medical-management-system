@@ -1,5 +1,6 @@
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
+import { runDbReads } from "../../shared/db/run-db-reads";
 import { logger } from "../../shared/logger";
 import {
   moneyMinorUnitsToString,
@@ -227,10 +228,16 @@ export class BillingService {
       search: query.search ? normalizeSearchValue(query.search) : undefined,
     };
 
-    const [items, total] = await Promise.all([
-      this.billingRepository.listSales(shopId, branchId, normalizedQuery),
-      this.billingRepository.countSales(shopId, branchId, normalizedQuery),
-    ]);
+    const items = await this.billingRepository.listSales(
+      shopId,
+      branchId,
+      normalizedQuery,
+    );
+    const total = await this.billingRepository.countSales(
+      shopId,
+      branchId,
+      normalizedQuery,
+    );
 
     return buildPaginatedResponse(
       items.map(toSaleListResponse),
@@ -862,10 +869,13 @@ export class BillingService {
     executor: DbExecutor,
   ) {
     await this.billingRepository.lockBillSequence(shopId, executor);
-    const [shop, sequence] = await Promise.all([
-      this.billingRepository.getShopById(shopId, executor),
-      this.billingRepository.getNextBillSequence(shopId, branchId, executor),
-    ]);
+    const [shop, sequence] = await runDbReads(
+      [
+        () => this.billingRepository.getShopById(shopId, executor),
+        () => this.billingRepository.getNextBillSequence(shopId, branchId, executor),
+      ] as const,
+      executor,
+    );
 
     if (!shop) {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
@@ -895,16 +905,20 @@ export class BillingService {
       ),
     ];
 
-    const [medicines, selectedBatches, sellableBatches] = await Promise.all([
-      this.billingRepository.findMedicinesByIds(shopId, medicineIds, executor),
-      this.billingRepository.findBatchesByIds(shopId, branchId, batchIds, executor),
-      this.billingRepository.listSellableBatchesByMedicineIds(
-        shopId,
-        branchId,
-        medicineIds,
-        executor,
-      ),
-    ]);
+    const [medicines, selectedBatches, sellableBatches] = await runDbReads(
+      [
+        () => this.billingRepository.findMedicinesByIds(shopId, medicineIds, executor),
+        () => this.billingRepository.findBatchesByIds(shopId, branchId, batchIds, executor),
+        () =>
+          this.billingRepository.listSellableBatchesByMedicineIds(
+            shopId,
+            branchId,
+            medicineIds,
+            executor,
+          ),
+      ] as const,
+      executor,
+    );
 
     const medicineMap = new Map(medicines.map((medicine) => [medicine.id, medicine]));
     const selectedBatchMap = new Map(

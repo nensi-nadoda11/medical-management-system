@@ -32,6 +32,8 @@ export const RealtimeQueryBridge = () => {
   const queryClient = useQueryClient();
   const sessionQuery = useSessionQuery();
   const [branchId, setBranchId] = useState<string | null>(() => getStoredBranchId());
+  const activeBranchId =
+    branchId ?? sessionQuery.data?.branchContext?.currentBranch.id ?? null;
 
   useEffect(() => {
     const handleBranchChanged = () => {
@@ -52,7 +54,7 @@ export const RealtimeQueryBridge = () => {
       return undefined;
     }
 
-    const eventSource = new EventSource(buildRealtimeUrl(branchId), {
+    const eventSource = new EventSource(buildRealtimeUrl(activeBranchId), {
       withCredentials: true,
     });
 
@@ -64,16 +66,40 @@ export const RealtimeQueryBridge = () => {
       ]);
     };
 
-    const handleInventoryChange = () => {
+    const matchesActiveBranch = (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data) as {
+          branchId?: string | null;
+        };
+
+        return !payload.branchId || payload.branchId === activeBranchId;
+      } catch {
+        return true;
+      }
+    };
+
+    const handleInventoryChange = (event: MessageEvent<string>) => {
+      if (!matchesActiveBranch(event)) {
+        return;
+      }
+
       invalidateInventoryViews();
       void queryClient.invalidateQueries({ queryKey: billingQueryKeys.all });
     };
 
-    const handlePurchaseChange = () => {
+    const handlePurchaseChange = (event: MessageEvent<string>) => {
+      if (!matchesActiveBranch(event)) {
+        return;
+      }
+
       void queryClient.invalidateQueries({ queryKey: purchasesQueryKeys.all });
     };
 
-    const handleNotificationChange = () => {
+    const handleNotificationChange = (event: MessageEvent<string>) => {
+      if (!matchesActiveBranch(event)) {
+        return;
+      }
+
       void queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.all });
     };
 
@@ -90,7 +116,7 @@ export const RealtimeQueryBridge = () => {
       );
       eventSource.close();
     };
-  }, [branchId, queryClient, sessionQuery.data]);
+  }, [activeBranchId, queryClient, sessionQuery.data]);
 
   return null;
 };

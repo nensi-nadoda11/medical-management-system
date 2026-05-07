@@ -18,10 +18,18 @@ import {
   formatDateTime,
   humanizeLabel,
 } from "../../../lib/utils";
-import type { CustomerListItem } from "../../../types/customer";
+import { hasPermission } from "../../../types/auth";
+import type {
+  CustomerListItem,
+  SaveCustomerPaymentPayload,
+} from "../../../types/customer";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
-  createCustomerPayment,
+  accountingQueryKeys,
+  createAccountingCustomerPayment,
+} from "../../accounting/api/accounting";
+import { notificationsQueryKeys } from "../../notifications/api/notifications";
+import {
   customersQueryKeys,
   getCustomer,
   listCustomerPayments,
@@ -37,10 +45,11 @@ export const CustomerDetailPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
-  const role = sessionQuery.data?.user.role;
-  const canEdit = role === "admin" || role === "staff";
-  const canUpdateStatus = role === "admin";
-  const canRecordPayments = role === "admin" || role === "accountant";
+  const user = sessionQuery.data?.user;
+  const canEditCustomer = hasPermission(user, "customers.edit");
+  const canUpdateStatus = hasPermission(user, "customers.edit");
+  const canViewPayments = hasPermission(user, "payments.view");
+  const canRecordPayments = hasPermission(user, "payments.create");
 
   const [purchasePage, setPurchasePage] = useState(1);
   const [paymentPage, setPaymentPage] = useState(1);
@@ -85,7 +94,7 @@ export const CustomerDetailPage = () => {
         sortBy: "paymentDate",
         sortOrder: "desc",
       }),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && canViewPayments,
   });
 
   const updateCustomerMutation = useMutation({
@@ -115,8 +124,11 @@ export const CustomerDetailPage = () => {
   });
 
   const paymentMutation = useMutation({
-    mutationFn: (payload: Parameters<typeof createCustomerPayment>[1]) =>
-      createCustomerPayment(id, payload),
+    mutationFn: (payload: SaveCustomerPaymentPayload) =>
+      createAccountingCustomerPayment({
+        ...payload,
+        customerId: id,
+      }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customersQueryKeys.detail(id) }),
@@ -133,6 +145,8 @@ export const CustomerDetailPage = () => {
           sortOrder: "desc",
         }) }),
         queryClient.invalidateQueries({ queryKey: customersQueryKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: accountingQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.all }),
       ]);
       pushToast({
         title: "Payment recorded",
@@ -159,7 +173,9 @@ export const CustomerDetailPage = () => {
 
   const customer = detailQuery.data;
   const purchases = purchasesQuery.data?.items ?? customer.recentPurchases;
-  const payments = paymentsQuery.data?.items ?? customer.recentPayments;
+  const payments = canViewPayments
+    ? paymentsQuery.data?.items ?? customer.recentPayments
+    : [];
   const dueBills = purchases.filter((bill) => Number(bill.dueAmount) > 0);
 
   return (
@@ -182,7 +198,7 @@ export const CustomerDetailPage = () => {
                 Record payment
               </button>
             ) : null}
-            {canEdit ? (
+            {canEditCustomer ? (
               <button
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                 onClick={() => setIsEditOpen(true)}
@@ -421,10 +437,11 @@ export const CustomerDetailPage = () => {
         )}
       </SectionCard>
 
-      <SectionCard
-        description="Payment records stay transparent with method, operator, and linked bill allocation details."
-        title="Payment history"
-      >
+      {canViewPayments ? (
+        <SectionCard
+          description="Payment records stay transparent with method, operator, and linked bill allocation details."
+          title="Payment history"
+        >
         {paymentsQuery.isLoading && !paymentsQuery.data ? (
           <LoadingState title="Loading payment history" />
         ) : payments.length ? (
@@ -536,7 +553,8 @@ export const CustomerDetailPage = () => {
             title="No payments recorded yet"
           />
         )}
-      </SectionCard>
+        </SectionCard>
+      ) : null}
 
       <CustomerFormModal
         customer={customer as CustomerListItem}

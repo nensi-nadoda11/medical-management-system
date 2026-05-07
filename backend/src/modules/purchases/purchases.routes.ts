@@ -77,7 +77,6 @@ router.post(
 router.delete(
   "/:id",
   requireAuth,
-  requirePermission("purchases.create"),
   validateRequest(getPurchaseByIdSchema),
   controller.deletePurchase,
 );

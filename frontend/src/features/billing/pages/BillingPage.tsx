@@ -6,6 +6,7 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { useToast } from "../../../hooks/use-toast";
 import { toSelectedCustomerSummary } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   createCustomer,
@@ -53,7 +54,7 @@ export const BillingPage = () => {
     toggleFefo,
   } = useBillingWorkspace();
 
-  const canCreateBills = sessionQuery.data?.user.role !== "accountant";
+  const canCreateBills = hasPermission(sessionQuery.data?.user, "billing.create");
 
   const createCustomerMutation = useMutation({
     mutationFn: (payload: Parameters<typeof createCustomer>[0]) =>

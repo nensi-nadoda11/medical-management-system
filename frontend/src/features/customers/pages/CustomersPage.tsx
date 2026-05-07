@@ -14,6 +14,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate } from "../../../lib/utils";
+import { hasPermission } from "../../../types/auth";
 import type { CustomerListItem } from "../../../types/customer";
 import type { MasterStatus } from "../../../types/medicine";
 import { useSessionQuery } from "../../auth/hooks/use-session";
@@ -35,9 +36,10 @@ export const CustomersPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
-  const role = sessionQuery.data?.user.role;
-  const canEdit = role === "admin" || role === "staff";
-  const canUpdateStatus = role === "admin";
+  const user = sessionQuery.data?.user;
+  const canCreateCustomer = hasPermission(user, "customers.create");
+  const canEditCustomer = hasPermission(user, "customers.edit");
+  const canUpdateStatus = hasPermission(user, "customers.edit");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -139,7 +141,7 @@ export const CustomersPage = () => {
     <div className="space-y-6">
       <PageHeader
         actions={
-          canEdit ? (
+          canCreateCustomer ? (
             <button
               className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               onClick={() => {
@@ -298,7 +300,7 @@ export const CustomersPage = () => {
                   </dl>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {canEdit ? (
+                    {canEditCustomer ? (
                       <button
                         className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                         onClick={() => {
@@ -373,7 +375,7 @@ export const CustomersPage = () => {
                           >
                             View
                           </Link>
-                          {canEdit ? (
+                          {canEditCustomer ? (
                             <button
                               className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                               onClick={() => {
@@ -415,7 +417,7 @@ export const CustomersPage = () => {
         ) : (
           <EmptyState
             action={
-              canEdit ? (
+              canCreateCustomer ? (
                 <button
                   className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                   onClick={() => {

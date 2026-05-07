@@ -19,16 +19,18 @@ export type RealtimeEvent = {
 type Subscriber = {
   id: string;
   shopId: string;
+  branchId: string | null;
   response: Response;
 };
 
 class RealtimeService {
   private readonly subscribers = new Map<string, Subscriber>();
 
-  subscribe(input: { shopId: string; response: Response }) {
+  subscribe(input: { shopId: string; branchId: string | null; response: Response }) {
     const subscriber: Subscriber = {
       id: randomUUID(),
       shopId: input.shopId,
+      branchId: input.branchId,
       response: input.response,
     };
 
@@ -70,6 +72,14 @@ class RealtimeService {
   publish(event: Omit<RealtimeEvent, "occurredAt">) {
     for (const subscriber of this.subscribers.values()) {
       if (subscriber.shopId !== event.shopId) {
+        continue;
+      }
+
+      if (
+        event.branchId &&
+        subscriber.branchId &&
+        subscriber.branchId !== event.branchId
+      ) {
         continue;
       }
 
