@@ -2,15 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
-import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { cn, formatDateTime } from "../../../lib/utils";
 import type { NotificationsParams } from "../../../types/notification";
@@ -23,8 +18,7 @@ import {
   notificationsQueryKeys,
 } from "../api/notifications";
 
-const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const inputClassName = "ui-input";
 
 export const NotificationCenterPage = () => {
   const queryClient = useQueryClient();
@@ -141,54 +135,21 @@ export const NotificationCenterPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Notification center"
-        title="Alerts & notifications"
-        description="Stay on top of stock pressure, expiry exposure, and financial follow-up from one compact operational queue."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!summary?.unreadCount || bulkReadMutation.isPending}
-              onClick={() => bulkReadMutation.mutate()}
-              type="button"
-            >
-              {bulkReadMutation.isPending ? "Updating..." : "Mark all read"}
-            </button>
-          </div>
-        }
-      />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="Unread alerts"
-          value={summary?.unreadCount ?? 0}
-          tone={summary?.unreadCount ? "accent" : "default"}
-          hint="Unread items across your accessible queue"
-        />
-        <SummaryCard
-          label="Critical active"
-          value={summary?.criticalCount ?? 0}
-          tone={summary?.criticalCount ? "danger" : "default"}
-          hint="High-priority conditions still needing attention"
-        />
-        <SummaryCard
-          label="Visible items"
-          value={pagination?.total ?? 0}
-          hint="Notifications matching the active filters"
-        />
-        <SummaryCard
-          label="Pending action"
-          value={items.filter((item) => item.isActive && !item.isAcknowledged).length}
-          tone="warning"
-          hint="Active notifications on this page not yet acknowledged"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] border border-white/75 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.1),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] px-5 py-4 shadow-[0_28px_72px_-48px_rgba(15,23,42,0.24)]">
+        <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-950">
+          Alerts & notifications
+        </h1>
+        <button
+          className="ui-btn ui-btn--primary"
+          disabled={!summary?.unreadCount || bulkReadMutation.isPending}
+          onClick={() => bulkReadMutation.mutate()}
+          type="button"
+        >
+          {bulkReadMutation.isPending ? "Updating..." : "Mark all read"}
+        </button>
       </div>
 
-      <FilterBar
-        title="Filter notifications"
-        description="Narrow the queue by alert type, severity, and current handling state."
-      >
+      <div className="rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Type
@@ -282,31 +243,29 @@ export const NotificationCenterPage = () => {
             </select>
           </label>
         </div>
-      </FilterBar>
+      </div>
 
-      <SectionCard
-        title="Operational queue"
-        description="Unread items stay visually elevated so the most important alerts remain easy to scan."
-      >
+      <section className="rounded-[26px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))] p-4 shadow-[0_24px_54px_-42px_rgba(15,23,42,0.24)] md:p-5">
+        <h2 className="text-[1.1rem] font-semibold text-slate-950">Notifications</h2>
         {items.length ? (
-          <div className="space-y-3">
+          <div className="mt-4 space-y-3">
             {items.map((item) => (
               <article
                 className={cn(
-                  "rounded-[24px] border p-4 shadow-sm transition",
+                  "rounded-[20px] border px-4 py-3.5 shadow-sm transition",
                   item.isRead
-                    ? "border-slate-200 bg-white"
-                    : "border-teal-200 bg-teal-50/40 shadow-teal-100/60",
+                    ? "border-slate-200 bg-white/92"
+                    : "border-violet-100 bg-violet-50/55 shadow-violet-100/70",
                 )}
                 key={item.id}
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 space-y-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge label={item.type} tone={item.type} />
                       <StatusBadge label={item.severity} tone={item.severity} />
                       {!item.isRead ? (
-                        <span className="inline-flex items-center rounded-full bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white">
+                        <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white">
                           Unread
                         </span>
                       ) : null}
@@ -322,16 +281,16 @@ export const NotificationCenterPage = () => {
                       ) : null}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <h2 className="text-base font-semibold text-slate-950">
+                    <div className="space-y-1">
+                      <h2 className="text-[0.95rem] font-semibold leading-5 text-slate-950">
                         {item.title}
                       </h2>
-                      <p className="max-w-3xl text-sm leading-6 text-slate-600">
+                      <p className="max-w-3xl text-sm leading-5 text-slate-600">
                         {item.message}
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500">
                       <span>Created {formatDateTime(item.createdAt)}</span>
                       {item.readAt ? <span>Read {formatDateTime(item.readAt)}</span> : null}
                       {item.acknowledgedAt ? (
@@ -343,7 +302,7 @@ export const NotificationCenterPage = () => {
                   <div className="flex flex-wrap gap-2 lg:justify-end">
                     {!item.isRead ? (
                       <button
-                        className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="ui-btn ui-btn--secondary !min-h-[2.1rem] !px-3"
                         disabled={markReadMutation.isPending}
                         onClick={() => markReadMutation.mutate(item.id)}
                         type="button"
@@ -354,7 +313,7 @@ export const NotificationCenterPage = () => {
 
                     {item.isActive && !item.isAcknowledged ? (
                       <button
-                        className="rounded-2xl bg-slate-950 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="ui-btn ui-btn--primary !min-h-[2.1rem] !px-3"
                         disabled={acknowledgeMutation.isPending}
                         onClick={() => acknowledgeMutation.mutate(item.id)}
                         type="button"
@@ -365,7 +324,7 @@ export const NotificationCenterPage = () => {
 
                     {item.actionPath ? (
                       <Link
-                        className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        className="ui-btn ui-btn--secondary !min-h-[2.1rem] !px-3"
                         to={item.actionPath}
                       >
                         {item.actionLabel ?? "Open"}
@@ -387,12 +346,19 @@ export const NotificationCenterPage = () => {
             ) : null}
           </div>
         ) : (
-          <EmptyState
-            title="Notification queue is clear"
-            description="No notifications match the current filters right now."
-          />
+          <div className="mt-4 rounded-[22px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,251,0.96))] px-6 py-8 text-center shadow-[0_24px_58px_-46px_rgba(15,23,42,0.18)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm shadow-slate-200/80">
+              <span className="text-base font-semibold text-slate-500">i</span>
+            </div>
+            <h3 className="mt-4 text-base font-semibold text-slate-900">
+              Notification queue is clear
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              No notifications match the current filters right now.
+            </p>
+          </div>
         )}
-      </SectionCard>
+      </section>
     </div>
   );
 };

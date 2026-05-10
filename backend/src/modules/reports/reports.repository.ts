@@ -378,6 +378,8 @@ export class ReportsRepository {
         totalSales: sql<string>`coalesce(sum(${sales.grandTotal}), 0)::text`,
         totalBills: sql<number>`count(${sales.id})`,
         averageBillValue: sql<string>`coalesce(avg(${sales.grandTotal}), 0)::text`,
+        totalPaidAmount: sql<string>`coalesce(sum(${sales.paidAmount}), 0)::text`,
+        totalDueAmount: sql<string>`coalesce(sum(${sales.dueAmount}), 0)::text`,
       })
       .from(sales)
       .where(buildCompletedSalesFilters(shopId, branchIds, query, accessScope));

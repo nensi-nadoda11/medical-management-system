@@ -2,13 +2,11 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatNumber } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
@@ -20,7 +18,6 @@ import {
 } from "../api/reports";
 import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
-import { ReportPeriodControl } from "../components/ReportPeriodControl";
 import { ReportsNav } from "../components/ReportsNav";
 import {
   resolveReportDateRange,
@@ -30,7 +27,9 @@ import {
 } from "../lib/report-period";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "min-h-12 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const periodButtonClassName =
+  "inline-flex min-h-12 items-center justify-center rounded-2xl border px-4 py-2 text-sm font-semibold transition";
 
 export const SupplierReportPage = () => {
   const { pushToast } = useToast();
@@ -164,148 +163,221 @@ export const SupplierReportPage = () => {
             />
           </>
         }
-        description="Review supplier-wise purchase value, payments made, and outstanding dues."
         eyebrow="Reports & Analytics"
         title="Supplier report"
+        titleClassName="whitespace-nowrap"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          hint={report.filters.dateRangeLabel}
-          label="Suppliers"
-          value={formatNumber(report.summary.supplierCount)}
-        />
-        <SummaryCard
-          hint="Total finalized purchase value"
-          label="Total purchase"
-          tone="accent"
-          value={formatCurrency(report.summary.totalPurchase)}
-        />
-        <SummaryCard
-          hint="Payments already cleared"
-          label="Total paid"
-          value={formatCurrency(report.summary.totalPaid)}
-        />
-        <SummaryCard
-          hint="Outstanding supplier balance"
-          label="Total due"
-          tone={Number(report.summary.totalDue) > 0 ? "warning" : "default"}
-          value={formatCurrency(report.summary.totalDue)}
-        />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          {
+            label: "Total purchase",
+            tone: "border-emerald-100 bg-[linear-gradient(180deg,rgba(240,253,246,0.98),rgba(255,255,255,0.94))]",
+            value: formatCurrency(report.summary.totalPurchase),
+          },
+          {
+            label: "Total paid",
+            tone: "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatCurrency(report.summary.totalPaid),
+          },
+          {
+            label: "Total due",
+            tone:
+              Number(report.summary.totalDue) > 0
+                ? "border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.94))]"
+                : "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatCurrency(report.summary.totalDue),
+          },
+        ].map((item) => (
+          <article
+            className={`min-w-0 rounded-[24px] border px-5 py-3 shadow-[0_20px_48px_-40px_rgba(15,23,42,0.22)] ${item.tone}`}
+            key={item.label}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+              {item.label}
+            </p>
+            <p className="mt-1 break-words text-[1.45rem] font-semibold tracking-tight text-slate-950 md:text-[1.6rem]">
+              {item.value}
+            </p>
+          </article>
+        ))}
       </div>
 
-      <FilterBar
-        className="print-hidden"
-        description="Filter supplier liabilities by daily, monthly, or custom range and supplier master."
-        title="Supplier filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReportPeriodControl
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            inputClassName={inputClassName}
-            mode={periodMode}
-            onCustomDateFromChange={(value) => {
-              setCustomDateFrom(value);
-              setPage(1);
-            }}
-            onCustomDateToChange={(value) => {
-              setCustomDateTo(value);
-              setPage(1);
-            }}
-            onModeChange={(value) => {
-              setPeriodMode(value);
-              setPage(1);
-            }}
-            onSelectedDateChange={(value) => {
-              setSelectedDate(value);
-              setPage(1);
-            }}
-            onSelectedMonthChange={(value) => {
-              setSelectedMonth(value);
-              setPage(1);
-            }}
-            selectedDate={selectedDate}
-            selectedMonth={selectedMonth}
-          />
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search supplier or company"
-              value={search}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Supplier
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSupplierId(event.target.value);
-                setPage(1);
-              }}
-              value={supplierId}
-            >
-              <option value="">All suppliers</option>
-              {(suppliersQuery.data?.items ?? []).map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.supplierName}
-                </option>
+      <div className="print-hidden rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-4">
+        <div className="space-y-3">
+          <div className="grid gap-2 text-sm font-medium text-slate-700">
+            <span>Range</span>
+            <div className="ui-subtle-scrollbar flex flex-nowrap gap-2 overflow-x-auto pb-1">
+              {[
+                ["daily", "Daily"],
+                ["monthly", "Monthly"],
+                ["custom", "Custom"],
+              ].map(([value, label]) => (
+                <button
+                  className={`${periodButtonClassName} ${
+                    periodMode === value
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                  key={value}
+                  onClick={() => {
+                    setPeriodMode(value as ReportPeriodMode);
+                    setPage(1);
+                  }}
+                  type="button"
+                >
+                  {label}
+                </button>
               ))}
-            </select>
-          </label>
-          <BranchScopeControl
-            branchId={branchId}
-            combineBranches={combineBranches}
-            onBranchIdChange={(value) => {
-              setBranchId(value);
-              setPage(1);
-            }}
-            onCombineBranchesChange={(value) => {
-              setCombineBranches(value);
-              setPage(1);
-            }}
-          />
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Sort by
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortBy(event.target.value as typeof sortBy);
-                setPage(1);
-              }}
-              value={sortBy}
-            >
-              <option value="totalPurchase">Total purchase</option>
-              <option value="totalDue">Total due</option>
-              <option value="purchaseCount">Purchase count</option>
-              <option value="supplierName">Supplier name</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Order
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortOrder(event.target.value as "asc" | "desc");
-                setPage(1);
-              }}
-              value={sortOrder}
-            >
-              <option value="desc">Highest first</option>
-              <option value="asc">Lowest first</option>
-            </select>
-          </label>
-        </div>
-      </FilterBar>
+            </div>
+          </div>
 
-      <SectionCard description="Supplier-wise purchase and outstanding register." title="Supplier register">
+          <div
+            className={`grid gap-3 md:grid-cols-2 ${
+              periodMode === "custom" ? "xl:grid-cols-4" : "xl:grid-cols-3"
+            }`}
+          >
+            {periodMode === "daily" ? (
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+                Report date
+                <input
+                  className={inputClassName}
+                  onChange={(event) => {
+                    setSelectedDate(event.target.value);
+                    setPage(1);
+                  }}
+                  type="date"
+                  value={selectedDate}
+                />
+              </label>
+            ) : null}
+
+            {periodMode === "monthly" ? (
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+                Report month
+                <input
+                  className={inputClassName}
+                  onChange={(event) => {
+                    setSelectedMonth(event.target.value);
+                    setPage(1);
+                  }}
+                  type="month"
+                  value={selectedMonth}
+                />
+              </label>
+            ) : null}
+
+            {periodMode === "custom" ? (
+              <>
+                <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+                  Date from
+                  <input
+                    className={inputClassName}
+                    onChange={(event) => {
+                      setCustomDateFrom(event.target.value);
+                      setPage(1);
+                    }}
+                    type="date"
+                    value={customDateFrom}
+                  />
+                </label>
+                <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+                  Date to
+                  <input
+                    className={inputClassName}
+                    onChange={(event) => {
+                      setCustomDateTo(event.target.value);
+                      setPage(1);
+                    }}
+                    type="date"
+                    value={customDateTo}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+              Search
+              <input
+                className={inputClassName}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search supplier or company"
+                value={search}
+              />
+            </label>
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+              Supplier
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSupplierId(event.target.value);
+                  setPage(1);
+                }}
+                value={supplierId}
+              >
+                <option value="">All suppliers</option>
+                {(suppliersQuery.data?.items ?? []).map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.supplierName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <BranchScopeControl
+              branchId={branchId}
+              combineBranches={combineBranches}
+              onBranchIdChange={(value) => {
+                setBranchId(value);
+                setPage(1);
+              }}
+              onCombineBranchesChange={(value) => {
+                setCombineBranches(value);
+                setPage(1);
+              }}
+            />
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+              Sort by
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSortBy(event.target.value as typeof sortBy);
+                  setPage(1);
+                }}
+                value={sortBy}
+              >
+                <option value="totalPurchase">Total purchase</option>
+                <option value="totalDue">Total due</option>
+                <option value="purchaseCount">Purchase count</option>
+                <option value="supplierName">Supplier name</option>
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+              Order
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSortOrder(event.target.value as "asc" | "desc");
+                  setPage(1);
+                }}
+                value={sortOrder}
+              >
+                <option value="desc">Highest first</option>
+                <option value="asc">Lowest first</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <SectionCard title="Supplier register">
         <div className="space-y-4">
-          <div className="hidden overflow-x-auto xl:block">
+          <div className="ui-subtle-scrollbar hidden overflow-x-auto xl:block">
             <table className="min-w-[1160px] w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">

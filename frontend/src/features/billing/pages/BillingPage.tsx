@@ -128,7 +128,7 @@ export const BillingPage = () => {
         title="Billing access is limited"
         action={
           <Link
-            className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="ui-btn ui-btn--primary"
             to="/app/billing/history"
           >
             Open billing history
@@ -167,7 +167,7 @@ export const BillingPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <BillingHeader
         canCreateBills={canCreateBills}
         validHeldBillId={validHeldBillId}
@@ -192,7 +192,7 @@ export const BillingPage = () => {
               Editing held bill <span className="font-semibold text-slate-950">{heldBillQuery.data?.billNumber}</span>
             </p>
             <Link
-              className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="ui-btn ui-btn--secondary !min-h-[2.35rem] !px-3"
               to={`/app/billing/${validHeldBillId}`}
             >
               View bill detail
@@ -201,23 +201,33 @@ export const BillingPage = () => {
         </SectionCard>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(280px,1.02fr)_minmax(420px,1.42fr)_minmax(340px,1.12fr)]">
-        <MedicineSearchPanel
-          isLoading={medicineSearchQuery.isLoading}
-          medicines={medicineSearchQuery.data?.items ?? []}
-          onAddMedicine={hydrateMedicine}
-          onSearchChange={setMedicineSearch}
-          search={medicineSearch}
-          isFefoEnabled={draft.isFefoEnabled}
-          onToggleFefo={toggleFefo}
-        />
+      <div className="grid gap-5 xl:grid-cols-2">
+        <div className="min-w-0 overflow-hidden rounded-[26px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))] p-4 shadow-[0_24px_54px_-42px_rgba(15,23,42,0.24)] md:p-5 xl:h-[54rem]">
+          <div className="grid h-full min-h-0 gap-5 xl:grid-rows-[minmax(0,24rem)_minmax(0,1fr)]">
+            <div className="min-h-0 overflow-hidden">
+              <MedicineSearchPanel
+                embedded
+                isFefoEnabled={draft.isFefoEnabled}
+                isLoading={medicineSearchQuery.isLoading}
+                medicines={medicineSearchQuery.data?.items ?? []}
+                onAddMedicine={hydrateMedicine}
+                onSearchChange={setMedicineSearch}
+                onToggleFefo={toggleFefo}
+                search={medicineSearch}
+              />
+            </div>
 
-        <BillingCartPanel
-          items={draft.items}
-          onClearCart={() => setDraft((current) => ({ ...current, items: [] }))}
-          onRemoveItem={removeItem}
-          onUpdateItem={updateItem}
-        />
+            <div className="min-h-0 overflow-hidden border-t border-slate-200/70 pt-5">
+              <BillingCartPanel
+                embedded
+                items={draft.items}
+                onClearCart={() => setDraft((current) => ({ ...current, items: [] }))}
+                onRemoveItem={removeItem}
+                onUpdateItem={updateItem}
+              />
+            </div>
+          </div>
+        </div>
 
         <BillingSummaryPanel
           customerOptions={customerOptionsQuery.data?.items ?? []}

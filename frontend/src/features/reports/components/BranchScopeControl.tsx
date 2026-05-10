@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+
+import { cn } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 
 const inputClassName =
@@ -16,11 +19,25 @@ export const BranchScopeControl = ({
   onBranchIdChange,
   onCombineBranchesChange,
 }: BranchScopeControlProps) => {
-  const branches = useSessionQuery().data?.branchContext?.accessibleBranches ?? [];
+  const branchContext = useSessionQuery().data?.branchContext;
+  const currentBranch = branchContext?.currentBranch;
+  const branches = branchContext?.accessibleBranches ?? [];
+  const additionalBranches = currentBranch
+    ? branches.filter((branch) => branch.id !== currentBranch.id)
+    : branches;
+  const canCombineBranches = additionalBranches.length > 0;
 
-  if (branches.length <= 1) {
-    return null;
-  }
+  useEffect(() => {
+    if (!canCombineBranches && combineBranches) {
+      onCombineBranchesChange(false);
+    }
+  }, [canCombineBranches, combineBranches, onCombineBranchesChange]);
+
+  useEffect(() => {
+    if (branchId && !additionalBranches.some((branch) => branch.id === branchId)) {
+      onBranchIdChange("");
+    }
+  }, [additionalBranches, branchId, onBranchIdChange]);
 
   return (
     <>
@@ -32,8 +49,12 @@ export const BranchScopeControl = ({
           onChange={(event) => onBranchIdChange(event.target.value)}
           value={branchId}
         >
-          <option value="">Current branch</option>
-          {branches.map((branch) => (
+          <option value="">
+            {currentBranch
+              ? `${currentBranch.name} (${currentBranch.code})`
+              : "Current branch"}
+          </option>
+          {additionalBranches.map((branch) => (
             <option key={branch.id} value={branch.id}>
               {branch.name} ({branch.code})
             </option>
@@ -41,13 +62,37 @@ export const BranchScopeControl = ({
         </select>
       </label>
 
-      <label className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+      <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
+        Scope
         <input
           checked={combineBranches}
+          className="sr-only"
+          disabled={!canCombineBranches}
           onChange={(event) => onCombineBranchesChange(event.target.checked)}
           type="checkbox"
         />
-        <span>Combined branches</span>
+        <span
+          className={cn(
+            "flex h-[52px] min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 text-sm font-medium transition",
+            canCombineBranches
+              ? "cursor-pointer text-slate-700"
+              : "cursor-not-allowed bg-slate-50 text-slate-400",
+          )}
+        >
+          <span
+            className={cn(
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
+              combineBranches
+                ? "border-teal-500 bg-teal-500"
+                : "border-slate-300 bg-white",
+            )}
+          >
+            {combineBranches ? (
+              <span className="h-2.5 w-2.5 rounded-[3px] bg-white" />
+            ) : null}
+          </span>
+          <span className="truncate">Combined branches</span>
+        </span>
       </label>
     </>
   );

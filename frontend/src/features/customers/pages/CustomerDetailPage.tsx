@@ -3,14 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import {
   formatCurrency,
@@ -39,6 +37,9 @@ import {
 } from "../api/customers";
 import { CustomerFormModal } from "../components/CustomerFormModal";
 import { CustomerPaymentModal } from "../components/CustomerPaymentModal";
+
+const compactStatCardClassName =
+  "min-w-0 rounded-[22px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))] px-4 py-4 shadow-[0_18px_44px_-38px_rgba(15,23,42,0.2)]";
 
 export const CustomerDetailPage = () => {
   const { id = "" } = useParams();
@@ -177,6 +178,26 @@ export const CustomerDetailPage = () => {
     ? paymentsQuery.data?.items ?? customer.recentPayments
     : [];
   const dueBills = purchases.filter((bill) => Number(bill.dueAmount) > 0);
+  const statCards = [
+    { label: "Total bills", value: customer.summary.totalBills },
+    {
+      label: "Total purchases",
+      value: formatCurrency(customer.summary.totalPurchaseAmount),
+    },
+    {
+      label: "Total due",
+      tone: Number(customer.summary.totalDueAmount) > 0 ? "warning" : "default",
+      value: formatCurrency(customer.summary.totalDueAmount),
+    },
+    {
+      label: "Last purchase",
+      value: formatDate(customer.summary.lastPurchaseDate),
+    },
+    {
+      label: "Payments received",
+      value: formatCurrency(customer.summary.totalPaymentsReceived),
+    },
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -209,16 +230,12 @@ export const CustomerDetailPage = () => {
             ) : null}
           </>
         }
-        description="Customer profile, purchase visibility, and payment history stay together so billing follow-up remains fast and reliable."
         eyebrow="Customer profile"
         title={customer.fullName}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1.8fr]">
-        <SectionCard
-          description="Profile details remain compact but ready for daily billing and follow-up work."
-          title="Profile summary"
-        >
+      <div className="grid gap-4 xl:grid-cols-[1.18fr_1.82fr]">
+        <SectionCard contentClassName="pt-1" title="Profile summary">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={customer.status} />
@@ -283,45 +300,28 @@ export const CustomerDetailPage = () => {
           </div>
         </SectionCard>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            hint="Completed bills linked to this customer"
-            label="Total bills"
-            value={customer.summary.totalBills}
-          />
-          <SummaryCard
-            hint="Lifetime billed value"
-            label="Total purchases"
-            value={formatCurrency(customer.summary.totalPurchaseAmount)}
-          />
-          <SummaryCard
-            hint="Outstanding amount across completed bills"
-            label="Total due"
-            tone={Number(customer.summary.totalDueAmount) > 0 ? "warning" : "default"}
-            value={formatCurrency(customer.summary.totalDueAmount)}
-          />
-          <SummaryCard
-            hint="Latest completed purchase date"
-            label="Last purchase"
-            value={formatDate(customer.summary.lastPurchaseDate)}
-          />
-          <SummaryCard
-            hint="Recorded customer receipts"
-            label="Payments received"
-            value={formatCurrency(customer.summary.totalPaymentsReceived)}
-          />
-          <SummaryCard
-            hint="Most recent recorded payment"
-            label="Last payment"
-            value={formatDate(customer.summary.lastPaymentDate)}
-          />
+        <div className="grid auto-rows-min gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {statCards.map((card) => (
+            <article
+              className={`${compactStatCardClassName} ${
+                ("tone" in card && card.tone === "warning")
+                  ? "border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.94))]"
+                  : ""
+              }`}
+              key={card.label}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                {card.label}
+              </p>
+              <p className="mt-2 break-words text-[1.28rem] font-semibold tracking-tight text-slate-950 md:text-[1.5rem]">
+                {card.value}
+              </p>
+            </article>
+          ))}
         </div>
       </div>
 
-      <SectionCard
-        description="Previous bills stay easy to review for repeat orders, due follow-up, and service context."
-        title="Purchase history"
-      >
+      <SectionCard contentClassName="pt-1" title="Purchase history">
         {purchasesQuery.isLoading && !purchasesQuery.data ? (
           <LoadingState title="Loading purchase history" />
         ) : purchases.length ? (
@@ -430,18 +430,20 @@ export const CustomerDetailPage = () => {
             ) : null}
           </div>
         ) : (
-          <EmptyState
-            description="Completed bills for this customer will appear here."
-            title="No purchase history yet"
-          />
+          <div className="rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,251,0.96))] px-6 py-8 text-center shadow-[0_20px_44px_-40px_rgba(15,23,42,0.22)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm shadow-slate-200/80">
+              <span className="text-base font-semibold text-slate-500">i</span>
+            </div>
+            <h3 className="mt-4 text-base font-semibold text-slate-900">No purchase history yet</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              Completed bills for this customer will appear here.
+            </p>
+          </div>
         )}
       </SectionCard>
 
       {canViewPayments ? (
-        <SectionCard
-          description="Payment records stay transparent with method, operator, and linked bill allocation details."
-          title="Payment history"
-        >
+        <SectionCard contentClassName="pt-1" title="Payment history">
         {paymentsQuery.isLoading && !paymentsQuery.data ? (
           <LoadingState title="Loading payment history" />
         ) : payments.length ? (
@@ -548,10 +550,15 @@ export const CustomerDetailPage = () => {
             ) : null}
           </div>
         ) : (
-          <EmptyState
-            description="Recorded customer receipts will appear here."
-            title="No payments recorded yet"
-          />
+          <div className="rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,251,0.96))] px-6 py-8 text-center shadow-[0_20px_44px_-40px_rgba(15,23,42,0.22)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm shadow-slate-200/80">
+              <span className="text-base font-semibold text-slate-500">i</span>
+            </div>
+            <h3 className="mt-4 text-base font-semibold text-slate-900">No payments recorded yet</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              Recorded customer receipts will appear here.
+            </p>
+          </div>
         )}
         </SectionCard>
       ) : null}

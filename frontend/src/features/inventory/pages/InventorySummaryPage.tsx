@@ -1,10 +1,10 @@
 import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { Eye } from "lucide-react";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
@@ -22,6 +22,7 @@ import { StockAdjustmentModal } from "../components/StockAdjustmentModal";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const compactFieldClassName = `${inputClassName} h-12`;
 const inventoryRefreshIntervalMs = 300000;
 
 export const InventorySummaryPage = () => {
@@ -126,86 +127,58 @@ export const InventorySummaryPage = () => {
     <div className="space-y-6">
       <PageHeader
         actions={
-          <>
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
             <Link
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="shrink-0 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               to="/app/inventory/low-stock"
             >
               Low stock view
             </Link>
             <Link
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="shrink-0 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               to="/app/inventory/expiry"
             >
               Expiry report
             </Link>
             <button
-              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="shrink-0 whitespace-nowrap rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
               onClick={() => setAdjustmentMedicineId("")}
               type="button"
             >
               Stock adjustment
             </button>
-          </>
+          </div>
         }
-        description="Track medicine-level stock availability, reorder readiness, and active batch coverage in one compact operational view."
+        className="py-4"
         eyebrow="Inventory control"
         title="Inventory Summary"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          hint="Matching medicines in the current result set"
           label="Medicines"
           value={pagination?.total ?? 0}
         />
         <SummaryCard
-          hint="Low stock medicines on this page"
           label="Low stock visible"
           tone={lowStockCount > 0 ? "danger" : "accent"}
           value={lowStockCount}
         />
         <SummaryCard
-          hint="Total available quantity on screen"
           label="Visible stock"
           value={formatNumber(visibleStock)}
         />
         <SummaryCard
-          hint="Active batches represented on screen"
           label="Active batches"
           value={formatNumber(visibleBatches)}
         />
       </div>
 
-
-      <FilterBar
-        actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setCategoryId("");
-              setManufacturerId("");
-              setLowStockOnly("all");
-              setMedicineStatus("");
-              setBatchStatus("");
-              setSortBy("medicineName");
-              setSortOrder("asc");
-              setPage(1);
-            }}
-            type="button"
-          >
-            Clear filters
-          </button>
-        }
-        description="Keep stock search, risk filters, and sort controls visible without making the page feel heavy."
-        title="Inventory filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -218,7 +191,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Category
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setCategoryId(event.target.value);
                 setPage(1);
@@ -237,7 +210,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Manufacturer
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setManufacturerId(event.target.value);
                 setPage(1);
@@ -256,7 +229,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Low stock
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setLowStockOnly(event.target.value as "all" | "only");
                 setPage(1);
@@ -271,7 +244,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Medicine status
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setMedicineStatus(event.target.value as typeof medicineStatus);
                 setPage(1);
@@ -287,7 +260,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Batch status
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setBatchStatus(event.target.value as typeof batchStatus);
                 setPage(1);
@@ -304,7 +277,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortBy(event.target.value as typeof sortBy);
                 setPage(1);
@@ -321,7 +294,7 @@ export const InventorySummaryPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Order
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortOrder(event.target.value as "asc" | "desc");
                 setPage(1);
@@ -332,13 +305,27 @@ export const InventorySummaryPage = () => {
               <option value="desc">Descending</option>
             </select>
           </label>
-        </div>
-      </FilterBar>
 
-      <SectionCard
-        description="A practical stock register for daily refill and control decisions."
-        title="Inventory register"
-      >
+          <button
+            className="h-12 rounded-2xl border border-slate-200 px-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setCategoryId("");
+              setManufacturerId("");
+              setLowStockOnly("all");
+              setMedicineStatus("");
+              setBatchStatus("");
+              setSortBy("medicineName");
+              setSortOrder("asc");
+              setPage(1);
+            }}
+            type="button"
+          >
+            Clear filters
+          </button>
+      </div>
+
+      <SectionCard contentClassName="pt-1" title="Inventory register">
         {items.length ? (
           <div className="space-y-4">
             <div className="grid gap-3 xl:hidden">
@@ -358,14 +345,6 @@ export const InventorySummaryPage = () => {
                           tone={item.isLowStock ? "low_stock" : "safe"}
                         />
                       </div>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.medicine.genericName}
-                      </p>
-                      {item.medicine.barcode ? (
-                        <p className="mt-1 text-xs font-medium text-slate-500">
-                          Barcode: {item.medicine.barcode}
-                        </p>
-                      ) : null}
                     </div>
                     <p className="text-base font-semibold text-slate-950">
                       {formatNumber(item.availableQuantity)}
@@ -397,10 +376,11 @@ export const InventorySummaryPage = () => {
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Link
-                      className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                      className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                       to={`/app/inventory/${item.medicine.id}`}
+                      title="View detail"
                     >
-                      View detail
+                      <Eye className="h-4 w-4" />
                     </Link>
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
@@ -432,50 +412,43 @@ export const InventorySummaryPage = () => {
                 <tbody>
                   {items.map((item) => (
                     <tr className="rounded-3xl bg-slate-50" key={item.medicine.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
+                      <td className="rounded-l-3xl px-4 py-3">
                         <div>
                           <p className="font-semibold text-slate-950">
                             {item.medicine.medicineName}
                           </p>
-                          <p className="mt-1 text-sm text-slate-600">
-                            {item.medicine.genericName}
-                          </p>
-                          {item.medicine.barcode ? (
-                            <p className="mt-1 text-xs font-medium text-slate-500">
-                              Barcode: {item.medicine.barcode}
-                            </p>
-                          ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
+                      <td className="px-4 py-3 text-sm text-slate-700">{item.category.name}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
                         {item.manufacturer.name}
                       </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-950">
                         {formatNumber(item.availableQuantity)}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
+                      <td className="px-4 py-3 text-sm text-slate-700">
                         {formatNumber(item.reorderLevel)}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3">
                         <StatusBadge
                           label={item.isLowStock ? "Low Stock" : "Safe"}
                           tone={item.isLowStock ? "low_stock" : "safe"}
                         />
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
+                      <td className="px-4 py-3 text-sm text-slate-700">
                         {formatNumber(item.activeBatchCount)}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3">
                         <StatusBadge label={item.medicine.status} />
                       </td>
-                      <td className="rounded-r-3xl px-4 py-4">
+                      <td className="rounded-r-3xl px-4 py-3">
                         <div className="flex justify-end gap-2">
                           <Link
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                            className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                             to={`/app/inventory/${item.medicine.id}`}
+                            title="View detail"
                           >
-                            View detail
+                            <Eye className="h-4 w-4" />
                           </Link>
                           <button
                             className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"

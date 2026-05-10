@@ -16,6 +16,7 @@ interface ReportPeriodControlProps {
   onCustomDateFromChange: (value: string) => void;
   onCustomDateToChange: (value: string) => void;
   inputClassName: string;
+  wrapperClassName?: string;
 }
 
 export const ReportPeriodControl = ({
@@ -30,8 +31,9 @@ export const ReportPeriodControl = ({
   onCustomDateFromChange,
   onCustomDateToChange,
   inputClassName,
+  wrapperClassName,
 }: ReportPeriodControlProps) => (
-  <div className="grid gap-3 xl:col-span-4">
+  <div className={cn("grid gap-3", wrapperClassName)}>
     <div className="flex flex-wrap gap-2">
       {[
         ["daily", "Daily"],

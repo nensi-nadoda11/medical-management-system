@@ -1,4 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  BadgeIndianRupee,
+  BarChart3,
+  ChevronDown,
+  ClipboardPlus,
+  Clock3,
+  FilePlus2,
+  HandCoins,
+  LayoutGrid,
+  PackagePlus,
+  PillBottle,
+  ShoppingCart,
+  Sparkles,
+  TriangleAlert,
+  UserPlus,
+} from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -8,6 +26,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { canAccessModule } from "../../../types/auth";
 import { billingQueryKeys, listBills } from "../../billing/api/billing";
 import { useSessionQuery } from "../../auth/hooks/use-session";
+import { customersQueryKeys, listCustomers } from "../../customers/api/customers";
 import {
   accountingQueryKeys,
   listAccountingCustomerPayments,
@@ -29,6 +48,7 @@ import {
   getProfitReport,
   getReportsDashboardSummary,
   getSalesReport,
+  getStockReport,
   reportsQueryKeys,
 } from "../../reports/api/reports";
 import {
@@ -48,6 +68,7 @@ import {
   cn,
   formatCurrency,
   formatDate,
+  formatDateTime,
   formatNumber,
   getDaysUntil,
 } from "../../../lib/utils";
@@ -76,6 +97,21 @@ const isPresent = <T,>(value: T | null | undefined): value is T => value !== nul
 
 const describeDelta = (value: number, label: string) =>
   `${formatNumber(value)} ${label}${value === 1 ? "" : "s"}`;
+
+const calculateChange = (current: number, previous: number) => {
+  if (previous === 0) {
+    return current > 0 ? 100 : 0;
+  }
+
+  return ((current - previous) / previous) * 100;
+};
+
+const formatChange = (current: number, previous: number) => {
+  const change = calculateChange(current, previous);
+  const prefix = change >= 0 ? "+" : "";
+
+  return `${prefix}${change.toFixed(1)}%`;
+};
 
 const defaultDashboardSummary = {
   todaySales: {
@@ -130,6 +166,8 @@ const defaultOutstandingSuppliersSummary = {
   totalAdvanceAmount: "0.00",
 };
 
+type SalesOverviewPeriod = "today" | "week" | "month";
+
 const renderSectionError = (message: string) => (
   <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
     {message}
@@ -137,6 +175,7 @@ const renderSectionError = (message: string) => (
 );
 
 export const DashboardHomePage = () => {
+  const [adminSalesPeriod, setAdminSalesPeriod] = useState<SalesOverviewPeriod>("week");
   const sessionQuery = useSessionQuery();
   const session = sessionQuery.data;
   const shop = session?.shop;
@@ -151,6 +190,10 @@ export const DashboardHomePage = () => {
   });
   const canViewPayments = canAccessModule(user, {
     permissions: ["payments.view"],
+    permissionMode: "all",
+  });
+  const canViewCustomers = canAccessModule(user, {
+    permissions: ["customers.view"],
     permissionMode: "all",
   });
   const canCreateBills = canAccessModule(user, {
@@ -187,6 +230,34 @@ export const DashboardHomePage = () => {
   const todayParam = toDateParam(todayStart);
   const monthStartParam = toDateParam(monthStart);
   const weekStartParam = toDateParam(weekStart);
+  const salesOverviewPeriodConfig: Record<
+    SalesOverviewPeriod,
+    {
+      dateFrom: string;
+      dateTo: string;
+      label: string;
+      pageSize: number;
+    }
+  > = {
+    today: {
+      dateFrom: todayParam,
+      dateTo: todayParam,
+      label: "Today",
+      pageSize: 1,
+    },
+    week: {
+      dateFrom: weekStartParam,
+      dateTo: todayParam,
+      label: "This Week",
+      pageSize: 7,
+    },
+    month: {
+      dateFrom: monthStartParam,
+      dateTo: todayParam,
+      label: "This Month",
+      pageSize: 31,
+    },
+  };
 
   const notificationsSummaryQuery = useQuery({
     queryKey: notificationsQueryKeys.summary,
@@ -215,6 +286,21 @@ export const DashboardHomePage = () => {
     queryKey: reportsQueryKeys.sales(salesInsightsParams),
     queryFn: () => getSalesReport(salesInsightsParams),
     enabled: canViewReports,
+    staleTime: 60_000,
+  });
+  const adminSalesOverviewParams = {
+    dateFrom: salesOverviewPeriodConfig[adminSalesPeriod].dateFrom,
+    dateTo: salesOverviewPeriodConfig[adminSalesPeriod].dateTo,
+    groupBy: "day" as const,
+    page: 1,
+    pageSize: salesOverviewPeriodConfig[adminSalesPeriod].pageSize,
+    sortBy: "completedAt" as const,
+    sortOrder: "desc" as const,
+  };
+  const adminSalesOverviewQuery = useQuery({
+    queryKey: reportsQueryKeys.sales(adminSalesOverviewParams),
+    queryFn: () => getSalesReport(adminSalesOverviewParams),
+    enabled: canViewReports && user?.role === "admin",
     staleTime: 60_000,
   });
 
@@ -277,6 +363,19 @@ export const DashboardHomePage = () => {
     staleTime: 60_000,
   });
 
+  const stockOverviewParams = {
+    page: 1,
+    pageSize: 1,
+    sortBy: "medicineName" as const,
+    sortOrder: "asc" as const,
+  };
+  const stockOverviewQuery = useQuery({
+    queryKey: reportsQueryKeys.stock(stockOverviewParams),
+    queryFn: () => getStockReport(stockOverviewParams),
+    enabled: canViewInventory,
+    staleTime: 60_000,
+  });
+
   const customerDueParams = {
     page: 1,
     pageSize: 5,
@@ -330,6 +429,19 @@ export const DashboardHomePage = () => {
     queryKey: billingQueryKeys.list(todayBillsParams),
     queryFn: () => listBills(todayBillsParams),
     enabled: canViewBilling && !canViewReports,
+    staleTime: 60_000,
+  });
+
+  const recentCustomersParams = {
+    page: 1,
+    pageSize: 50,
+    sortBy: "createdAt" as const,
+    sortOrder: "desc" as const,
+  };
+  const recentCustomersQuery = useQuery({
+    queryKey: customersQueryKeys.list(recentCustomersParams),
+    queryFn: () => listCustomers(recentCustomersParams),
+    enabled: canViewCustomers,
     staleTime: 60_000,
   });
 
@@ -437,7 +549,7 @@ export const DashboardHomePage = () => {
 
   const stockTransactionParams = {
     page: 1,
-    pageSize: 4,
+    pageSize: 40,
     sortBy: "createdAt" as const,
     sortOrder: "desc" as const,
   };
@@ -469,6 +581,11 @@ export const DashboardHomePage = () => {
     ...(salesInsightsQuery.data?.summary ?? {}),
   };
   const salesTrend = salesInsightsQuery.data?.trend ?? [];
+  const adminSalesOverviewSummary = {
+    ...defaultSalesSummary,
+    ...(adminSalesOverviewQuery.data?.summary ?? {}),
+  };
+  const adminSalesOverviewTrend = adminSalesOverviewQuery.data?.trend ?? [];
   const profitMonthSummary = {
     ...defaultProfitSummary,
     ...(profitMonthQuery.data?.summary ?? {}),
@@ -501,6 +618,11 @@ export const DashboardHomePage = () => {
 
   const salesTrendPoints: TrendPoint[] =
     salesTrend.map((item) => ({
+      label: toPeriodLabel(item.periodStart),
+      value: parseMoney(item.totalSales),
+    })) ?? [];
+  const adminSalesTrendPoints: TrendPoint[] =
+    adminSalesOverviewTrend.map((item) => ({
       label: toPeriodLabel(item.periodStart),
       value: parseMoney(item.totalSales),
     })) ?? [];
@@ -781,6 +903,199 @@ export const DashboardHomePage = () => {
     todaySupplierPaymentsQuery.data?.summary.totalAmount ?? "0.00";
   const todaySupplierPaymentsCount =
     todaySupplierPaymentsQuery.data?.summary.totalPayments ?? 0;
+  const todayCustomerCount = (recentCustomersQuery.data?.items ?? []).filter(
+    (item) => toDateParam(new Date(item.createdAt)) === todayParam,
+  ).length;
+  const yesterdayDate = new Date(todayStart);
+  yesterdayDate.setDate(todayStart.getDate() - 1);
+  const yesterdayParam = toDateParam(yesterdayDate);
+  const yesterdayCustomerCount = (recentCustomersQuery.data?.items ?? []).filter(
+    (item) => toDateParam(new Date(item.createdAt)) === yesterdayParam,
+  ).length;
+
+  const orderedSalesTrend = [...salesTrend].sort(
+    (left, right) =>
+      new Date(left.periodStart).getTime() - new Date(right.periodStart).getTime(),
+  );
+  const orderedProfitTrend = [...profitMonthTrend].sort(
+    (left, right) =>
+      new Date(left.periodStart).getTime() - new Date(right.periodStart).getTime(),
+  );
+  const latestSalesTrend = orderedSalesTrend.at(-1);
+  const previousSalesTrend = orderedSalesTrend.at(-2);
+  const latestProfitTrend = orderedProfitTrend.at(-1);
+  const previousProfitTrend = orderedProfitTrend.at(-2);
+  const totalInventoryItems = stockOverviewQuery.data?.summary.totalMedicines ?? 0;
+  const inventoryNearExpiry = nearExpiryTotal;
+  const inventoryLowStock = lowStockTotal;
+  const inventoryOutOfStock = Math.max(
+    totalInventoryItems - Math.max(totalInventoryItems - inventoryLowStock - inventoryNearExpiry, 0) - inventoryLowStock - inventoryNearExpiry,
+    0,
+  );
+  const inventoryInStock = Math.max(
+    totalInventoryItems - inventoryLowStock - inventoryNearExpiry - inventoryOutOfStock,
+    0,
+  );
+  const inventoryLegend = [
+    { label: "In Stock", value: inventoryInStock, color: "#4ade80" },
+    { label: "Low Stock", value: inventoryLowStock, color: "#fbbf24" },
+    { label: "Near Expiry", value: inventoryNearExpiry, color: "#fb7185" },
+    { label: "Out of Stock", value: inventoryOutOfStock, color: "#cbd5e1" },
+  ];
+  const inventoryLegendTotal = inventoryLegend.reduce((sum, item) => sum + item.value, 0);
+  const inventoryChartStops = inventoryLegend.reduce<string[]>((stops, item, index) => {
+    const before = inventoryLegend
+      .slice(0, index)
+      .reduce((sum, entry) => sum + entry.value, 0);
+    const start = inventoryLegendTotal > 0 ? (before / inventoryLegendTotal) * 100 : 0;
+    const end =
+      inventoryLegendTotal > 0
+        ? ((before + item.value) / inventoryLegendTotal) * 100
+        : start;
+
+    if (start === end) {
+      return stops;
+    }
+
+    return [...stops, `${item.color} ${start}% ${end}%`];
+  }, []);
+
+  const topSellingMedicines = Object.values(
+    (stockTransactionsQuery.data?.items ?? []).reduce<
+      Record<
+        string,
+        {
+          medicineId: string;
+          medicineName: string;
+          quantity: number;
+        }
+      >
+    >((accumulator, item) => {
+      if (item.transactionType !== "sale_out" || item.quantityOut <= 0) {
+        return accumulator;
+      }
+
+      const current = accumulator[item.medicine.id] ?? {
+        medicineId: item.medicine.id,
+        medicineName: item.medicine.medicineName,
+        quantity: 0,
+      };
+
+      current.quantity += item.quantityOut;
+      accumulator[item.medicine.id] = current;
+
+      return accumulator;
+    }, {}),
+  )
+    .sort((left, right) => right.quantity - left.quantity)
+    .slice(0, 5);
+
+  const adminStatCards = [
+    canViewReports
+      ? {
+          label: "Today's Sales",
+          value: formatCurrency(todaySalesAmount),
+          change: formatChange(
+            parseMoney(latestSalesTrend?.totalSales ?? todaySalesAmount),
+            parseMoney(previousSalesTrend?.totalSales ?? 0),
+          ),
+          changeTone: "positive" as const,
+          note: "vs yesterday",
+          icon: <BadgeIndianRupee className="h-6 w-6" />,
+          iconClassName: "bg-violet-50 text-violet-600",
+        }
+      : null,
+    canViewReports
+      ? {
+          label: "Today's Profit",
+          value: formatCurrency(profitTodaySummary.profit),
+          change: formatChange(
+            parseMoney(latestProfitTrend?.profit ?? profitTodaySummary.profit),
+            parseMoney(previousProfitTrend?.profit ?? 0),
+          ),
+          changeTone: "positive" as const,
+          note: "vs yesterday",
+          icon: <Sparkles className="h-6 w-6" />,
+          iconClassName: "bg-emerald-50 text-emerald-600",
+        }
+      : null,
+    canViewBilling
+      ? {
+          label: "Invoices Created",
+          value: formatNumber(todayBillsCount),
+          change: formatChange(
+            todayBillsCount,
+            previousSalesTrend?.totalBills ?? 0,
+          ),
+          changeTone: "positive" as const,
+          note: "vs yesterday",
+          icon: <FilePlus2 className="h-6 w-6" />,
+          iconClassName: "bg-sky-50 text-sky-600",
+        }
+      : null,
+    canViewCustomers
+      ? {
+          label: "New Customers",
+          value: formatNumber(todayCustomerCount),
+          change: formatChange(todayCustomerCount, yesterdayCustomerCount),
+          changeTone: "positive" as const,
+          note: "vs yesterday",
+          icon: <UserPlus className="h-6 w-6" />,
+          iconClassName: "bg-amber-50 text-amber-500",
+        }
+      : null,
+  ].filter(isPresent);
+
+  const dashboardShortcuts = [
+    canCreateBills
+      ? {
+          label: "New Sale",
+          to: "/app/billing",
+          icon: <ShoppingCart className="h-6 w-6" />,
+          tileClassName: "bg-emerald-50 text-emerald-600",
+        }
+      : null,
+    canViewCustomers
+      ? {
+          label: "Add Customer",
+          to: "/app/customers",
+          icon: <UserPlus className="h-6 w-6" />,
+          tileClassName: "bg-violet-50 text-violet-600",
+        }
+      : null,
+    canViewInventory
+      ? {
+          label: "New Purchase",
+          to: "/app/purchases",
+          icon: <PackagePlus className="h-6 w-6" />,
+          tileClassName: "bg-sky-50 text-sky-600",
+        }
+      : null,
+    canViewInventory
+      ? {
+          label: "Stock Transfer",
+          to: "/app/inventory/transfers",
+          icon: <ArrowRight className="h-6 w-6" />,
+          tileClassName: "bg-amber-50 text-amber-500",
+        }
+      : null,
+    canViewReports
+      ? {
+          label: "Sales Report",
+          to: "/app/reports/sales",
+          icon: <BarChart3 className="h-6 w-6" />,
+          tileClassName: "bg-rose-50 text-rose-500",
+        }
+      : null,
+    canViewInventory
+      ? {
+          label: "Expiry Report",
+          to: "/app/inventory/expiry",
+          icon: <Clock3 className="h-6 w-6" />,
+          tileClassName: "bg-indigo-50 text-indigo-500",
+        }
+      : null,
+  ].filter(isPresent);
 
   const staffTopMetrics = [
     canViewBilling
@@ -1374,6 +1689,365 @@ export const DashboardHomePage = () => {
             )}
           </SectionCard>
         ) : null}
+      </div>
+    );
+  }
+
+  if (user.role === "admin") {
+    const topMedicineMax = topSellingMedicines[0]?.quantity ?? 1;
+
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col gap-4 rounded-[30px] border border-white/75 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.1),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] px-5 py-4 shadow-[0_28px_72px_-48px_rgba(15,23,42,0.24)] lg:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h1 className="text-[2rem] font-semibold tracking-tight text-slate-950">
+                {shop.name}
+              </h1>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <StatusBadge label={user.role} tone={user.role} />
+              <Link
+                className="ui-btn ui-btn--primary !min-h-[2.8rem] !rounded-[18px] !px-4"
+                to={canCreateBills ? "/app/billing" : "/app/reports"}
+              >
+                <Sparkles className="h-4 w-4" />
+                Quick actions
+                <ChevronDown className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {!visibleSections ? (
+          <EmptyState
+            title="No dashboard modules available"
+            description="Your current role does not have any dashboard-enabled modules yet."
+          />
+        ) : null}
+
+        {adminStatCards.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {adminStatCards.map((card) => (
+              <article
+                className="rounded-[22px] border border-white/80 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.08),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.94))] px-4 py-3.5 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.22)]"
+                key={card.label}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[0.95rem] font-medium text-slate-500">{card.label}</p>
+                    <p className="mt-1.5 text-[1.75rem] font-semibold tracking-tight text-slate-950">
+                      {card.value}
+                    </p>
+                  </div>
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-[16px] ${card.iconClassName}`}
+                  >
+                    {card.icon}
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center gap-2 text-[13px]">
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      card.changeTone === "positive" ? "text-emerald-600" : "text-rose-500",
+                    )}
+                  >
+                    {card.change}
+                  </span>
+                  <span className="text-slate-500">{card.note}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr]">
+          <section className="flex flex-col overflow-hidden rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] p-5 shadow-[0_28px_60px_-46px_rgba(15,23,42,0.24)] xl:h-[28rem]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[1.4rem] font-semibold tracking-tight text-slate-950">
+                  Sales Overview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">Total Sales</p>
+                <p className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">
+                  {formatCurrency(adminSalesOverviewSummary.totalSales)}
+                </p>
+              </div>
+              <div className="relative shrink-0">
+                <select
+                  aria-label="Select sales overview period"
+                  className="ui-input min-w-[9.75rem] appearance-none !rounded-[14px] !py-2.5 !pl-3.5 !pr-10 text-sm font-semibold text-slate-700"
+                  onChange={(event) =>
+                    setAdminSalesPeriod(event.target.value as SalesOverviewPeriod)
+                  }
+                  value={adminSalesPeriod}
+                >
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              </div>
+            </div>
+
+            {adminSalesOverviewQuery.error ? (
+              <div className="flex-1 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-700">
+                {adminSalesOverviewQuery.error.message}
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1">
+                <TrendChart
+                  emptyLabel={`No sales data available for ${salesOverviewPeriodConfig[adminSalesPeriod].label.toLowerCase()}.`}
+                  points={adminSalesTrendPoints}
+                />
+              </div>
+            )}
+          </section>
+
+          <section className="self-start overflow-hidden rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] p-5 shadow-[0_28px_60px_-46px_rgba(15,23,42,0.24)] xl:h-[28rem]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[1.4rem] font-semibold tracking-tight text-slate-950">
+                  Inventory Health
+                </h2>
+              </div>
+              <Link
+                className="ui-btn ui-btn--secondary !min-h-[2.2rem] !rounded-[14px] !px-3"
+                to="/app/inventory"
+              >
+                View all
+              </Link>
+            </div>
+
+            {stockOverviewQuery.error ? (
+              <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-700">
+                {stockOverviewQuery.error.message}
+              </div>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-[220px_1fr] md:items-center">
+                <div className="mx-auto flex flex-col items-center justify-center">
+                  <div
+                    className="relative h-[190px] w-[190px] rounded-full"
+                    style={{
+                      background: `conic-gradient(${inventoryChartStops.length ? inventoryChartStops.join(", ") : "#e2e8f0 0% 100%"})`,
+                    }}
+                  >
+                    <div className="absolute inset-[28px] flex flex-col items-center justify-center rounded-full bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                      <p className="text-[2rem] font-semibold tracking-tight text-slate-950">
+                        {formatNumber(totalInventoryItems)}
+                      </p>
+                      <p className="text-sm text-slate-500">Total Items</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  {inventoryLegend.map((item) => (
+                    <div className="flex items-center justify-between gap-3" key={item.label}>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="h-3.5 w-3.5 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-base font-medium text-slate-700">
+                          {item.label}
+                        </span>
+                      </div>
+                      <span className="text-base font-semibold text-slate-950">
+                        {formatNumber(item.value)}{" "}
+                        <span className="text-slate-500">
+                          ({inventoryLegendTotal > 0 ? Math.round((item.value / inventoryLegendTotal) * 100) : 0}%)
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[1.08fr_1fr_0.96fr]">
+          <section className="rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] p-5 shadow-[0_28px_60px_-46px_rgba(15,23,42,0.24)]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-950">
+                  Alerts & Notifications
+                </h2>
+              </div>
+              <Link
+                className="ui-btn ui-btn--secondary !min-h-[2.2rem] !rounded-[14px] !px-3"
+                to="/app/notifications"
+              >
+                View all
+              </Link>
+            </div>
+
+            {notificationsSummaryQuery.error ? (
+              <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-700">
+                {notificationsSummaryQuery.error.message}
+              </div>
+            ) : alerts.length ? (
+              <div className="ui-subtle-scrollbar grid max-h-[20.75rem] gap-[0.65rem] overflow-y-auto pr-1.5">
+                {alerts.map((item) => (
+                  <Link
+                    className={cn(
+                      "block rounded-[20px] border px-3.5 py-3 transition hover:-translate-y-0.5",
+                      item.severity === "critical"
+                        ? "border-rose-200 bg-rose-50/60"
+                        : item.severity === "warning"
+                          ? "border-amber-200 bg-amber-50/60"
+                          : "border-sky-200 bg-sky-50/50",
+                    )}
+                    key={item.id}
+                    to={item.actionPath ?? "/app/notifications"}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <div
+                          className={cn(
+                            "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]",
+                            item.severity === "critical"
+                              ? "bg-rose-100 text-rose-500"
+                              : item.severity === "warning"
+                                ? "bg-amber-100 text-amber-500"
+                                : "bg-sky-100 text-sky-500",
+                          )}
+                        >
+                          {item.severity === "critical" ? (
+                            <TriangleAlert className="h-5 w-5" />
+                          ) : item.severity === "warning" ? (
+                            <PillBottle className="h-5 w-5" />
+                          ) : (
+                            <ClipboardPlus className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-950">
+                              {item.title}
+                            </p>
+                            <span className="shrink-0 whitespace-nowrap pt-0.5 text-[11px] font-medium text-slate-500">
+                              {formatDateTime(item.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-600">
+                            {item.message}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <StatusBadge label={item.type} tone={item.type} />
+                            <StatusBadge label={item.severity} tone={item.severity} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="All caught up!"
+                description="You're all set. New alerts will appear here."
+              />
+            )}
+          </section>
+
+          <section className="rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] p-5 shadow-[0_28px_60px_-46px_rgba(15,23,42,0.24)]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-950">
+                  Top Selling Medicines
+                </h2>
+              </div>
+              <Link
+                className="ui-btn ui-btn--secondary !min-h-[2.2rem] !rounded-[14px] !px-3"
+                to="/app/reports/sales"
+              >
+                This Month
+                <ChevronDown className="h-4 w-4" />
+              </Link>
+            </div>
+
+            {topSellingMedicines.length ? (
+              <div className="space-y-5">
+                {topSellingMedicines.map((item) => (
+                  <Link
+                    className="block"
+                    key={item.medicineId}
+                    to={`/app/inventory/${item.medicineId}`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-base font-semibold text-slate-900">
+                        {item.medicineName}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {formatNumber(item.quantity)} strips
+                      </p>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div
+                        className="h-2 rounded-full bg-[linear-gradient(90deg,#8b5cf6_0%,#c4b5fd_100%)]"
+                        style={{
+                          width: `${Math.max((item.quantity / topMedicineMax) * 100, 8)}%`,
+                        }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No medicine trend yet"
+                description="Recent sale-out stock movements will appear here once billing activity is available."
+              />
+            )}
+          </section>
+
+          <section className="rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.95))] p-5 shadow-[0_28px_60px_-46px_rgba(15,23,42,0.24)]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-950">
+                  Quick Shortcuts
+                </h2>
+              </div>
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] bg-slate-50 text-slate-500">
+                <LayoutGrid className="h-5 w-5" />
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {dashboardShortcuts.map((shortcut) => (
+                <Link
+                  className="rounded-[22px] border border-slate-100 bg-white/92 p-4 text-center shadow-[0_20px_44px_-40px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:border-slate-200"
+                  key={shortcut.label}
+                  to={shortcut.to}
+                >
+                  <div
+                    className={`mx-auto flex h-16 w-16 items-center justify-center rounded-[18px] ${shortcut.tileClassName}`}
+                  >
+                    {shortcut.icon}
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-slate-900">
+                    {shortcut.label}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-[24px] border border-white/70 bg-white/80 px-5 py-4 text-sm text-slate-500 shadow-[0_18px_44px_-40px_rgba(15,23,42,0.18)] md:flex-row md:items-center md:justify-between">
+          <p>© 2026 {shop.name}. All rights reserved.</p>
+          <div className="flex items-center gap-6">
+            <span>Version 1.0.0</span>
+            <span className="inline-flex items-center gap-2">
+              <HandCoins className="h-4 w-4" />
+              Need help?
+            </span>
+          </div>
+        </div>
       </div>
     );
   }

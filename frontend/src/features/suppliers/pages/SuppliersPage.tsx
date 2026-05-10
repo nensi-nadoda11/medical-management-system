@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Ban, Check, Pencil } from "lucide-react";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { ErrorState } from "../../../components/ui/ErrorState";
@@ -8,10 +8,9 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { ResponsiveDataList } from "../../../components/ui/ResponsiveDataList";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDateTime } from "../../../lib/utils";
+import { formatCurrency } from "../../../lib/utils";
 import type { MasterStatus } from "../../../types/medicine";
 import type { SaveSupplierPayload, Supplier } from "../../../types/supplier";
 import {
@@ -25,6 +24,7 @@ import { SupplierFormModal } from "../components/SupplierFormModal";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const compactFieldClassName = `${inputClassName} h-12 py-2 text-sm leading-6`;
 
 type StatusFilter = MasterStatus | "all";
 
@@ -64,7 +64,10 @@ export const SuppliersPage = () => {
   const summary = {
     totalSuppliers: suppliersQuery.data?.pagination.total ?? 0,
     activeOnScreen: suppliers.filter((item) => item.status === "active").length,
-    withGst: suppliers.filter((item) => item.gstNumber).length,
+    totalDueOnScreen: suppliers.reduce(
+      (sum, item) => sum + Math.max(Number(item.openingBalance), 0),
+      0,
+    ),
     openingBalanceOnScreen: suppliers.reduce(
       (sum, item) => sum + Number(item.openingBalance),
       0,
@@ -135,7 +138,7 @@ export const SuppliersPage = () => {
             Add supplier
           </button>
         }
-        description="Manage supplier contacts, compliance details, and opening balances in a clean purchasing-ready workspace."
+        className="py-4"
         eyebrow="Procurement master"
         title="Supplier Management"
       />
@@ -143,103 +146,92 @@ export const SuppliersPage = () => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           ["Suppliers", summary.totalSuppliers],
-          ["Active on screen", summary.activeOnScreen],
-          ["GST captured", summary.withGst],
-          [
-            "Visible opening balance",
-            formatCurrency(summary.openingBalanceOnScreen),
-          ],
+          ["Active", summary.activeOnScreen],
+          ["Total due", formatCurrency(summary.totalDueOnScreen)],
+          ["Opening balance", formatCurrency(summary.openingBalanceOnScreen)],
         ].map(([label, value]) => (
           <article
-            className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60"
+            className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-200/60"
             key={label}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               {label}
             </p>
-            <p className="mt-2.5 text-[2rem] font-semibold tracking-tight text-slate-950">
+            <p className="mt-1.5 text-[1.75rem] font-semibold tracking-tight text-slate-950">
               {value}
             </p>
           </article>
         ))}
       </div>
 
-      <FilterBar
-        description="Quick filters keep supplier review fast without turning the page into a cluttered admin form."
-        title="Supplier filters"
-        actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setStatusFilter("all");
-              setSortBy("supplierName");
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center">
+        <label className="block min-w-0">
+          <span className="sr-only">Search suppliers</span>
+          <input
+            className={`${compactFieldClassName} w-full`}
+            onChange={(event) => {
+              setSearch(event.target.value);
               setPage(1);
             }}
-            type="button"
+            placeholder="Search suppliers"
+            value={search}
+          />
+        </label>
+
+        <label className="block min-w-0">
+          <span className="sr-only">Status</span>
+          <select
+            className={`${compactFieldClassName} w-full`}
+            onChange={(event) => {
+              setStatusFilter(event.target.value as StatusFilter);
+              setPage(1);
+            }}
+            value={statusFilter}
           >
-            Clear filters
-          </button>
-        }
-      >
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search suppliers
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by supplier name or mobile number"
-              value={search}
-            />
-          </label>
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Status
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setStatusFilter(event.target.value as StatusFilter);
-                setPage(1);
-              }}
-              value={statusFilter}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </label>
+        <label className="block min-w-0">
+          <span className="sr-only">Sort by</span>
+          <select
+            className={`${compactFieldClassName} w-full`}
+            onChange={(event) => {
+              setSortBy(event.target.value as "supplierName" | "updatedAt");
+              setPage(1);
+            }}
+            value={sortBy}
+          >
+            <option value="supplierName">Supplier name</option>
+            <option value="updatedAt">Last updated</option>
+          </select>
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Sort by
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortBy(event.target.value as "supplierName" | "updatedAt");
-                setPage(1);
-              }}
-              value={sortBy}
-            >
-              <option value="supplierName">Supplier name</option>
-              <option value="updatedAt">Last updated</option>
-            </select>
-          </label>
-        </div>
-      </FilterBar>
+        <button
+          className="h-12 shrink-0 whitespace-nowrap rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          onClick={() => {
+            setSearch("");
+            setStatusFilter("all");
+            setSortBy("supplierName");
+            setPage(1);
+          }}
+          type="button"
+        >
+          Clear filters
+        </button>
+      </div>
 
-      <SectionCard
-        description="A polished operational view of supplier master data for day-to-day admin work."
-        title="Supplier directory"
-      >
+      <SectionCard title="Supplier directory">
         <ResponsiveDataList
           data={suppliers}
           isLoading={suppliersQuery.isLoading}
           keyExtractor={(item) => item.id}
           emptyState={{
             title: "No suppliers found",
-            description: "No suppliers match the current search. Try adding one if the directory is empty.",
+            description:
+              "No suppliers match the current search. Try adding one if the directory is empty.",
           }}
           pagination={
             pagination ? (
@@ -258,42 +250,76 @@ export const SuppliersPage = () => {
               accessor: (supplier) => (
                 <div>
                   <p className="font-semibold text-slate-950">{supplier.supplierName}</p>
-                  <p className="mt-1 text-sm text-slate-600">{supplier.email || "No email added"}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {supplier.email || "No email added"}
+                  </p>
                 </div>
               ),
               className: "rounded-l-3xl px-4 py-4",
             },
-            { header: "Company", accessor: (supplier) => supplier.companyName || "Independent" },
-            { header: "Contact", accessor: (supplier) => supplier.contactPerson || "Not added" },
+            {
+              header: "Company",
+              accessor: (supplier) => supplier.companyName || "Independent",
+            },
+            {
+              header: "Contact",
+              accessor: (supplier) => supplier.contactPerson || "Not added",
+            },
             { header: "Mobile", accessor: (supplier) => supplier.mobileNumber },
             {
               header: "Location",
               accessor: (supplier) =>
-                [supplier.city, supplier.state].filter(Boolean).join(", ") || "Not added",
+                [supplier.city, supplier.state].filter(Boolean).join(", ") ||
+                "Not added",
             },
-            { header: "GST", accessor: (supplier) => supplier.gstNumber || "Not added" },
-            { header: "Opening balance", accessor: (supplier) => formatCurrency(supplier.openingBalance) },
-            { header: "Status", accessor: (supplier) => <StatusBadge label={supplier.status} /> },
+            {
+              header: "GST",
+              accessor: (supplier) => supplier.gstNumber || "Not added",
+            },
+            {
+              header: "Opening balance",
+              accessor: (supplier) => formatCurrency(supplier.openingBalance),
+            },
+            {
+              header: "Status",
+              accessor: (supplier) => <StatusBadge label={supplier.status} />,
+            },
             {
               header: "Actions",
               accessor: (supplier) => (
                 <div className="flex justify-end gap-2">
                   <button
-                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    aria-label={`Edit ${supplier.supplierName}`}
+                    className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                     onClick={() => {
                       setEditingSupplier(supplier);
                       setIsFormOpen(true);
                     }}
+                    title="Edit supplier"
                     type="button"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                    aria-label={
+                      supplier.status === "active"
+                        ? `Deactivate ${supplier.supplierName}`
+                        : `Activate ${supplier.supplierName}`
+                    }
+                    className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                     onClick={() => setPendingStatusSupplier(supplier)}
+                    title={
+                      supplier.status === "active"
+                        ? "Deactivate supplier"
+                        : "Activate supplier"
+                    }
                     type="button"
                   >
-                    {supplier.status === "active" ? "Deactivate" : "Activate"}
+                    {supplier.status === "active" ? (
+                      <Ban className="h-4 w-4" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               ),
@@ -319,11 +345,12 @@ export const SuppliersPage = () => {
                   </p>
                 </div>
                 <button
-                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                   onClick={() => {
                     setEditingSupplier(supplier);
                     setIsFormOpen(true);
                   }}
+                  title="Edit supplier"
                   type="button"
                 >
                   <Pencil className="h-4 w-4" />
@@ -336,15 +363,11 @@ export const SuppliersPage = () => {
                   ["Email", supplier.email || "Not added"],
                   [
                     "Location",
-                    [supplier.city, supplier.state]
-                      .filter(Boolean)
-                      .join(", ") || "Not added",
+                    [supplier.city, supplier.state].filter(Boolean).join(", ") ||
+                      "Not added",
                   ],
                   ["GST", supplier.gstNumber || "Not added"],
-                  [
-                    "Opening balance",
-                    formatCurrency(supplier.openingBalance),
-                  ],
+                  ["Opening balance", formatCurrency(supplier.openingBalance)],
                   ["Contact person", supplier.contactPerson || "Not added"],
                 ].map(([label, value]) => (
                   <div
@@ -361,16 +384,27 @@ export const SuppliersPage = () => {
                 ))}
               </dl>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                  Updated {formatDateTime(supplier.updatedAt)}
-                </p>
+              <div className="mt-4 flex justify-end">
                 <button
-                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  aria-label={
+                    supplier.status === "active"
+                      ? `Deactivate ${supplier.supplierName}`
+                      : `Activate ${supplier.supplierName}`
+                  }
+                  className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                   onClick={() => setPendingStatusSupplier(supplier)}
+                  title={
+                    supplier.status === "active"
+                      ? "Deactivate supplier"
+                      : "Activate supplier"
+                  }
                   type="button"
                 >
-                  {supplier.status === "active" ? "Deactivate" : "Activate"}
+                  {supplier.status === "active" ? (
+                    <Ban className="h-4 w-4" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </article>

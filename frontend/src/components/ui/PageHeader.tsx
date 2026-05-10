@@ -1,10 +1,14 @@
 import type { ReactNode } from "react";
+import { cn } from "../../lib/utils";
 
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
+  className?: string;
+  titleClassName?: string;
+  theme?: "light" | "dark";
 }
 
 export const PageHeader = ({
@@ -12,22 +16,48 @@ export const PageHeader = ({
   title,
   description,
   actions,
+  className,
+  titleClassName,
+  theme = "light",
 }: PageHeaderProps) => (
-  <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94)_58%,rgba(236,253,250,0.72))] px-5 py-5 shadow-[0_30px_70px_-46px_rgba(15,23,42,0.45)] md:px-6 md:py-6">
-    <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.12),transparent)]" />
+  <div
+    className={cn(
+      "relative overflow-hidden rounded-[28px] border px-5 py-5 shadow-[0_26px_60px_-46px_rgba(15,23,42,0.26)] md:px-6 md:py-5",
+      theme === "dark"
+        ? "border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.18),transparent_32%),linear-gradient(180deg,#10182d_0%,#0d1424_100%)]"
+        : "border-white/70 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.95)_62%,rgba(235,255,245,0.7))]",
+      className,
+    )}
+  >
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="space-y-2.5">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+          <p
+            className={cn(
+              "text-[11px] font-semibold uppercase tracking-[0.24em]",
+              theme === "dark" ? "text-violet-200" : "text-violet-700",
+            )}
+          >
             {eyebrow}
           </p>
         ) : null}
         <div className="space-y-2">
-          <h1 className="text-[1.55rem] font-semibold tracking-tight text-slate-950 md:text-[1.85rem]">
+          <h1
+            className={cn(
+              "text-[1.55rem] font-semibold tracking-tight md:text-[1.82rem]",
+              theme === "dark" ? "text-white" : "text-slate-950",
+              titleClassName,
+            )}
+          >
             {title}
           </h1>
           {description ? (
-            <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-[0.96rem]">
+            <p
+              className={cn(
+                "max-w-3xl text-sm leading-6 md:text-[0.95rem]",
+                theme === "dark" ? "text-slate-300" : "text-slate-600",
+              )}
+            >
               {description}
             </p>
           ) : null}

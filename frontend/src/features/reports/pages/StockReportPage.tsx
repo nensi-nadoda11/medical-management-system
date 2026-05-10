@@ -2,7 +2,6 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
@@ -10,7 +9,7 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDate, formatNumber, humanizeLabel } from "../../../lib/utils";
+import { formatCurrency, formatDate, formatNumber } from "../../../lib/utils";
 import { listCategories, listManufacturers, medicinesQueryKeys } from "../../medicines/api/medicines";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
@@ -23,7 +22,7 @@ import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "h-12 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 const reportRefreshIntervalMs = 300000;
 
 export const StockReportPage = () => {
@@ -159,34 +158,23 @@ export const StockReportPage = () => {
             />
           </>
         }
-        description="Review current stock valuation and batch-wise availability from one compact report."
         eyebrow="Reports & Analytics"
         title="Stock report"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 [&>article]:px-4 [&>article]:py-3.5">
         <SummaryCard label="Medicines" value={formatNumber(report.summary.totalMedicines)} />
-        <SummaryCard label="Batches" value={formatNumber(report.summary.totalBatches)} />
         <SummaryCard label="Units" value={formatNumber(report.summary.totalUnits)} />
         <SummaryCard
           label="Stock valuation"
           tone="accent"
           value={formatCurrency(report.summary.stockValuation)}
         />
-        <SummaryCard
-          label="Low stock count"
-          tone={report.summary.lowStockCount ? "warning" : "default"}
-          value={formatNumber(report.summary.lowStockCount)}
-        />
       </div>
 
-      <FilterBar
-        className="print-hidden"
-        description="Filter by product master and batch state."
-        title="Stock filters"
-      >
+      <div className="print-hidden rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
             Search
             <input
               className={inputClassName}
@@ -293,47 +281,42 @@ export const StockReportPage = () => {
             </select>
           </label>
         </div>
-      </FilterBar>
+      </div>
 
-      <SectionCard description="Batch-wise stock position and valuation." title="Stock register">
+      <SectionCard title="Stock register">
         <div className="space-y-4">
-          <div className="hidden overflow-x-auto xl:block">
-            <table className="min-w-[1240px] w-full border-separate border-spacing-y-3">
+          <div className="profit-table-scrollbar hidden overflow-x-auto xl:block">
+            <table className="min-w-[1080px] w-full border-separate border-spacing-y-2.5">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <th className="px-4">Medicine</th>
-                  <th className="px-4">Category</th>
-                  <th className="px-4">Manufacturer</th>
-                  <th className="px-4">Batch</th>
-                  <th className="px-4">Expiry</th>
-                  <th className="px-4">Qty</th>
-                  <th className="px-4">Purchase rate</th>
-                  <th className="px-4">Stock value</th>
-                  <th className="px-4">Status</th>
+                  <th className="px-3.5">Medicine</th>
+                  <th className="px-3.5">Category</th>
+                  <th className="px-3.5">Batch</th>
+                  <th className="px-3.5">Expiry</th>
+                  <th className="px-3.5">Qty</th>
+                  <th className="px-3.5">Purchase rate</th>
+                  <th className="px-3.5">Stock value</th>
+                  <th className="px-3.5">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {report.rows.items.map((item) => (
                   <tr className="rounded-3xl bg-slate-50" key={item.batch.id}>
-                    <td className="rounded-l-3xl px-4 py-4">
+                    <td className="rounded-l-3xl px-3.5 py-3.5">
                       <p className="font-semibold text-slate-950">{item.medicine.medicineName}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.medicine.genericName} / {humanizeLabel(item.medicine.form)} / {humanizeLabel(item.medicine.unit)}
-                      </p>
                       {item.medicine.barcode ? (
                         <p className="mt-1 text-xs font-medium text-slate-500">
                           Barcode: {item.medicine.barcode}
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{item.manufacturer.name}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{item.batch.batchNumber}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatDate(item.batch.expiryDate)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatNumber(item.batch.quantityAvailable)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.batch.purchaseRate)}</td>
-                    <td className="px-4 py-4 text-sm font-semibold text-slate-950">{formatCurrency(item.stockValue)}</td>
-                    <td className="rounded-r-3xl px-4 py-4">
+                    <td className="px-3.5 py-3.5 text-sm text-slate-700">{item.category.name}</td>
+                    <td className="px-3.5 py-3.5 text-sm text-slate-700">{item.batch.batchNumber}</td>
+                    <td className="px-3.5 py-3.5 text-sm text-slate-700">{formatDate(item.batch.expiryDate)}</td>
+                    <td className="px-3.5 py-3.5 text-sm text-slate-700">{formatNumber(item.batch.quantityAvailable)}</td>
+                    <td className="px-3.5 py-3.5 text-sm text-slate-700">{formatCurrency(item.batch.purchaseRate)}</td>
+                    <td className="px-3.5 py-3.5 text-sm font-semibold text-slate-950">{formatCurrency(item.stockValue)}</td>
+                    <td className="rounded-r-3xl px-3.5 py-3.5">
                       <StatusBadge label={item.batch.status} />
                     </td>
                   </tr>

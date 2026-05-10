@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Eye, Pencil, UserCheck, UserX } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -11,7 +11,6 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate } from "../../../lib/utils";
 import { hasPermission } from "../../../types/auth";
@@ -29,6 +28,8 @@ import { CustomerFormModal } from "../components/CustomerFormModal";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const desktopTableScrollClassName =
+  "hidden overflow-x-auto overflow-y-hidden lg:block [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.18)_transparent] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/40 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/45";
 
 type StatusFilter = MasterStatus | "all";
 
@@ -124,19 +125,6 @@ export const CustomersPage = () => {
     );
   }
 
-  const summary = {
-    totalCustomers: pagination?.total ?? 0,
-    activeOnScreen: customers.filter((customer) => customer.status === "active").length,
-    visiblePurchaseAmount: customers.reduce(
-      (sum, customer) => sum + Number(customer.summary.totalPurchaseAmount),
-      0,
-    ),
-    visibleDueAmount: customers.reduce(
-      (sum, customer) => sum + Number(customer.summary.totalDueAmount),
-      0,
-    ),
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -154,41 +142,16 @@ export const CustomersPage = () => {
             </button>
           ) : null
         }
-        description="Manage customer master records, repeat-buyer visibility, and due-ready profiles in one compact workspace."
         eyebrow="Customer management"
         title="Customers"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint="Total matching customers" label="Customers" value={summary.totalCustomers} />
-        <SummaryCard
-          hint="Active customers on this page"
-          label="Active visible"
-          tone={summary.activeOnScreen ? "accent" : "default"}
-          value={summary.activeOnScreen}
-        />
-        <SummaryCard
-          hint="Visible purchase value on this page"
-          label="Visible purchases"
-          value={formatCurrency(summary.visiblePurchaseAmount)}
-        />
-        <SummaryCard
-          hint="Visible outstanding due on this page"
-          label="Visible due"
-          tone={summary.visibleDueAmount > 0 ? "warning" : "default"}
-          value={formatCurrency(summary.visibleDueAmount)}
-        />
-      </div>
-
-      <SectionCard
-        description="Search, filter, and sort customers without turning the screen into a heavy admin grid."
-        title="Customer controls"
-      >
-        <div className="grid gap-4 xl:grid-cols-[1.5fr_repeat(3,minmax(0,1fr))]">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search customers
+      <SectionCard contentClassName="pt-1" title="Customer controls">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="block min-w-0 flex-1 basis-[19rem]">
+            <span className="sr-only">Search customers</span>
             <input
-              className={inputClassName}
+              className={`${inputClassName} w-full`}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -198,10 +161,10 @@ export const CustomersPage = () => {
             />
           </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Status
+          <label className="block w-full sm:w-[11rem]">
+            <span className="sr-only">Status</span>
             <select
-              className={inputClassName}
+              className={`${inputClassName} w-full`}
               onChange={(event) => {
                 setStatusFilter(event.target.value as StatusFilter);
                 setPage(1);
@@ -214,10 +177,10 @@ export const CustomersPage = () => {
             </select>
           </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Sort by
+          <label className="block w-full sm:w-[12rem]">
+            <span className="sr-only">Sort by</span>
             <select
-              className={inputClassName}
+              className={`${inputClassName} w-full`}
               onChange={(event) => {
                 setSortBy(event.target.value as typeof sortBy);
                 setPage(1);
@@ -231,10 +194,10 @@ export const CustomersPage = () => {
             </select>
           </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Order
+          <label className="block w-full sm:w-[10.5rem]">
+            <span className="sr-only">Order</span>
             <select
-              className={inputClassName}
+              className={`${inputClassName} w-full`}
               onChange={(event) => {
                 setSortOrder(event.target.value as "asc" | "desc");
                 setPage(1);
@@ -248,10 +211,7 @@ export const CustomersPage = () => {
         </div>
       </SectionCard>
 
-      <SectionCard
-        description="Customer profiles stay compact but still surface the purchase and due signals the business needs every day."
-        title="Customer directory"
-      >
+      <SectionCard contentClassName="pt-1" title="Customer directory">
         {customers.length ? (
           <div className="space-y-4">
             <div className="grid gap-3 lg:hidden">
@@ -326,7 +286,7 @@ export const CustomersPage = () => {
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto lg:block">
+            <div className={desktopTableScrollClassName}>
               <table className="min-w-[1180px] w-full border-separate border-spacing-y-3">
                 <thead>
                   <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -370,18 +330,22 @@ export const CustomersPage = () => {
                       <td className="rounded-r-3xl px-4 py-4">
                         <div className="flex justify-end gap-2">
                           <Link
-                            className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                            aria-label={`View ${customer.fullName}`}
+                            className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                             to={`/app/customers/${customer.id}`}
+                            title="View customer"
                           >
-                            View
+                            <Eye className="h-4 w-4" />
                           </Link>
                           {canEditCustomer ? (
                             <button
+                              aria-label={`Edit ${customer.fullName}`}
                               className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                               onClick={() => {
                                 setEditingCustomer(customer);
                                 setIsFormOpen(true);
                               }}
+                              title="Edit customer"
                               type="button"
                             >
                               <Pencil className="h-4 w-4" />
@@ -389,11 +353,25 @@ export const CustomersPage = () => {
                           ) : null}
                           {canUpdateStatus ? (
                             <button
-                              className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                              aria-label={
+                                customer.status === "active"
+                                  ? `Deactivate ${customer.fullName}`
+                                  : `Activate ${customer.fullName}`
+                              }
+                              className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                               onClick={() => setPendingStatusCustomer(customer)}
+                              title={
+                                customer.status === "active"
+                                  ? "Deactivate customer"
+                                  : "Activate customer"
+                              }
                               type="button"
                             >
-                              {customer.status === "active" ? "Deactivate" : "Activate"}
+                              {customer.status === "active" ? (
+                                <UserX className="h-4 w-4" />
+                              ) : (
+                                <UserCheck className="h-4 w-4" />
+                              )}
                             </button>
                           ) : null}
                         </div>

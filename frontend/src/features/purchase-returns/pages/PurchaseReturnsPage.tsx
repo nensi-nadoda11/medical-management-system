@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
@@ -20,6 +19,7 @@ import {
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const compactFieldClassName = `${inputClassName} h-12`;
 
 export const PurchaseReturnsPage = () => {
   const sessionQuery = useSessionQuery();
@@ -79,51 +79,30 @@ export const PurchaseReturnsPage = () => {
         actions={
           canCreateReturns ? (
             <Link
-              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"
               to="/app/purchase-returns/new"
             >
               Create return
             </Link>
           ) : null
         }
-        description="Track draft, completed, and cancelled purchase returns with clean supplier and purchase linkage."
+        className="py-4"
         eyebrow="Purchase management"
         title="Purchase returns"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint="Total matching returns" label="Returns" value={pagination?.total ?? 0} />
-        <SummaryCard hint="Completed returns on this page" label="Completed visible" tone={completedCount ? "accent" : "default"} value={completedCount} />
-        <SummaryCard hint="Draft returns on this page" label="Draft visible" tone={draftCount ? "warning" : "default"} value={draftCount} />
-        <SummaryCard hint="Visible return value" label="Visible total" value={formatCurrency(visibleValue)} />
+        <SummaryCard label="Returns" value={pagination?.total ?? 0} />
+        <SummaryCard label="Completed visible" tone={completedCount ? "accent" : "default"} value={completedCount} />
+        <SummaryCard label="Draft visible" tone={draftCount ? "warning" : "default"} value={draftCount} />
+        <SummaryCard label="Visible total" value={formatCurrency(visibleValue)} />
       </div>
 
-      <FilterBar
-        actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setStatus("");
-              setDateFrom("");
-              setDateTo("");
-              setSortBy("createdAt");
-              setSortOrder("desc");
-              setPage(1);
-            }}
-            type="button"
-          >
-            Clear filters
-          </button>
-        }
-        description="Keep the return register compact for procurement and finance review."
-        title="Return filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-end">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -136,7 +115,7 @@ export const PurchaseReturnsPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Status
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setStatus(event.target.value as typeof status);
                 setPage(1);
@@ -153,7 +132,7 @@ export const PurchaseReturnsPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Date from
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setDateFrom(event.target.value);
                 setPage(1);
@@ -166,7 +145,7 @@ export const PurchaseReturnsPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Date to
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setDateTo(event.target.value);
                 setPage(1);
@@ -179,7 +158,7 @@ export const PurchaseReturnsPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortBy(event.target.value as typeof sortBy);
                 setPage(1);
@@ -196,7 +175,7 @@ export const PurchaseReturnsPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Order
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortOrder(event.target.value as "asc" | "desc");
                 setPage(1);
@@ -207,13 +186,25 @@ export const PurchaseReturnsPage = () => {
               <option value="asc">Oldest first</option>
             </select>
           </label>
-        </div>
-      </FilterBar>
 
-      <SectionCard
-        description="A compact register for supplier-facing return activity and stock/payable corrections."
-        title="Returns register"
-      >
+          <button
+            className="h-12 rounded-2xl border border-slate-200 px-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setStatus("");
+              setDateFrom("");
+              setDateTo("");
+              setSortBy("createdAt");
+              setSortOrder("desc");
+              setPage(1);
+            }}
+            type="button"
+          >
+            Clear filters
+          </button>
+      </div>
+
+      <SectionCard contentClassName="pt-1" title="Returns register">
         <ResponsiveDataList
           data={returns}
           isLoading={purchaseReturnsQuery.isLoading}

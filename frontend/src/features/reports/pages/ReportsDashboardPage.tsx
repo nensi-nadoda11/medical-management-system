@@ -8,20 +8,25 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
+import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatNumber } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
+  exportDashboardReport,
   getReportsDashboardSummary,
   reportsQueryKeys,
 } from "../api/reports";
 import { BranchScopeControl } from "../components/BranchScopeControl";
+import { ReportExportButtons } from "../components/ReportExportButtons";
 import { ReportsNav } from "../components/ReportsNav";
 
 export const ReportsDashboardPage = () => {
+  const { pushToast } = useToast();
   const sessionQuery = useSessionQuery();
   const role = sessionQuery.data?.user.role;
   const [branchId, setBranchId] = useState("");
   const [combineBranches, setCombineBranches] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const params = useMemo(
     () => ({
       branchId: branchId || undefined,
@@ -56,17 +61,39 @@ export const ReportsDashboardPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        actions={<ReportsNav role={role} />}
-        description="A compact operational snapshot for sales, profit, stock pressure, and upcoming expiry exposure."
+        actions={
+          <>
+            <ReportsNav role={role} />
+            <ReportExportButtons
+              isLoading={isExporting}
+              onExport={(format) => {
+                setIsExporting(true);
+                void exportDashboardReport(params, format)
+                  .then(() => {
+                    pushToast({
+                      title: "Export ready",
+                      description: `Dashboard ${format.toUpperCase()} download started.`,
+                      variant: "success",
+                    });
+                  })
+                  .catch((error: Error) => {
+                    pushToast({
+                      title: "Export failed",
+                      description: error.message,
+                      variant: "error",
+                    });
+                  })
+                  .finally(() => setIsExporting(false));
+              }}
+            />
+          </>
+        }
         eyebrow="Reports & Analytics"
         title="Reports dashboard"
       />
 
-      <FilterBar
-        description="Switch between the active branch and combined branch summary when multiple branches are available."
-        title="Report scope"
-      >
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)] xl:max-w-3xl">
+      <FilterBar title="Report scope">
+        <div className="grid gap-4 md:grid-cols-2 xl:max-w-4xl">
           <BranchScopeControl
             branchId={branchId}
             combineBranches={combineBranches}
@@ -76,7 +103,7 @@ export const ReportsDashboardPage = () => {
         </div>
       </FilterBar>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           hint={`Bills ${formatNumber(summary.todaySales.totalBills)} today`}
           label="Today sales"
@@ -100,19 +127,10 @@ export const ReportsDashboardPage = () => {
           tone={summary.lowStockCount ? "warning" : "default"}
           value={formatNumber(summary.lowStockCount)}
         />
-        <SummaryCard
-          hint="Expired + next 30 day batches"
-          label="Expiry count"
-          tone={summary.expiryCount ? "danger" : "default"}
-          value={formatNumber(summary.expiryCount)}
-        />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <SectionCard
-          description="Quick access to the main reports used in day-to-day review and financial follow-up."
-          title="Report shortcuts"
-        >
+      <div className="grid gap-5 xl:grid-cols-2">
+        <SectionCard className="h-full" title="Report shortcuts">
           <div className="grid gap-3 md:grid-cols-2">
             {[
               ["Sales report", "/app/reports/sales", "Track bills, value, and payment mix."],
@@ -139,11 +157,8 @@ export const ReportsDashboardPage = () => {
           </div>
         </SectionCard>
 
-        <SectionCard
-          description="Expiry pressure at a glance."
-          title="Expiry breakdown"
-        >
-          <div className="grid gap-3">
+        <SectionCard className="h-full" title="Expiry breakdown">
+          <div className="grid gap-3 sm:grid-cols-2">
             {[
               {
                 label: "Expired",
@@ -166,13 +181,24 @@ export const ReportsDashboardPage = () => {
                 tone: "default" as const,
               },
             ].map((item) => (
-              <SummaryCard
-                hint="Batch count"
+              <article
+                className={`rounded-[20px] border p-4 shadow-[0_18px_44px_-38px_rgba(15,23,42,0.22)] ${
+                  item.tone === "danger"
+                    ? "border-rose-100 bg-[linear-gradient(180deg,rgba(255,241,242,0.98),rgba(255,255,255,0.94))]"
+                    : item.tone === "warning"
+                      ? "border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.94))]"
+                      : "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]"
+                }`}
                 key={item.label}
-                label={item.label}
-                tone={item.tone}
-                value={formatNumber(item.value)}
-              />
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-[1.45rem] font-semibold tracking-tight text-slate-950">
+                  {formatNumber(item.value)}
+                </p>
+                <p className="mt-2 text-sm text-slate-600">Batch count</p>
+              </article>
             ))}
           </div>
         </SectionCard>

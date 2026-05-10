@@ -30,8 +30,8 @@ export function ResponsiveDataList<T>({
   isLoading,
   emptyState,
   pagination,
-  rowClassName = "rounded-3xl bg-slate-50",
-  tableClassName = "min-w-[1080px] w-full border-separate border-spacing-y-3",
+  rowClassName = "rounded-[22px] bg-transparent",
+  tableClassName = "min-w-[1080px] w-full border-separate border-spacing-y-2.5",
   keyExtractor,
 }: ResponsiveDataListProps<T>) {
   if (isLoading) {
@@ -45,10 +45,10 @@ export function ResponsiveDataList<T>({
         </div>
 
         {/* Desktop Skeletons */}
-        <div className="hidden xl:block overflow-x-auto">
+        <div className="hidden overflow-x-auto xl:block">
           <table className={tableClassName}>
             <thead>
-              <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                 {columns.map((col, i) => (
                   <th key={i} className={col.headerClassName || "px-4"}>{col.header}</th>
                 ))}
@@ -93,7 +93,7 @@ export function ResponsiveDataList<T>({
       <div className="hidden overflow-x-auto xl:block">
         <table className={tableClassName}>
           <thead>
-            <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
               {columns.map((col, i) => (
                 <th key={i} className={col.headerClassName || "px-4"}>{col.header}</th>
               ))}

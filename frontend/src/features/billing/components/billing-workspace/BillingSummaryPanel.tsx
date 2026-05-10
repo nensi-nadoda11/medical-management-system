@@ -55,6 +55,8 @@ export const BillingSummaryPanel = ({
   return (
     <SectionCard
       title="Bill summary"
+      className="min-w-0 min-h-0 xl:h-[54rem]"
+      contentClassName="min-h-0 overflow-y-auto pr-1 ui-subtle-scrollbar"
     >
       <div className="space-y-4">
         <div className="grid gap-3">
@@ -149,10 +151,10 @@ export const BillingSummaryPanel = ({
                 </label>
 
                 {customerOptions.length ? (
-                  <div className="grid gap-2">
+                  <div className="grid max-h-40 gap-2 overflow-y-auto pr-1 ui-subtle-scrollbar">
                     {customerOptions.map((customer) => (
                       <button
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40"
+                        className="rounded-[14px] border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40"
                         key={customer.id}
                         onClick={() => onSelectCustomer(customer)}
                         type="button"
@@ -176,7 +178,7 @@ export const BillingSummaryPanel = ({
                   </div>
                 ) : null}
 
-                <div className="grid gap-3">
+                <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Walk-in customer name
                     <input
@@ -211,27 +213,27 @@ export const BillingSummaryPanel = ({
             )}
           </div>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Payment method
-            <select
-              className={inputClassName}
-              onChange={(event) =>
-                onDraftChange((current) => ({
-                  ...current,
-                  paymentMethod: event.target.value as typeof current.paymentMethod,
-                }))
-              }
-              value={draft.paymentMethod}
-            >
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="split">Split</option>
-            </select>
-          </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Payment method
+              <select
+                className={inputClassName}
+                onChange={(event) =>
+                  onDraftChange((current) => ({
+                    ...current,
+                    paymentMethod: event.target.value as typeof current.paymentMethod,
+                  }))
+                }
+                value={draft.paymentMethod}
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="split">Split</option>
+              </select>
+            </label>
 
-          <div className="grid gap-3 2xl:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Paid amount
               <input
@@ -248,38 +250,7 @@ export const BillingSummaryPanel = ({
                 value={draft.paidAmount}
               />
             </label>
-
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Round off
-              <input
-                className={inputClassName}
-                onChange={(event) =>
-                  onDraftChange((current) => ({
-                    ...current,
-                    roundOffAmount: event.target.value,
-                  }))
-                }
-                step="0.01"
-                type="number"
-                value={draft.roundOffAmount}
-              />
-            </label>
           </div>
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Notes
-            <textarea
-              className="min-h-24 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
-              onChange={(event) =>
-                onDraftChange((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              placeholder="Optional billing notes"
-              value={draft.notes}
-            />
-          </label>
         </div>
 
         <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
@@ -341,9 +312,9 @@ export const BillingSummaryPanel = ({
           </div>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid gap-2 md:grid-cols-2">
           <button
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[6px] border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting || !draft.items.length}
             onClick={onSaveHeld}
             type="button"
@@ -351,7 +322,7 @@ export const BillingSummaryPanel = ({
             {isSubmitting ? "Saving..." : validHeldBillId ? "Update held bill" : "Hold bill"}
           </button>
           <button
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[6px] bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting || !draft.items.length}
             onClick={onFinalize}
             type="button"

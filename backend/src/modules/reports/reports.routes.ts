@@ -5,6 +5,7 @@ import { requirePermission } from "../../shared/http/require_permission";
 import { requireAuth } from "../auth/auth.middleware";
 import { ReportsController } from "./reports.controller";
 import {
+  exportDashboardSummarySchema,
   exportExpiryReportSchema,
   exportLowStockReportSchema,
   exportProfitReportSchema,
@@ -31,6 +32,13 @@ router.get(
   requirePermission("reports.view"),
   validateRequest(getDashboardSummarySchema),
   controller.getDashboardSummary,
+);
+router.get(
+  "/dashboard/export",
+  requireAuth,
+  requirePermission("reports.view"),
+  validateRequest(exportDashboardSummarySchema),
+  controller.exportDashboardReport,
 );
 router.get(
   "/sales",

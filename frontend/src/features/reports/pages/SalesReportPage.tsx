@@ -10,7 +10,7 @@ import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDate, formatDateTime, formatNumber } from "../../../lib/utils";
+import { formatCurrency, formatDateTime, formatNumber } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   exportSalesReport,
@@ -29,7 +29,7 @@ import {
 } from "../lib/report-period";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "h-[52px] rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 export const SalesReportPage = () => {
   const { pushToast } = useToast();
@@ -45,7 +45,6 @@ export const SalesReportPage = () => {
     `${toMonthInputValue(today)}-01`,
   );
   const [customDateTo, setCustomDateTo] = useState(toLocalDateInputValue(today));
-  const [groupBy, setGroupBy] = useState<"day" | "month">("day");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [branchId, setBranchId] = useState("");
   const [combineBranches, setCombineBranches] = useState(false);
@@ -73,7 +72,6 @@ export const SalesReportPage = () => {
       search: deferredSearch || undefined,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
-      groupBy,
       branchId: branchId || undefined,
       combineBranches: combineBranches || undefined,
       paymentMethod:
@@ -90,7 +88,6 @@ export const SalesReportPage = () => {
       dateRange.dateFrom,
       dateRange.dateTo,
       deferredSearch,
-      groupBy,
       page,
       paymentMethod,
       sortBy,
@@ -119,8 +116,6 @@ export const SalesReportPage = () => {
 
   const report = salesQuery.data!;
   const bills = report.rows.items;
-  const paymentBreakdown = report.summary.paymentBreakdown;
-
   return (
     <div className="print-report-page space-y-6">
       <PageHeader
@@ -152,12 +147,11 @@ export const SalesReportPage = () => {
             />
           </>
         }
-        description="Track sales value, billing volume, and payment mix across any date range."
         eyebrow="Reports & Analytics"
         title="Sales report"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SummaryCard
           hint={report.filters.dateRangeLabel}
           label="Total sales"
@@ -174,11 +168,6 @@ export const SalesReportPage = () => {
           label="Average bill"
           value={formatCurrency(report.summary.averageBillValue)}
         />
-        <SummaryCard
-          hint={`Grouped by ${report.filters.groupBy}`}
-          label="Trend rows"
-          value={formatNumber(report.trend.length)}
-        />
       </div>
 
       <FilterBar
@@ -186,184 +175,117 @@ export const SalesReportPage = () => {
         description="Compact filters for quick operational reporting."
         title="Sales filters"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReportPeriodControl
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            inputClassName={inputClassName}
-            mode={periodMode}
-            onCustomDateFromChange={(value) => {
-              setCustomDateFrom(value);
-              setPage(1);
-            }}
-            onCustomDateToChange={(value) => {
-              setCustomDateTo(value);
-              setPage(1);
-            }}
-            onModeChange={(value) => {
-              setPeriodMode(value);
-              setPage(1);
-            }}
-            onSelectedDateChange={(value) => {
-              setSelectedDate(value);
-              setPage(1);
-            }}
-            onSelectedMonthChange={(value) => {
-              setSelectedMonth(value);
-              setPage(1);
-            }}
-            selectedDate={selectedDate}
-            selectedMonth={selectedMonth}
-          />
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
+        <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.88fr)_minmax(0,0.62fr)_minmax(0,0.7fr)]">
+            <ReportPeriodControl
+              customDateFrom={customDateFrom}
+              customDateTo={customDateTo}
+              inputClassName={inputClassName}
+              mode={periodMode}
+              onCustomDateFromChange={(value) => {
+                setCustomDateFrom(value);
                 setPage(1);
               }}
-              placeholder="Search bill number or customer"
-              value={search}
+              onCustomDateToChange={(value) => {
+                setCustomDateTo(value);
+                setPage(1);
+              }}
+              onModeChange={(value) => {
+                setPeriodMode(value);
+                setPage(1);
+              }}
+              onSelectedDateChange={(value) => {
+                setSelectedDate(value);
+                setPage(1);
+              }}
+              onSelectedMonthChange={(value) => {
+                setSelectedMonth(value);
+                setPage(1);
+              }}
+              selectedDate={selectedDate}
+              selectedMonth={selectedMonth}
             />
-          </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Group by
-            <select
-              className={inputClassName}
-              onChange={(event) => setGroupBy(event.target.value as "day" | "month")}
-              value={groupBy}
-            >
-              <option value="day">Day</option>
-              <option value="month">Month</option>
-            </select>
-          </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Search
+              <input
+                className={inputClassName}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search bill number or customer"
+                value={search}
+              />
+            </label>
 
-          <BranchScopeControl
-            branchId={branchId}
-            combineBranches={combineBranches}
-            onBranchIdChange={(value) => {
-              setBranchId(value);
-              setPage(1);
-            }}
-            onCombineBranchesChange={(value) => {
-              setCombineBranches(value);
-              setPage(1);
-            }}
-          />
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Payment mode
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setPaymentMethod(event.target.value);
+            <BranchScopeControl
+              branchId={branchId}
+              combineBranches={combineBranches}
+              onBranchIdChange={(value) => {
+                setBranchId(value);
                 setPage(1);
               }}
-              value={paymentMethod}
-            >
-              <option value="">All payment modes</option>
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="split">Split</option>
-            </select>
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Sort by
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortBy(event.target.value as typeof sortBy);
+              onCombineBranchesChange={(value) => {
+                setCombineBranches(value);
                 setPage(1);
               }}
-              value={sortBy}
-            >
-              <option value="completedAt">Completed date</option>
-              <option value="billNumber">Bill number</option>
-              <option value="grandTotal">Grand total</option>
-            </select>
-          </label>
+            />
+          </div>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Order
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortOrder(event.target.value as "asc" | "desc");
-                setPage(1);
-              }}
-              value={sortOrder}
-            >
-              <option value="desc">Newest first</option>
-              <option value="asc">Oldest first</option>
-            </select>
-          </label>
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Payment mode
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setPaymentMethod(event.target.value);
+                  setPage(1);
+                }}
+                value={paymentMethod}
+              >
+                <option value="">All payment modes</option>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="split">Split</option>
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Sort by
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSortBy(event.target.value as typeof sortBy);
+                  setPage(1);
+                }}
+                value={sortBy}
+              >
+                <option value="completedAt">Completed date</option>
+                <option value="billNumber">Bill number</option>
+                <option value="grandTotal">Grand total</option>
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Order
+              <select
+                className={inputClassName}
+                onChange={(event) => {
+                  setSortOrder(event.target.value as "asc" | "desc");
+                  setPage(1);
+                }}
+                value={sortOrder}
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </select>
+            </label>
+          </div>
         </div>
       </FilterBar>
-
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard
-          description="Payment mode contribution in the selected period."
-          title="Payment breakdown"
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            {paymentBreakdown.map((item) => (
-              <article
-                className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"
-                key={item.paymentMethod}
-              >
-                <p className="text-sm font-semibold text-slate-950">
-                  {item.paymentMethod.toUpperCase()}
-                </p>
-                <p className="mt-2 text-xl font-semibold text-slate-950">
-                  {formatCurrency(item.totalSales)}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {formatNumber(item.totalBills)} bills
-                </p>
-              </article>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard description="Daily or monthly trend rows." title="Sales trend">
-          <div className="overflow-x-auto">
-            <table className="min-w-[640px] w-full border-separate border-spacing-y-3">
-              <thead>
-                <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <th className="px-4">Period</th>
-                  <th className="px-4">Bills</th>
-                  <th className="px-4">Average</th>
-                  <th className="px-4">Sales</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.trend.map((item) => (
-                  <tr className="rounded-3xl bg-slate-50" key={item.periodStart}>
-                    <td className="rounded-l-3xl px-4 py-4 text-sm font-semibold text-slate-950">
-                      {formatDate(item.periodStart)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {formatNumber(item.totalBills)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {formatCurrency(item.averageBillValue)}
-                    </td>
-                    <td className="rounded-r-3xl px-4 py-4 text-sm font-semibold text-slate-950">
-                      {formatCurrency(item.totalSales)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      </div>
 
       <SectionCard description="Completed bill register for the selected filters." title="Sales register">
         <div className="space-y-4">

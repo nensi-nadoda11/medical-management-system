@@ -38,43 +38,51 @@ const drawPageFrame = (
   title: string,
   shopName: string,
   subtitle: string,
-  pageNumber: number,
 ) => {
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const titleX = doc.page.margins.left + 20;
 
   doc
     .save()
-    .roundedRect(doc.page.margins.left, 28, pageWidth, 56, 16)
+    .roundedRect(doc.page.margins.left, 26, pageWidth, 64, 18)
     .fill("#10293a")
     .restore();
 
   doc
     .fillColor("#ffffff")
     .font("Helvetica-Bold")
-    .fontSize(18)
-    .text(title, doc.page.margins.left + 18, 42, {
-      width: pageWidth - 36,
-      align: "left",
-    });
+    .fontSize(20)
+    .text(title, titleX, 40, { lineBreak: false });
 
   doc
     .font("Helvetica")
-    .fontSize(9)
-    .text(shopName, doc.page.margins.left + 18, 64, {
-      width: pageWidth - 36,
-      align: "left",
-    });
+    .fontSize(10)
+    .text(shopName, titleX, 64, { lineBreak: false });
 
   doc
     .fillColor("#475569")
     .font("Helvetica")
     .fontSize(9)
-    .text(subtitle, doc.page.margins.left, 98, {
-      width: pageWidth,
-      align: "left",
-    });
+    .text(subtitle, doc.page.margins.left, 108, { lineBreak: false });
+};
 
-  const footerY = doc.page.height - 34;
+const drawPageFooter = (
+  doc: PDFKit.PDFDocument,
+  pageNumber: number,
+  totalPages: number,
+) => {
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const footerY = doc.page.height - doc.page.margins.bottom - 12;
+  const generatedAt = `Generated on ${new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date())}`;
+  const pageLabel = `Page ${pageNumber} of ${totalPages}`;
+  const pageLabelWidth = doc
+    .font("Helvetica")
+    .fontSize(8)
+    .widthOfString(pageLabel);
+
   doc
     .moveTo(doc.page.margins.left, footerY - 8)
     .lineTo(doc.page.width - doc.page.margins.right, footerY - 8)
@@ -86,23 +94,14 @@ const drawPageFrame = (
     .fillColor("#64748b")
     .font("Helvetica")
     .fontSize(8)
-    .text(
-      `Generated on ${new Intl.DateTimeFormat("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date())}`,
-      doc.page.margins.left,
-      footerY,
-      {
-        width: pageWidth,
-        align: "left",
-      },
-    );
+    .text(generatedAt, doc.page.margins.left, footerY, { lineBreak: false });
 
-  doc.text(`Page ${pageNumber}`, doc.page.margins.left, footerY, {
-    width: pageWidth,
-    align: "right",
-  });
+  doc.text(
+    pageLabel,
+    doc.page.width - doc.page.margins.right - pageLabelWidth,
+    footerY,
+    { lineBreak: false },
+  );
 };
 
 export const buildExcelReport = async (input: BuildExportInput) => {
@@ -216,49 +215,73 @@ export const buildPdfReport = async (input: BuildExportInput) =>
     const denseTable = shouldUseLandscape || input.columns.length >= 7;
     const headerFontSize = denseTable ? 7.2 : 8;
     const rowFontSize = denseTable ? 7.6 : 8;
-    let pageNumber = 1;
-
-    const addTemplate = () =>
-      drawPageFrame(doc, input.title, input.shopName, input.subtitle, pageNumber);
+    const contentTop = 136;
+    const contentBottom = doc.page.height - doc.page.margins.bottom - 30;
+    let cursorY = contentTop;
 
     doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    addTemplate();
+    const startNewPage = () => {
+      drawPageFrame(doc, input.title, input.shopName, input.subtitle);
+      cursorY = contentTop;
+    };
 
-    let cursorY = 124;
+    const ensureSpace = (height: number) => {
+      if (cursorY + height <= contentBottom) {
+        return;
+      }
 
-    input.summary.forEach((metric, index) => {
+      doc.addPage();
+      startNewPage();
+    };
+
+    startNewPage();
+
+    if (input.summary.length) {
       const summaryColumns = pageWidth > 640 ? 3 : 2;
-      const cardWidth = (pageWidth - 16 * (summaryColumns - 1)) / summaryColumns;
-      const cardHeight = 46;
-      const x =
-        doc.page.margins.left + (index % summaryColumns) * (cardWidth + 16);
-      const y =
-        cursorY + Math.floor(index / summaryColumns) * (cardHeight + 10);
+      const cardGap = 12;
+      const cardWidth = (pageWidth - cardGap * (summaryColumns - 1)) / summaryColumns;
+      const cardHeight = 54;
+      const summaryRows = Math.ceil(input.summary.length / summaryColumns);
+      const summaryHeight = summaryRows * cardHeight + Math.max(summaryRows - 1, 0) * cardGap;
 
-      doc
-        .save()
-        .roundedRect(x, y, cardWidth, cardHeight, 12)
-        .fill("#f8fafc")
-        .restore();
+      ensureSpace(summaryHeight + 14);
 
-      doc
-        .fillColor("#64748b")
-        .font("Helvetica-Bold")
-        .fontSize(9)
-        .text(metric.label, x + 12, y + 10, { width: cardWidth - 24 });
+      input.summary.forEach((metric, index) => {
+        const x =
+          doc.page.margins.left + (index % summaryColumns) * (cardWidth + cardGap);
+        const y =
+          cursorY + Math.floor(index / summaryColumns) * (cardHeight + cardGap);
 
-      doc
-        .fillColor("#0f172a")
-        .font("Helvetica-Bold")
-        .fontSize(12)
-        .text(metric.value, x + 12, y + 24, { width: cardWidth - 24 });
-    });
+        doc
+          .save()
+          .roundedRect(x, y, cardWidth, cardHeight, 14)
+          .fill("#f8fafc")
+          .restore();
 
-    const summaryColumns = pageWidth > 640 ? 3 : 2;
-    cursorY += Math.ceil(input.summary.length / summaryColumns) * 56 + 14;
+        doc
+          .fillColor("#64748b")
+          .font("Helvetica-Bold")
+          .fontSize(8.5)
+          .text(metric.label, x + 12, y + 10, {
+            width: cardWidth - 24,
+            lineBreak: false,
+          });
+
+        doc
+          .fillColor("#0f172a")
+          .font("Helvetica-Bold")
+          .fontSize(12)
+          .text(metric.value, x + 12, y + 28, {
+            width: cardWidth - 24,
+            lineBreak: false,
+          });
+      });
+
+      cursorY += summaryHeight + 18;
+    }
 
     const drawTableHeader = () => {
       let cursorX = doc.page.margins.left;
@@ -289,6 +312,7 @@ export const buildPdfReport = async (input: BuildExportInput) =>
           .text(column.header, cursorX + 6, cursorY + 6, {
             width: Math.max(width - 12, 24),
             align: column.align ?? "left",
+            lineBreak: false,
           });
         cursorX += width;
       });
@@ -319,11 +343,9 @@ export const buildPdfReport = async (input: BuildExportInput) =>
     input.rows.forEach((row, rowIndex) => {
       const rowHeight = getRowHeight(row);
 
-      if (cursorY + rowHeight > doc.page.height - 58) {
+      if (cursorY + rowHeight > contentBottom) {
         doc.addPage();
-        pageNumber += 1;
-        addTemplate();
-        cursorY = 124;
+        startNewPage();
         drawTableHeader();
       }
 
@@ -344,6 +366,7 @@ export const buildPdfReport = async (input: BuildExportInput) =>
           .text(formatCellValue(row[column.key]), cursorX + 6, cursorY + 6, {
             width: Math.max(width - 12, 24),
             align: column.align ?? "left",
+            lineBreak: false,
           });
 
         cursorX += width;
@@ -351,6 +374,14 @@ export const buildPdfReport = async (input: BuildExportInput) =>
 
       cursorY += rowHeight + 4;
     });
+
+    const bufferedRange = doc.bufferedPageRange();
+    const totalPages = bufferedRange.count;
+
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
+      doc.switchToPage(bufferedRange.start + pageIndex);
+      drawPageFooter(doc, pageIndex + 1, totalPages);
+    }
 
     doc.end();
   });

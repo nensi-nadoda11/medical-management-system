@@ -18,10 +18,10 @@ interface SearchableOptionSelectProps {
 }
 
 const triggerClassName =
-  "flex min-h-[46px] w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "flex min-h-[42px] w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const searchInputClassName =
-  "w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100";
+  "w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100";
 
 export const SearchableOptionSelect = ({
   placeholder,
@@ -78,7 +78,7 @@ export const SearchableOptionSelect = ({
               value={search}
             />
 
-            <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+            <div className="ui-subtle-scrollbar mt-3 max-h-[15.25rem] space-y-2 overflow-y-auto pr-1">
               {isLoading ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
                   Loading...
@@ -86,7 +86,7 @@ export const SearchableOptionSelect = ({
               ) : options.length ? (
                 options.map((item) => (
                   <button
-                    className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition ${
+                    className={`w-full rounded-2xl border px-3 py-2 text-left text-sm leading-5 transition ${
                       item.id === value
                         ? "border-teal-200 bg-teal-50 text-teal-700"
                         : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"

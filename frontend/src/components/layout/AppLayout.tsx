@@ -1,6 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
+  BarChart3,
+  Bell,
+  CalendarDays,
+  ClipboardList,
+  Database,
+  GitBranch,
+  HandCoins,
+  Home,
+  PackageSearch,
+  Pill,
+  Receipt,
+  RotateCcw,
+  ShieldCheck,
+  ShoppingCart,
+  Store,
+  Truck,
+  Users,
+  UsersRound,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
   Link,
   NavLink,
   Outlet,
@@ -39,6 +61,7 @@ type NavigationItem = {
   label: string;
   group: NavigationGroup;
   description: string;
+  icon: LucideIcon;
   roles?: Array<"admin" | "staff" | "accountant">;
   permissions?: AdminPermissionKey[];
   resolveTo: (role: "admin" | "staff" | "accountant") => string;
@@ -49,6 +72,7 @@ const navigation: NavigationItem[] = [
     label: "Dashboard",
     group: "Overview",
     description: "Review the most important activity, stock, and finance signals.",
+    icon: Home,
     roles: ["admin", "staff", "accountant"] as const,
     resolveTo: () => "/app",
   },
@@ -56,6 +80,7 @@ const navigation: NavigationItem[] = [
     label: "Notifications",
     group: "Overview",
     description: "Handle unread alerts, reminders, and operational exceptions quickly.",
+    icon: Bell,
     roles: ["admin", "staff", "accountant"] as const,
     resolveTo: () => "/app/notifications",
   },
@@ -63,6 +88,7 @@ const navigation: NavigationItem[] = [
     label: "Billing",
     group: "Sales & Finance",
     description: "Create bills fast and keep the counter flow focused.",
+    icon: Receipt,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["billing.view"],
     resolveTo: (role) =>
@@ -72,6 +98,7 @@ const navigation: NavigationItem[] = [
     label: "Sales Returns",
     group: "Sales & Finance",
     description: "Process returns without hunting through extra screens.",
+    icon: RotateCcw,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["billing.return"],
     resolveTo: () => "/app/billing/returns",
@@ -80,6 +107,7 @@ const navigation: NavigationItem[] = [
     label: "Customers",
     group: "Sales & Finance",
     description: "Track customers, history, balances, and follow-up in one place.",
+    icon: Users,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["customers.view"],
     resolveTo: () => "/app/customers",
@@ -88,6 +116,7 @@ const navigation: NavigationItem[] = [
     label: "Accounting",
     group: "Sales & Finance",
     description: "Review dues, ledgers, and payments with fewer clicks.",
+    icon: HandCoins,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["payments.view"],
     resolveTo: () => "/app/accounting/customers",
@@ -96,6 +125,7 @@ const navigation: NavigationItem[] = [
     label: "Reports",
     group: "Sales & Finance",
     description: "Open high-value reports from a single analytics workspace.",
+    icon: BarChart3,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["reports.view"],
     resolveTo: () => "/app/reports",
@@ -104,6 +134,7 @@ const navigation: NavigationItem[] = [
     label: "Medicines",
     group: "Inventory & Supply",
     description: "Maintain a clean medicine catalog for billing and stock workflows.",
+    icon: Pill,
     permissions: ["medicines.view"],
     resolveTo: () => "/app/medicines",
   },
@@ -111,6 +142,7 @@ const navigation: NavigationItem[] = [
     label: "Suppliers",
     group: "Inventory & Supply",
     description: "Keep supplier information, balances, and contacts organized.",
+    icon: Truck,
     permissions: ["suppliers.view"],
     resolveTo: () => "/app/suppliers",
   },
@@ -118,6 +150,7 @@ const navigation: NavigationItem[] = [
     label: "Purchases",
     group: "Inventory & Supply",
     description: "Manage incoming stock documents and supplier invoices.",
+    icon: ShoppingCart,
     permissions: ["purchases.view"],
     resolveTo: () => "/app/purchases",
   },
@@ -125,6 +158,7 @@ const navigation: NavigationItem[] = [
     label: "Purchase Returns",
     group: "Inventory & Supply",
     description: "Reverse purchase stock with a controlled return flow.",
+    icon: RotateCcw,
     roles: ["admin", "staff", "accountant"] as const,
     permissions: ["purchaseReturns.view"],
     resolveTo: () => "/app/purchase-returns",
@@ -133,6 +167,7 @@ const navigation: NavigationItem[] = [
     label: "Inventory",
     group: "Inventory & Supply",
     description: "Monitor stock movement, low stock, and expiry pressure quickly.",
+    icon: PackageSearch,
     permissions: ["inventory.view"],
     resolveTo: () => "/app/inventory",
   },
@@ -140,6 +175,7 @@ const navigation: NavigationItem[] = [
     label: "Stock Transfers",
     group: "Inventory & Supply",
     description: "Move stock between branches without leaving the inventory flow.",
+    icon: ClipboardList,
     roles: ["admin"] as const,
     resolveTo: () => "/app/inventory/transfers",
   },
@@ -147,6 +183,7 @@ const navigation: NavigationItem[] = [
     label: "Shop Setup",
     group: "Administration",
     description: "Control shop details and core defaults from one setup page.",
+    icon: Store,
     permissions: ["shop.view"],
     resolveTo: () => "/app/shop-setup",
   },
@@ -154,6 +191,7 @@ const navigation: NavigationItem[] = [
     label: "Staff Management",
     group: "Administration",
     description: "Manage users, roles, and invitations with less clutter.",
+    icon: UsersRound,
     permissions: ["users.view"],
     resolveTo: () => "/app/staff-management",
   },
@@ -161,6 +199,7 @@ const navigation: NavigationItem[] = [
     label: "Branches",
     group: "Administration",
     description: "Handle branch-level settings and branch visibility.",
+    icon: GitBranch,
     roles: ["admin"] as const,
     permissions: ["shop.manage"],
     resolveTo: () => "/app/branches",
@@ -169,6 +208,7 @@ const navigation: NavigationItem[] = [
     label: "Data Management",
     group: "Administration",
     description: "Import, export, and cleanup tools stay isolated from daily work.",
+    icon: Database,
     roles: ["admin"] as const,
     resolveTo: () => "/app/data-management",
   },
@@ -176,6 +216,7 @@ const navigation: NavigationItem[] = [
     label: "Admin Settings",
     group: "Administration",
     description: "Control permissions and advanced operational settings.",
+    icon: ShieldCheck,
     roles: ["admin"] as const,
     permissions: ["settings.view"],
     resolveTo: () => "/app/admin-settings",
@@ -343,8 +384,9 @@ export const AppLayout = () => {
 
   const workspaceDate = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
-    day: "numeric",
     month: "short",
+    day: "numeric",
+    year: "numeric",
   }).format(new Date());
 
   const profileInitials = session.user.fullName
@@ -354,10 +396,16 @@ export const AppLayout = () => {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
   const unreadCount = notificationsSummaryQuery.data?.unreadCount ?? 0;
+  const shopNameParts = session.shop.name.split(" ").filter(Boolean);
+  const primaryShopName =
+    shopNameParts.length > 1 ? shopNameParts.slice(0, -1).join(" ") : session.shop.name;
+  const secondaryShopName =
+    shopNameParts.length > 1 ? shopNameParts.at(-1) : "medical";
+  const currentGroupLabel = currentNavigation?.group ?? "Workspace";
 
   return (
-    <div className="app-shell min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.08),transparent_30%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.08),transparent_24%),linear-gradient(180deg,#f7f8fa_0%,#edf1f4_100%)] text-slate-900">
-      <div className="app-frame mx-auto flex min-h-screen max-w-[1680px] gap-4 px-3 py-3 lg:px-5 lg:py-5">
+    <div className="app-shell min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(91,33,182,0.14),transparent_26%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.08),transparent_24%),linear-gradient(180deg,#f6f7ff_0%,#eef2fb_50%,#f8fafc_100%)] text-slate-900">
+      <div className="app-frame mx-auto flex min-h-screen max-w-[1720px] gap-4 px-3 py-3 lg:px-5 lg:py-5">
         <div
           aria-hidden="true"
           className={cn(
@@ -371,63 +419,69 @@ export const AppLayout = () => {
 
         <aside
           className={cn(
-            "app-sidebar print-hidden fixed inset-y-3 left-3 z-40 flex w-[min(18.5rem,calc(100vw-1.5rem))] flex-col rounded-[32px] border border-white/10 bg-[#090d13]/96 p-4 text-slate-100 shadow-[0_38px_88px_-42px_rgba(15,23,42,0.9)] transition duration-200 lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[260px] lg:translate-x-0",
+            "app-sidebar print-hidden fixed inset-y-3 left-3 z-40 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col rounded-[30px] border border-white/[0.08] bg-[linear-gradient(180deg,#0b1020_0%,#11182d_48%,#0d1425_100%)] p-4 text-slate-100 shadow-[0_40px_90px_-42px_rgba(15,23,42,0.82)] transition duration-200 lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[276px] lg:translate-x-0",
             isMobileNavigationOpen
               ? "translate-x-0 opacity-100"
               : "-translate-x-[108%] opacity-0 lg:opacity-100",
           )}
         >
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h1 className="text-[1.45rem] font-semibold leading-tight tracking-tight text-white">
-                  {session.shop.name}
-                </h1>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,#8b5cf6_0%,#6d3df5_100%)] shadow-[0_18px_30px_-18px_rgba(139,92,246,0.9)]">
+                  <svg
+                    aria-hidden="true"
+                    className="h-7 w-7 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[1.2rem] font-semibold leading-tight tracking-tight text-white">
+                    {primaryShopName}
+                  </p>
+                  <p className="text-[1.2rem] font-semibold leading-tight tracking-tight text-violet-400">
+                    {secondaryShopName}
+                  </p>
+                </div>
               </div>
               <button
                 className="ui-icon-button lg:hidden"
                 onClick={() => setIsMobileNavigationOpen(false)}
                 type="button"
               >
-                <svg
-                  aria-hidden="true"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
+                <X aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          <div className="mt-4 flex min-h-0 flex-1 flex-col">
-            <div className="mb-3 px-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Navigation
-              </p>
-            </div>
-
+          <div className="mt-5 flex min-h-0 flex-1 flex-col">
             <nav className="hide-scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="space-y-5">
                 {visibleGroups.map(({ group, items }) => (
                   <div className="space-y-2" key={group}>
-                    <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-white">
+                    <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-400">
                       {group}
                     </p>
                     <div className="space-y-1.5">
-                      {items.map((item) => (
+                      {items.map((item) => {
+                        const Icon = item.icon;
+                        const isNotificationsItem = item.label === "Notifications";
+
+                        return (
                         <NavLink
                           className={({ isActive }) =>
                             cn(
-                              "group flex min-h-[2.9rem] items-center justify-between gap-3 rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none",
+                              "group flex min-h-[3rem] items-center justify-between gap-3 rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none",
                               isActive
-                                ? "border-white/30 bg-white !text-black font-bold shadow-lg"
-                                : "border-transparent bg-white/[0.03] text-white hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
+                                ? "border-violet-500/40 bg-[linear-gradient(135deg,rgba(109,61,245,0.42),rgba(91,33,182,0.28))] text-white shadow-[0_18px_30px_-24px_rgba(109,61,245,0.78)]"
+                                : "border-transparent bg-white/[0.03] text-slate-100 hover:border-white/10 hover:bg-white/[0.06] hover:text-white",
                             )
                           }
                           end={item.to === "/app"}
@@ -436,72 +490,83 @@ export const AppLayout = () => {
                         >
                           {({ isActive }) => (
                             <>
-                              <span className={cn("min-w-0 truncate", isActive ? "text-black" : "text-white")}>{item.label}</span>
-                              <span
-                                className={cn(
-                                  "h-2 w-2 shrink-0 rounded-full transition",
-                                  isActive ? "bg-emerald-500" : "bg-white/40",
-                                )}
-                              />
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span
+                                  className={cn(
+                                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border transition",
+                                    isActive
+                                      ? "border-white/10 bg-white/10 text-white"
+                                      : "border-white/[0.08] bg-white/[0.04] text-slate-300 group-hover:text-white",
+                                  )}
+                                >
+                                  <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
+                                </span>
+                                <span className="min-w-0 truncate">{item.label}</span>
+                              </div>
+                              {isNotificationsItem && unreadCount > 0 ? (
+                                <span className="inline-flex min-w-[1.55rem] items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </span>
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "h-2.5 w-2.5 shrink-0 rounded-full transition",
+                                    isActive ? "bg-emerald-400" : "bg-white/30",
+                                  )}
+                                />
+                              )}
                             </>
                           )}
                         </NavLink>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 ))}
               </div>
             </nav>
           </div>
+
+          <div className="mt-4 rounded-[24px] border border-white/[0.08] bg-white/[0.04] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
+                {profileInitials || "U"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">
+                  {session.user.fullName}
+                </p>
+                <p className="truncate text-xs text-slate-400">
+                  {session.user.role === "admin" ? "Administrator" : session.user.role}
+                </p>
+              </div>
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </div>
+          </div>
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[32px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(247,249,251,0.94))] shadow-[0_34px_80px_-46px_rgba(15,23,42,0.46)] backdrop-blur-xl">
-            <header className="app-header print-hidden shrink-0 border-b border-slate-200/80 px-4 py-4 lg:px-6">
+          <div className="flex min-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[30px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(248,250,255,0.96))] shadow-[0_34px_86px_-52px_rgba(15,23,42,0.3)] backdrop-blur-xl">
+            <header className="app-header print-hidden shrink-0 border-b border-slate-200/75 px-4 py-4 lg:px-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex items-center gap-3">
-                  <button
-                    aria-expanded={isMobileNavigationOpen}
-                    className="ui-icon-button lg:hidden"
-                    onClick={() =>
-                      setIsMobileNavigationOpen((current) => !current)
-                    }
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.8"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M4 7h16M4 12h16M4 17h16" />
-                    </svg>
-                  </button>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+                  <div className="flex flex-wrap items-center gap-2 md:hidden">
+                    <span className="rounded-full border border-slate-200/80 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">
                       Workspace
                     </span>
-                    {currentNavigation ? (
-                      <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                        {currentNavigation.group}
-                      </span>
-                    ) : null}
+                    <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                      {currentGroupLabel}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
-                  <div className="hidden rounded-[22px] border border-slate-200 bg-white/80 px-4 py-2.5 shadow-sm shadow-slate-200/50 xl:block">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                      Today
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {workspaceDate}
-                    </p>
+                <div className="flex flex-1 flex-col gap-3 xl:max-w-[min(66rem,100%)] xl:flex-row xl:items-center xl:justify-end">
+                  <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
+                    <span className="rounded-full border border-slate-200/80 bg-white px-3.5 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm shadow-slate-200/40">
+                      Workspace
+                    </span>
+                    <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3.5 py-1.5 text-[11px] font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60">
+                      {currentGroupLabel}
+                    </span>
                   </div>
 
                   {accessibleBranches.length > 1 ? (
@@ -510,7 +575,7 @@ export const AppLayout = () => {
                         Active branch
                       </span>
                       <select
-                        className="rounded-[18px] border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 shadow-sm shadow-slate-200/40 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                        className="ui-input !rounded-[18px] !py-2.5 !font-semibold"
                         onChange={async (event) => {
                           const nextBranchId = event.target.value;
                           setStoredBranchId(nextBranchId);
@@ -538,7 +603,15 @@ export const AppLayout = () => {
                     </label>
                   ) : null}
 
-                  <div className="relative" ref={notificationMenuRef}>
+                  <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
+                    <div className="hidden items-center gap-2 rounded-[18px] border border-slate-200/80 bg-white/88 px-3.5 py-2.5 shadow-sm shadow-slate-200/35 md:flex">
+                      <CalendarDays aria-hidden="true" className="h-[18px] w-[18px] text-slate-500" />
+                      <p className="text-sm font-semibold text-slate-800">
+                        {workspaceDate}
+                      </p>
+                    </div>
+
+                    <div className="relative" ref={notificationMenuRef}>
                     <button
                       aria-expanded={isNotificationMenuOpen}
                       className="ui-icon-button relative"
@@ -547,28 +620,16 @@ export const AppLayout = () => {
                       }
                       type="button"
                     >
-                      <svg
-                        aria-hidden="true"
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.8"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                        <path d="M10 20a2 2 0 0 0 4 0" />
-                      </svg>
+                      <Bell aria-hidden="true" className="h-[18px] w-[18px]" />
                       {unreadCount ? (
-                        <span className="absolute -right-1 -top-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        <span className="absolute -right-1 -top-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                           {unreadCount > 99 ? "99+" : unreadCount}
                         </span>
                       ) : null}
                     </button>
 
                     {isNotificationMenuOpen ? (
-                      <div className="absolute right-0 top-14 z-20 w-[min(30rem,calc(100vw-1.5rem))] rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.42)] backdrop-blur-xl">
+                      <div className="absolute right-0 top-14 z-20 w-[min(30rem,calc(100vw-1.5rem))] rounded-[26px] border border-slate-200/80 bg-white/96 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.26)] backdrop-blur-xl">
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div>
                             <p className="text-sm font-bold text-slate-900">
@@ -579,7 +640,7 @@ export const AppLayout = () => {
                             </p>
                           </div>
                           <Link
-                            className="ui-btn ui-btn--secondary !min-h-[2.25rem] !px-3 !py-2 !text-xs"
+                            className="ui-btn ui-btn--secondary !min-h-[2.2rem] !px-3 !py-2 !text-xs"
                             onClick={() => setIsNotificationMenuOpen(false)}
                             to="/app/notifications"
                           >
@@ -602,10 +663,10 @@ export const AppLayout = () => {
                                 (item) => (
                                   <Link
                                     className={cn(
-                                      "block rounded-[22px] border px-3.5 py-3.5 transition",
+                                      "block rounded-[20px] border px-3.5 py-3 transition",
                                       item.isRead
                                         ? "border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-white"
-                                        : "border-emerald-100 bg-emerald-50/80 hover:border-emerald-200",
+                                        : "border-violet-100 bg-violet-50/80 hover:border-violet-200",
                                     )}
                                     key={item.id}
                                     onClick={() =>
@@ -654,12 +715,12 @@ export const AppLayout = () => {
                         </button>
                       </div>
                     ) : null}
-                  </div>
+                    </div>
 
-                  <div className="relative" ref={profileMenuRef}>
+                    <div className="relative" ref={profileMenuRef}>
                     <button
                       aria-expanded={isProfileMenuOpen}
-                      className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-full border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm shadow-slate-200/50 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white"
+                      className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-full border border-slate-200/80 bg-[linear-gradient(180deg,#f1eaff_0%,#ffffff_100%)] px-3 text-sm font-bold text-violet-700 shadow-sm shadow-slate-200/40 transition hover:-translate-y-0.5 hover:border-violet-200 hover:bg-white"
                       onClick={() => setIsProfileMenuOpen((current) => !current)}
                       type="button"
                     >
@@ -667,8 +728,8 @@ export const AppLayout = () => {
                     </button>
 
                     {isProfileMenuOpen ? (
-                      <div className="absolute right-0 top-14 z-20 w-72 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.42)] backdrop-blur-xl">
-                        <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <div className="absolute right-0 top-14 z-20 w-72 rounded-[26px] border border-slate-200/80 bg-white/96 p-4 shadow-[0_28px_80px_-38px_rgba(15,23,42,0.26)] backdrop-blur-xl">
+                        <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 px-4 py-3">
                           <p className="text-sm font-semibold text-slate-950">
                             {session.user.fullName}
                           </p>
@@ -688,12 +749,13 @@ export const AppLayout = () => {
                         </button>
                       </div>
                     ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
             </header>
 
-            <div className="app-content min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-6">
+            <div className="app-content min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-5 lg:py-5">
               <WorkspaceErrorBoundary
                 resetKey={`${location.pathname}${location.search}${location.hash}`}
               >

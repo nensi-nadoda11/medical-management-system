@@ -2,12 +2,10 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatNumber, humanizeLabel } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
@@ -150,36 +148,11 @@ export const LowStockReportPage = () => {
             />
           </>
         }
-        description="Track medicines that have dropped to or below reorder level, with exact shortage quantity."
         eyebrow="Reports & Analytics"
         title="Low stock report"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <SummaryCard
-          hint="Medicines requiring replenishment"
-          label="Low stock medicines"
-          tone="warning"
-          value={formatNumber(report.summary.totalMedicines)}
-        />
-        <SummaryCard
-          hint="Total units short against reorder level"
-          label="Total shortage"
-          tone="danger"
-          value={formatNumber(report.summary.totalShortage)}
-        />
-        <SummaryCard
-          hint="Current register rows"
-          label="Visible rows"
-          value={formatNumber(report.rows.pagination.total)}
-        />
-      </div>
-
-      <FilterBar
-        className="print-hidden"
-        description="Filter shortage by medicine master attributes."
-        title="Low stock filters"
-      >
+      <div className="print-hidden rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
@@ -272,17 +245,16 @@ export const LowStockReportPage = () => {
             </select>
           </label>
         </div>
-      </FilterBar>
+      </div>
 
-      <SectionCard description="Medicines currently under required stock level." title="Shortage register">
+      <SectionCard title="Shortage register">
         <div className="space-y-4">
           <div className="hidden overflow-x-auto xl:block">
-            <table className="min-w-[1160px] w-full border-separate border-spacing-y-3">
+            <table className="min-w-[980px] w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   <th className="px-4">Medicine</th>
                   <th className="px-4">Category</th>
-                  <th className="px-4">Manufacturer</th>
                   <th className="px-4">Available</th>
                   <th className="px-4">Reorder</th>
                   <th className="px-4">Shortage</th>
@@ -304,7 +276,6 @@ export const LowStockReportPage = () => {
                         ) : null}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">{item.category.name}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.manufacturer.name}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{formatNumber(item.availableQuantity)}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{formatNumber(item.reorderLevel)}</td>
                       <td className="rounded-r-3xl px-4 py-4 text-sm font-semibold text-rose-700">
@@ -314,7 +285,7 @@ export const LowStockReportPage = () => {
                   ))
                 ) : (
                   <tr>
-                    <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={6}>
+                    <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={5}>
                       No low stock medicines found for the selected filters.
                     </td>
                   </tr>
@@ -330,7 +301,6 @@ export const LowStockReportPage = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-950">{item.medicine.medicineName}</p>
-                      <p className="mt-1 text-sm text-slate-600">{item.manufacturer.name}</p>
                       {item.medicine.barcode ? (
                         <p className="mt-1 text-xs font-medium text-slate-500">
                           Barcode: {item.medicine.barcode}

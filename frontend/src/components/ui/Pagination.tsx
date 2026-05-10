@@ -31,7 +31,7 @@ export const Pagination = ({
         >
           Previous
         </button>
-        <span className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/50">
+        <span className="rounded-[18px] border border-slate-200/80 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/40">
           Page {page} of {Math.max(totalPages, 1)}
         </span>
         <button

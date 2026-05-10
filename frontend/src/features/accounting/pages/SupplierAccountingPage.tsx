@@ -212,7 +212,7 @@ export const SupplierAccountingPage = () => {
             ) : null}
           </>
         }
-        eyebrow="Accounting / Suppliers"
+        className="px-5 py-4 md:px-6 md:py-4"
         title="Supplier Accounting"
       />
 
@@ -233,6 +233,7 @@ export const SupplierAccountingPage = () => {
             </button>
           ) : null
         }
+        className="p-3.5 md:p-4"
         contentClassName="border-0 bg-transparent p-0 shadow-none"
         title="Supplier"
       >

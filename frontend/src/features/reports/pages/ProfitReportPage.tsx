@@ -9,7 +9,12 @@ import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import { formatCurrency, formatDate, formatDateTime, formatNumber } from "../../../lib/utils";
+import {
+  cn,
+  formatCurrency,
+  formatDateTime,
+  formatNumber,
+} from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   exportProfitReport,
@@ -18,7 +23,6 @@ import {
 } from "../api/reports";
 import { BranchScopeControl } from "../components/BranchScopeControl";
 import { ReportExportButtons } from "../components/ReportExportButtons";
-import { ReportPeriodControl } from "../components/ReportPeriodControl";
 import { ReportsNav } from "../components/ReportsNav";
 import {
   resolveReportDateRange,
@@ -28,7 +32,10 @@ import {
 } from "../lib/report-period";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "h-12 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+
+const periodButtonClassName =
+  "inline-flex min-h-[2.5rem] items-center justify-center rounded-full border px-3.5 py-2 text-sm font-semibold transition";
 
 export const ProfitReportPage = () => {
   const { pushToast } = useToast();
@@ -143,12 +150,11 @@ export const ProfitReportPage = () => {
             />
           </>
         }
-        description="Measure revenue, cost, and realized margin from completed sales using batch-level cost data."
         eyebrow="Reports & Analytics"
         title="Profit & Loss"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 [&>article]:px-4 [&>article]:py-3.5">
         <SummaryCard
           hint={report.filters.dateRangeLabel}
           label="Revenue"
@@ -172,38 +178,101 @@ export const ProfitReportPage = () => {
       <FilterBar
         className="print-hidden"
         description="Use daily, monthly, or custom range filters to focus the profitability window."
+        contentClassName="space-y-4 p-3.5 md:p-4"
         title="Profit & loss filters"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReportPeriodControl
-            customDateFrom={customDateFrom}
-            customDateTo={customDateTo}
-            inputClassName={inputClassName}
-            mode={periodMode}
-            onCustomDateFromChange={(value) => {
-              setCustomDateFrom(value);
-              setPage(1);
-            }}
-            onCustomDateToChange={(value) => {
-              setCustomDateTo(value);
-              setPage(1);
-            }}
-            onModeChange={(value) => {
-              setPeriodMode(value);
-              setPage(1);
-            }}
-            onSelectedDateChange={(value) => {
-              setSelectedDate(value);
-              setPage(1);
-            }}
-            onSelectedMonthChange={(value) => {
-              setSelectedMonth(value);
-              setPage(1);
-            }}
-            selectedDate={selectedDate}
-            selectedMonth={selectedMonth}
-          />
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
+        <div className="flex flex-wrap gap-2 lg:flex-nowrap">
+          {[
+            ["daily", "Daily"],
+            ["monthly", "Monthly"],
+            ["custom", "Custom"],
+          ].map(([value, label]) => (
+            <button
+              className={cn(
+                periodButtonClassName,
+                periodMode === value
+                  ? "border-slate-950 bg-slate-950 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+              )}
+              key={value}
+              onClick={() => {
+                setPeriodMode(value as ReportPeriodMode);
+                setPage(1);
+              }}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {periodMode === "daily" ? (
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Report date
+              <input
+                className={inputClassName}
+                onChange={(event) => {
+                  setSelectedDate(event.target.value);
+                  setPage(1);
+                }}
+                type="date"
+                value={selectedDate}
+              />
+            </label>
+          ) : null}
+
+          {periodMode === "monthly" ? (
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Report month
+              <input
+                className={inputClassName}
+                onChange={(event) => {
+                  setSelectedMonth(event.target.value);
+                  setPage(1);
+                }}
+                type="month"
+                value={selectedMonth}
+              />
+            </label>
+          ) : null}
+
+          {periodMode === "custom" ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:col-span-2">
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Date from
+                <input
+                  className={inputClassName}
+                  onChange={(event) => {
+                    setCustomDateFrom(event.target.value);
+                    setPage(1);
+                  }}
+                  type="date"
+                  value={customDateFrom}
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Date to
+                <input
+                  className={inputClassName}
+                  onChange={(event) => {
+                    setCustomDateTo(event.target.value);
+                    setPage(1);
+                  }}
+                  type="date"
+                  value={customDateTo}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          <label
+            className={cn(
+              "grid gap-2 text-sm font-medium text-slate-700",
+              periodMode === "custom" ? "" : "xl:col-span-2",
+            )}
+          >
             Search
             <input
               className={inputClassName}
@@ -215,6 +284,7 @@ export const ProfitReportPage = () => {
               value={search}
             />
           </label>
+
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Group by
             <select
@@ -226,6 +296,9 @@ export const ProfitReportPage = () => {
               <option value="month">Month</option>
             </select>
           </label>
+        </div>
+
+        <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-4">
           <BranchScopeControl
             branchId={branchId}
             combineBranches={combineBranches}
@@ -270,13 +343,15 @@ export const ProfitReportPage = () => {
         </div>
       </FilterBar>
 
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard description="Profit trend across the selected range." title="Trend register">
-          <div className="overflow-x-auto">
-            <table className="min-w-[720px] w-full border-separate border-spacing-y-3">
+      <SectionCard title="Bill profitability">
+        <div className="space-y-4">
+          <div className="profit-table-scrollbar hidden overflow-x-auto xl:block">
+            <table className="min-w-full w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <th className="px-4">Period</th>
+                  <th className="px-4">Bill</th>
+                  <th className="px-4">Customer</th>
+                  <th className="px-4">Completed</th>
                   <th className="px-4">Revenue</th>
                   <th className="px-4">Cost</th>
                   <th className="px-4">Profit</th>
@@ -284,10 +359,14 @@ export const ProfitReportPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {report.trend.map((item) => (
-                  <tr className="rounded-3xl bg-slate-50" key={item.periodStart}>
-                    <td className="rounded-l-3xl px-4 py-4 text-sm font-semibold text-slate-950">
-                      {formatDate(item.periodStart)}
+                {report.rows.items.map((item) => (
+                  <tr className="rounded-3xl bg-slate-50" key={item.saleId}>
+                    <td className="rounded-l-3xl px-4 py-4 font-semibold text-slate-950">
+                      {item.billNumber}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-slate-700">{item.customerName}</td>
+                    <td className="px-4 py-4 text-sm text-slate-700">
+                      {formatDateTime(item.completedAt)}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.revenue)}</td>
                     <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.cost)}</td>
@@ -302,95 +381,54 @@ export const ProfitReportPage = () => {
               </tbody>
             </table>
           </div>
-        </SectionCard>
 
-        <SectionCard description="Bill-wise realized profitability." title="Bill profitability">
-          <div className="space-y-4">
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1040px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Bill</th>
-                    <th className="px-4">Customer</th>
-                    <th className="px-4">Completed</th>
-                    <th className="px-4">Revenue</th>
-                    <th className="px-4">Cost</th>
-                    <th className="px-4">Profit</th>
-                    <th className="px-4">Profit %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.rows.items.map((item) => (
-                    <tr className="rounded-3xl bg-slate-50" key={item.saleId}>
-                      <td className="rounded-l-3xl px-4 py-4 font-semibold text-slate-950">
-                        {item.billNumber}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.customerName}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {formatDateTime(item.completedAt)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.revenue)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(item.cost)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-emerald-700">
-                        {formatCurrency(item.profit)}
-                      </td>
-                      <td className="rounded-r-3xl px-4 py-4 text-sm font-semibold text-slate-950">
-                        {formatNumber(item.profitPercent)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="grid gap-3 xl:hidden">
-              {report.rows.items.map((item) => (
-                <article
-                  className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
-                  key={item.saleId}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{item.billNumber}</p>
-                      <p className="mt-1 text-sm text-slate-600">{item.customerName}</p>
+          <div className="grid gap-3 xl:hidden">
+            {report.rows.items.map((item) => (
+              <article
+                className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
+                key={item.saleId}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">{item.billNumber}</p>
+                    <p className="mt-1 text-sm text-slate-600">{item.customerName}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-emerald-700">
+                    {formatCurrency(item.profit)}
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Revenue", formatCurrency(item.revenue)],
+                    ["Cost", formatCurrency(item.cost)],
+                    ["Profit %", `${formatNumber(item.profitPercent)}%`],
+                    ["Completed", formatDateTime(item.completedAt)],
+                  ].map(([label, value]) => (
+                    <div
+                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+                      key={label}
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
                     </div>
-                    <p className="text-sm font-semibold text-emerald-700">
-                      {formatCurrency(item.profit)}
-                    </p>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Revenue", formatCurrency(item.revenue)],
-                      ["Cost", formatCurrency(item.cost)],
-                      ["Profit %", `${formatNumber(item.profitPercent)}%`],
-                      ["Completed", formatDateTime(item.completedAt)],
-                    ].map(([label, value]) => (
-                      <div
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
-                        key={label}
-                      >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {label}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-            <div className="print-hidden">
-              <Pagination
-                onPageChange={setPage}
-                page={report.rows.pagination.page}
-                pageSize={report.rows.pagination.pageSize}
-                totalItems={report.rows.pagination.total}
-                totalPages={report.rows.pagination.totalPages}
-              />
-            </div>
+                  ))}
+                </div>
+              </article>
+            ))}
           </div>
-        </SectionCard>
-      </div>
+          <div className="print-hidden">
+            <Pagination
+              onPageChange={setPage}
+              page={report.rows.pagination.page}
+              pageSize={report.rows.pagination.pageSize}
+              totalItems={report.rows.pagination.total}
+              totalPages={report.rows.pagination.totalPages}
+            />
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 };

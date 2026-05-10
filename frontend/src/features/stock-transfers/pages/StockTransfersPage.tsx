@@ -40,7 +40,6 @@ export const StockTransfersPage = () => {
   const [fromBranchId, setFromBranchId] = useState("");
   const [toBranchId, setToBranchId] = useState("");
   const [search, setSearch] = useState("");
-  const [notes, setNotes] = useState("");
   const [items, setItems] = useState<DraftTransferItem[]>([]);
 
   const branchesQuery = useQuery({
@@ -77,7 +76,6 @@ export const StockTransfersPage = () => {
         variant: "success",
       });
       setItems([]);
-      setNotes("");
       setSearch("");
     },
   });
@@ -172,7 +170,7 @@ export const StockTransfersPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Draft, complete, and audit branch-to-branch stock movements without breaking single-store fallback."
+        className="py-4"
         eyebrow="Inventory Control"
         title="Stock transfers"
       />
@@ -190,10 +188,7 @@ export const StockTransfersPage = () => {
         />
       </div>
 
-      <SectionCard
-        description="Select source and destination branches, then add batches that should move."
-        title="Create transfer"
-      >
+      <SectionCard contentClassName="pt-1" title="Create transfer">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
           <div className="min-w-0 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -245,10 +240,10 @@ export const StockTransfersPage = () => {
             </label>
 
             <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-2">
+              <div className="grid h-[15rem] gap-2 overflow-y-auto pr-1">
                 {(sourceBatchesQuery.data ?? []).map((option) => (
                   <button
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-slate-300"
                     key={option.batch.id}
                     onClick={() => addTransferItem(option)}
                     type="button"
@@ -276,22 +271,12 @@ export const StockTransfersPage = () => {
           </div>
 
           <div className="min-w-0 space-y-4">
-            <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-700">
-              Notes
-              <textarea
-                className={`${inputClassName} min-h-24`}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Optional operational notes"
-                value={notes}
-              />
-            </label>
-
             <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-3">
-              <div className="space-y-3">
+              <div className="h-[15rem] space-y-3 overflow-y-auto pr-1">
                 {items.length ? (
                   items.map((item) => (
                     <div
-                      className="rounded-2xl border border-slate-200 bg-white px-3 py-3"
+                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
                       key={item.sourceBatchId}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -364,7 +349,6 @@ export const StockTransfersPage = () => {
                 createMutation.mutate({
                   fromBranchId,
                   toBranchId,
-                  notes: notes.trim() || undefined,
                   items: items.map((item) => ({
                     sourceBatchId: item.sourceBatchId,
                     medicineId: item.medicineId,
@@ -380,16 +364,14 @@ export const StockTransfersPage = () => {
         </div>
       </SectionCard>
 
-      <SectionCard description="Complete or cancel drafted transfers from one operational queue." title="Transfer register">
+      <SectionCard contentClassName="pt-1" title="Transfer register">
         <div className="space-y-4">
           <div className="hidden overflow-x-auto xl:block">
-            <table className="min-w-[1160px] w-full border-separate border-spacing-y-3">
+            <table className="min-w-[980px] w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   <th className="px-4">Transfer</th>
                   <th className="px-4">Status</th>
-                  <th className="px-4">Created</th>
-                  <th className="px-4">Completed</th>
                   <th className="px-4">Created by</th>
                   <th className="px-4 text-right">Actions</th>
                 </tr>
@@ -408,8 +390,6 @@ export const StockTransfersPage = () => {
                     <td className="px-4 py-4">
                       <StatusBadge label={item.status} />
                     </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatDateTime(item.createdAt)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatDateTime(item.completedAt)}</td>
                     <td className="px-4 py-4 text-sm text-slate-700">{item.createdBy.fullName}</td>
                     <td className="rounded-r-3xl px-4 py-4">
                       <div className="flex justify-end gap-2">

@@ -15,18 +15,17 @@ export const BillingHeader = ({
   return (
     <PageHeader
       actions={
-        <>
+        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
           <BillingModuleNav canCreateBills={canCreateBills} />
           <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            className="ui-btn ui-btn--primary !rounded-[6px]"
             onClick={onNewBill}
             type="button"
           >
             New bill
           </button>
-        </>
+        </div>
       }
-      description="Fast medicine billing with batch visibility, hold-and-resume support, payment capture, and stock-safe completion."
       eyebrow="Billing / POS"
       title={validHeldBillId ? "Resume held bill" : "Point of sale"}
     />

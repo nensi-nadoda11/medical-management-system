@@ -38,6 +38,12 @@ export const getDashboardSummarySchema = z.object({
   query: dateRangeQuerySchema.merge(branchScopeQuerySchema),
 });
 
+export const exportDashboardSummarySchema = z.object({
+  query: getDashboardSummarySchema.shape.query.extend({
+    format: exportFormatSchema,
+  }),
+});
+
 export const listSalesReportSchema = z.object({
   query: paginationQuerySchema.merge(dateRangeQuerySchema).merge(branchScopeQuerySchema).extend({
     search: optionalSearch,
@@ -157,6 +163,9 @@ export const exportUsageReportSchema = z.object({
 
 export type DashboardSummaryQuery = z.infer<
   typeof getDashboardSummarySchema
+>["query"];
+export type DashboardSummaryExportQuery = z.infer<
+  typeof exportDashboardSummarySchema
 >["query"];
 export type SalesReportQuery = z.infer<typeof listSalesReportSchema>["query"];
 export type SalesReportExportQuery = z.infer<

@@ -87,6 +87,30 @@ const formatDateRangeLabel = (dateFrom?: Date, dateTo?: Date) => {
 };
 
 const toMoneyNumber = (value?: string | number | null) => Number(value ?? 0);
+const formatExportDate = (value?: Date | null) =>
+  value
+    ? new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(value)
+    : "";
+
+const formatPaymentMethodLabel = (
+  value: "cash" | "upi" | "card" | "bank_transfer" | "split",
+) => {
+  switch (value) {
+    case "bank_transfer":
+      return "Bank transfer";
+    case "upi":
+      return "UPI";
+    default:
+      return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+  }
+};
+
+const formatPaymentStatusLabel = (value: "unpaid" | "partial" | "paid") =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+
 const toPercentString = (numerator: number, denominator: number) =>
   denominator > 0 ? ((numerator / denominator) * 100).toFixed(2) : "0.00";
 
@@ -194,6 +218,112 @@ export class ReportsService {
     };
   }
 
+  async exportDashboardReport(
+    shopId: string,
+    branchIds: string[],
+    shopName: string,
+    accessScope: { userId: string; role: "admin" | "staff" | "accountant" },
+    query: DashboardSummaryQuery & { format: "xlsx" | "pdf" },
+  ) {
+    const report = await this.getDashboardSummary(
+      shopId,
+      branchIds,
+      accessScope,
+      query,
+    );
+
+    return this.buildReportExport(
+      query.format,
+      shopName,
+      "Reports Dashboard",
+      branchIds.length > 1
+        ? "Combined branch dashboard snapshot"
+        : "Current branch dashboard snapshot",
+      [
+        { label: "Today sales", value: report.todaySales.totalSales },
+        { label: "Monthly sales", value: report.monthlySales.totalSales },
+        { label: "Total profit", value: report.totalProfit },
+        { label: "Low stock count", value: String(report.lowStockCount) },
+        { label: "Expiry count", value: String(report.expiryCount) },
+      ],
+      [
+        { header: "Section", key: "section", width: 18 },
+        { header: "Metric", key: "metric", width: 24 },
+        { header: "Value", key: "value", width: 18, align: "right" },
+        { header: "Details", key: "details", width: 30 },
+      ],
+      [
+        {
+          section: "Today",
+          metric: "Sales value",
+          value: report.todaySales.totalSales,
+          details: `${report.todaySales.totalBills} bills completed today`,
+        },
+        {
+          section: "Today",
+          metric: "Bills count",
+          value: report.todaySales.totalBills,
+          details: "Completed bills for the current day",
+        },
+        {
+          section: "Monthly",
+          metric: "Sales value",
+          value: report.monthlySales.totalSales,
+          details: `${report.monthlySales.totalBills} bills in the current month`,
+        },
+        {
+          section: "Monthly",
+          metric: "Bills count",
+          value: report.monthlySales.totalBills,
+          details: "Completed bills for the current month",
+        },
+        {
+          section: "Financial",
+          metric: "Total profit",
+          value: report.totalProfit,
+          details: "Current month gross profit",
+        },
+        {
+          section: "Inventory",
+          metric: "Low stock count",
+          value: report.lowStockCount,
+          details: "Medicines under reorder threshold",
+        },
+        {
+          section: "Expiry",
+          metric: "Expiry count",
+          value: report.expiryCount,
+          details: "Expired plus next 30 day batches",
+        },
+        {
+          section: "Expiry",
+          metric: "Expired",
+          value: report.expiryBreakdown.expired,
+          details: "Expired batch count",
+        },
+        {
+          section: "Expiry",
+          metric: "Next 30 days",
+          value: report.expiryBreakdown.next30Days,
+          details: "Batches expiring in the next 30 days",
+        },
+        {
+          section: "Expiry",
+          metric: "Next 60 days",
+          value: report.expiryBreakdown.next60Days,
+          details: "Batches expiring in the next 60 days",
+        },
+        {
+          section: "Expiry",
+          metric: "Next 90 days",
+          value: report.expiryBreakdown.next90Days,
+          details: "Batches expiring in the next 90 days",
+        },
+      ],
+      "reports-dashboard",
+    );
+  }
+
   async getSalesReport(
     shopId: string,
     branchIds: string[],
@@ -256,6 +386,8 @@ export class ReportsService {
         totalSales: summary?.totalSales ?? "0.00",
         totalBills: summary?.totalBills ?? 0,
         averageBillValue: summary?.averageBillValue ?? "0.00",
+        totalPaidAmount: summary?.totalPaidAmount ?? "0.00",
+        totalDueAmount: summary?.totalDueAmount ?? "0.00",
         paymentBreakdown: paymentBreakdown.map((item) => ({
           paymentMethod: item.paymentMethod,
           totalSales: item.totalSales,
@@ -732,31 +864,35 @@ export class ReportsService {
       query.format,
       shopName,
       "Sales Report",
-      report.filters.dateRangeLabel,
+      `${report.filters.dateRangeLabel}${query.paymentMethod ? ` | ${formatPaymentMethodLabel(query.paymentMethod)} payments` : ""}`,
       [
         { label: "Total sales", value: report.summary.totalSales },
         { label: "Total bills", value: String(report.summary.totalBills) },
         { label: "Avg bill", value: report.summary.averageBillValue },
+        { label: "Collected", value: report.summary.totalPaidAmount },
+        { label: "Due", value: report.summary.totalDueAmount },
       ],
       [
         { header: "Bill Number", key: "billNumber", width: 20 },
         { header: "Customer", key: "customerName", width: 24 },
         { header: "Payment", key: "paymentMethod", width: 16 },
-        { header: "Completed", key: "completedAt", width: 16 },
+        { header: "Status", key: "paymentStatus", width: 14 },
         { header: "Total", key: "grandTotal", width: 16, align: "right" },
-        { header: "Paid", key: "paidAmount", width: 16, align: "right" },
+        { header: "Collected", key: "paidAmount", width: 16, align: "right" },
         { header: "Due", key: "dueAmount", width: 16, align: "right" },
+        { header: "Completed", key: "completedAt", width: 22 },
+        { header: "Created By", key: "createdBy", width: 22 },
       ],
       report.rows.items.map((item) => ({
         billNumber: item.billNumber,
         customerName: item.customerName,
-        paymentMethod: item.paymentMethod,
-        completedAt: item.completedAt
-          ? item.completedAt.toISOString().slice(0, 10)
-          : "",
+        paymentMethod: formatPaymentMethodLabel(item.paymentMethod),
+        paymentStatus: formatPaymentStatusLabel(item.paymentStatus),
         grandTotal: item.grandTotal,
         paidAmount: item.paidAmount,
         dueAmount: item.dueAmount,
+        completedAt: formatExportDate(item.completedAt),
+        createdBy: item.createdBy.fullName,
       })),
       "sales-report",
     );

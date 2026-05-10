@@ -2,13 +2,11 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatDate, formatNumber } from "../../../lib/utils";
 import { useSessionQuery } from "../../auth/hooks/use-session";
@@ -130,42 +128,49 @@ export const ExpiryReportPage = () => {
             />
           </>
         }
-        description="Monitor expired and near-expiry batches so inventory action can happen before wastage."
         eyebrow="Reports & Analytics"
         title="Expiry report"
+        titleClassName="whitespace-nowrap"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          hint="Already expired batches"
-          label="Expired"
-          tone={report.summary.expiredCount ? "danger" : "default"}
-          value={formatNumber(report.summary.expiredCount)}
-        />
-        <SummaryCard
-          hint="Batches expiring in 30 days"
-          label="Next 30 days"
-          tone={report.summary.next30Count ? "warning" : "default"}
-          value={formatNumber(report.summary.next30Count)}
-        />
-        <SummaryCard
-          hint="Batches expiring in 60 days"
-          label="Next 60 days"
-          tone={report.summary.next60Count ? "warning" : "default"}
-          value={formatNumber(report.summary.next60Count)}
-        />
-        <SummaryCard
-          hint="Batches expiring in 90 days"
-          label="Next 90 days"
-          value={formatNumber(report.summary.next90Count)}
-        />
+        {[
+          {
+            label: "Expired",
+            tone: report.summary.expiredCount ? "border-rose-100 bg-[linear-gradient(180deg,rgba(255,241,242,0.98),rgba(255,255,255,0.94))]" : "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatNumber(report.summary.expiredCount),
+          },
+          {
+            label: "Next 30 days",
+            tone: report.summary.next30Count ? "border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.94))]" : "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatNumber(report.summary.next30Count),
+          },
+          {
+            label: "Next 60 days",
+            tone: report.summary.next60Count ? "border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.94))]" : "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatNumber(report.summary.next60Count),
+          },
+          {
+            label: "Next 90 days",
+            tone: "border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))]",
+            value: formatNumber(report.summary.next90Count),
+          },
+        ].map((item) => (
+          <article
+            className={`min-w-0 rounded-[24px] border px-5 py-3 shadow-[0_20px_48px_-40px_rgba(15,23,42,0.22)] ${item.tone}`}
+            key={item.label}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+              {item.label}
+            </p>
+            <p className="mt-1 break-words text-[1.45rem] font-semibold tracking-tight text-slate-950 md:text-[1.6rem]">
+              {item.value}
+            </p>
+          </article>
+        ))}
       </div>
 
-      <FilterBar
-        className="print-hidden"
-        description="Focus by medicine, expiry window, and sort order."
-        title="Expiry filters"
-      >
+      <div className="print-hidden rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
@@ -254,9 +259,9 @@ export const ExpiryReportPage = () => {
             </select>
           </label>
         </div>
-      </FilterBar>
+      </div>
 
-      <SectionCard description="Batch-wise expiry exposure for the selected window." title="Expiry register">
+      <SectionCard title="Expiry register">
         <div className="space-y-4">
           <div className="hidden overflow-x-auto xl:block">
             <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
@@ -274,22 +279,21 @@ export const ExpiryReportPage = () => {
                 {report.rows.items.length ? (
                   report.rows.items.map((item) => (
                     <tr className="rounded-3xl bg-slate-50" key={item.id}>
-                      <td className="rounded-l-3xl px-4 py-4">
+                      <td className="rounded-l-3xl px-4 py-3">
                         <p className="font-semibold text-slate-950">{item.medicine.medicineName}</p>
-                        <p className="mt-1 text-sm text-slate-600">{item.medicine.genericName}</p>
                         {item.medicine.barcode ? (
-                          <p className="mt-1 text-xs font-medium text-slate-500">
+                          <p className="mt-0.5 text-xs font-medium text-slate-500">
                             Barcode: {item.medicine.barcode}
                           </p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{item.batchNumber}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(item.expiryDate)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{formatNumber(item.quantityAvailable)}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3 text-sm text-slate-700">{item.batchNumber}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{formatDate(item.expiryDate)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{formatNumber(item.quantityAvailable)}</td>
+                      <td className="px-4 py-3">
                         <StatusBadge label={item.status} />
                       </td>
-                      <td className="rounded-r-3xl px-4 py-4">
+                      <td className="rounded-r-3xl px-4 py-3">
                         <StatusBadge label={item.expiryStatus} />
                       </td>
                     </tr>
@@ -308,13 +312,13 @@ export const ExpiryReportPage = () => {
           <div className="grid gap-3 xl:hidden">
             {report.rows.items.length ? (
               report.rows.items.map((item) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={item.id}>
+                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-3.5" key={item.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-950">{item.medicine.medicineName}</p>
-                      <p className="mt-1 text-sm text-slate-600">{item.batchNumber}</p>
+                      <p className="mt-0.5 text-sm text-slate-600">{item.batchNumber}</p>
                       {item.medicine.barcode ? (
-                        <p className="mt-1 text-xs font-medium text-slate-500">
+                        <p className="mt-0.5 text-xs font-medium text-slate-500">
                           Barcode: {item.medicine.barcode}
                         </p>
                       ) : null}
@@ -326,7 +330,6 @@ export const ExpiryReportPage = () => {
                       ["Expiry", formatDate(item.expiryDate)],
                       ["Quantity", formatNumber(item.quantityAvailable)],
                       ["Batch status", item.status],
-                      ["Generic", item.medicine.genericName],
                     ].map(([label, value]) => (
                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">

@@ -54,6 +54,16 @@ export const getReportsDashboardSummary = (params: DashboardSummaryParams) =>
     params: cleanParams(params),
   });
 
+export const exportDashboardReport = (
+  params: DashboardSummaryParams,
+  format: "xlsx" | "pdf",
+) =>
+  downloadReportExport(
+    "/reports/dashboard/export",
+    { ...params, format },
+    `reports-dashboard.${format}`,
+  );
+
 export const getSalesReport = (params: SalesReportParams) =>
   apiRequest<SalesReport>({
     method: "GET",

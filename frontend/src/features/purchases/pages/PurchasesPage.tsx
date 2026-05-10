@@ -6,7 +6,6 @@ import { Pencil, Trash2, Eye } from "lucide-react";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
@@ -35,6 +34,7 @@ import type { PurchaseListItem } from "../../../types/purchase";
 
 const inputClassName =
   "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+const compactFieldClassName = `${inputClassName} h-12`;
 
 const getPurchaseStatusLabel = (status: PurchaseListItem["status"]) =>
   status === "draft" ? "open" : status === "finalized" ? "received" : "cancelled";
@@ -225,64 +225,37 @@ export const PurchasesPage = () => {
             Create purchase order
           </Link>
         }
-        description="Manage draft purchase orders, received stock postings, and cancelled supplier documents with clear visibility into invoices, payment status, and totals."
+        className="py-4"
         eyebrow="Purchase management"
         title="Purchase Orders & Receipts"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          hint="Total matching purchase records"
           label="Documents"
           value={pagination?.total ?? 0}
         />
         <SummaryCard
-          hint="Draft purchase orders on this screen"
           label="Open POs visible"
           tone={draftCount > 0 ? "warning" : "default"}
           value={draftCount}
         />
         <SummaryCard
-          hint="Received purchases on this screen"
           label="Received visible"
           tone={finalizedCount > 0 ? "accent" : "default"}
           value={finalizedCount}
         />
         <SummaryCard
-          hint="Visible grand total across this page"
           label="Visible value"
           value={formatCurrency(visibleGrandTotal)}
         />
       </div>
 
-      <FilterBar
-        actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setSupplierId("");
-              setStatus("");
-              setPaymentStatus("");
-              setDateFrom("");
-              setDateTo("");
-              setSortBy("purchaseDate");
-              setSortOrder("desc");
-              setPage(1);
-            }}
-            type="button"
-          >
-            Clear filters
-          </button>
-        }
-        description="Keep high-use filters visible without crowding the main purchase table."
-        title="Purchase order filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -295,7 +268,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Supplier
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSupplierId(event.target.value);
                 setPage(1);
@@ -314,7 +287,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Status
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setStatus(event.target.value as typeof status);
                 setPage(1);
@@ -331,7 +304,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Payment status
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setPaymentStatus(event.target.value as typeof paymentStatus);
                 setPage(1);
@@ -348,7 +321,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Date from
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setDateFrom(event.target.value);
                 setPage(1);
@@ -361,7 +334,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Date to
             <input
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setDateTo(event.target.value);
                 setPage(1);
@@ -374,7 +347,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Sort by
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortBy(event.target.value as typeof sortBy);
                 setPage(1);
@@ -391,7 +364,7 @@ export const PurchasesPage = () => {
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Order
             <select
-              className={inputClassName}
+              className={compactFieldClassName}
               onChange={(event) => {
                 setSortOrder(event.target.value as "asc" | "desc");
                 setPage(1);
@@ -402,13 +375,27 @@ export const PurchasesPage = () => {
               <option value="asc">Oldest first</option>
             </select>
           </label>
-        </div>
-      </FilterBar>
 
-      <SectionCard
-        description="Compact purchase visibility for everyday procurement operations."
-        title="Purchase order register"
-      >
+          <button
+            className="h-12 rounded-2xl border border-slate-200 px-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setSupplierId("");
+              setStatus("");
+              setPaymentStatus("");
+              setDateFrom("");
+              setDateTo("");
+              setSortBy("purchaseDate");
+              setSortOrder("desc");
+              setPage(1);
+            }}
+            type="button"
+          >
+            Clear filters
+          </button>
+      </div>
+
+      <SectionCard contentClassName="pt-1" title="Purchase order register">
         <ResponsiveDataList
           data={purchases}
           isLoading={purchasesQuery.isLoading}

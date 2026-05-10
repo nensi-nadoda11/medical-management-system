@@ -69,6 +69,8 @@ export interface SalesReport {
     totalSales: string;
     totalBills: number;
     averageBillValue: string;
+    totalPaidAmount: string;
+    totalDueAmount: string;
     paymentBreakdown: Array<{
       paymentMethod: "cash" | "upi" | "card" | "bank_transfer" | "split";
       totalSales: string;
