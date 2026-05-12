@@ -744,13 +744,13 @@ const supplierSummarySubquery = (shopId: string, executor?: DbExecutor) => {
     .as("supplier_financial_summary");
 };
 
-const hasCustomerAccountingBalance = (
+const hasCustomerOutstandingDue = (
   summary: ReturnType<typeof customerSummarySubquery>,
-) => sql`(${summary.outstandingAmount} > 0 or ${summary.advanceAmount} > 0)`;
+) => sql`${summary.outstandingAmount} >= 1.00`;
 
-const hasSupplierAccountingBalance = (
+const hasSupplierOutstandingDue = (
   summary: ReturnType<typeof supplierSummarySubquery>,
-) => sql`(${summary.outstandingAmount} > 0 or ${summary.advanceAmount} > 0)`;
+) => sql`${summary.outstandingAmount} >= 1.00`;
 
 export class AccountingRepository {
   async findCustomerById(shopId: string, customerId: string, executor?: DbExecutor) {
@@ -1226,7 +1226,7 @@ export class AccountingRepository {
 
     const filters = [
       eq(customers.shopId, shopId),
-      hasCustomerAccountingBalance(summary),
+      hasCustomerOutstandingDue(summary),
     ];
 
     if (query.search) {
@@ -1282,7 +1282,7 @@ export class AccountingRepository {
     const summary = customerSummarySubquery(shopId);
     const filters = [
       eq(customers.shopId, shopId),
-      hasCustomerAccountingBalance(summary),
+      hasCustomerOutstandingDue(summary),
     ];
 
     if (query.search) {
@@ -1312,7 +1312,7 @@ export class AccountingRepository {
     const summary = customerSummarySubquery(shopId);
     const filters = [
       eq(customers.shopId, shopId),
-      hasCustomerAccountingBalance(summary),
+      hasCustomerOutstandingDue(summary),
     ];
 
     if (query.search) {
@@ -1500,7 +1500,7 @@ export class AccountingRepository {
 
     const filters = [
       eq(suppliers.shopId, shopId),
-      hasSupplierAccountingBalance(summary),
+      hasSupplierOutstandingDue(summary),
     ];
 
     if (query.search) {
@@ -1554,7 +1554,7 @@ export class AccountingRepository {
     const summary = supplierSummarySubquery(shopId);
     const filters = [
       eq(suppliers.shopId, shopId),
-      hasSupplierAccountingBalance(summary),
+      hasSupplierOutstandingDue(summary),
     ];
 
     if (query.search) {
@@ -1584,7 +1584,7 @@ export class AccountingRepository {
     const summary = supplierSummarySubquery(shopId);
     const filters = [
       eq(suppliers.shopId, shopId),
-      hasSupplierAccountingBalance(summary),
+      hasSupplierOutstandingDue(summary),
     ];
 
     if (query.search) {

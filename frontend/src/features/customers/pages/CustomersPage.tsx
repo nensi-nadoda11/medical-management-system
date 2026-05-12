@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, UserCheck, UserX } from "lucide-react";
+import { Eye, Pencil, Trash2, UserCheck, UserX } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -19,6 +19,7 @@ import type { MasterStatus } from "../../../types/medicine";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   createCustomer,
+  deleteCustomer,
   customersQueryKeys,
   listCustomers,
   updateCustomer,
@@ -33,6 +34,30 @@ const desktopTableScrollClassName =
 
 type StatusFilter = MasterStatus | "all";
 
+const getDeleteBlockReason = (customer: CustomerListItem) => {
+  const reasons: string[] = [];
+
+  if (customer.deletion.hasHeldBills) {
+    reasons.push("draft billing is still linked");
+  }
+
+  if (customer.deletion.hasOutstandingDue) {
+    reasons.push("customer due is still pending");
+  }
+
+  if (customer.deletion.hasAdvanceBalance) {
+    reasons.push("customer advance balance exists");
+  }
+
+  if (customer.deletion.hasPaymentHistory) {
+    reasons.push("linked payment history exists");
+  }
+
+  return reasons.length
+    ? `Delete disabled: ${reasons.join(", ")}.`
+    : "Delete customer";
+};
+
 export const CustomersPage = () => {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -41,6 +66,7 @@ export const CustomersPage = () => {
   const canCreateCustomer = hasPermission(user, "customers.create");
   const canEditCustomer = hasPermission(user, "customers.edit");
   const canUpdateStatus = hasPermission(user, "customers.edit");
+  const canDeleteCustomer = hasPermission(user, "customers.edit");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -52,6 +78,8 @@ export const CustomersPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CustomerListItem | null>(null);
   const [pendingStatusCustomer, setPendingStatusCustomer] =
+    useState<CustomerListItem | null>(null);
+  const [pendingDeleteCustomer, setPendingDeleteCustomer] =
     useState<CustomerListItem | null>(null);
   const deferredSearch = useDeferredValue(search);
 
@@ -108,6 +136,19 @@ export const CustomersPage = () => {
         variant: "success",
       });
       setPendingStatusCustomer(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (customerId: string) => deleteCustomer(customerId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: customersQueryKeys.all });
+      pushToast({
+        title: "Customer deleted",
+        description: "The customer was removed safely from the directory.",
+        variant: "success",
+      });
+      setPendingDeleteCustomer(null);
     },
   });
 
@@ -281,6 +322,17 @@ export const CustomersPage = () => {
                         {customer.status === "active" ? "Deactivate" : "Activate"}
                       </button>
                     ) : null}
+                    {canDeleteCustomer ? (
+                      <button
+                        className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!customer.deletion.canDelete}
+                        onClick={() => setPendingDeleteCustomer(customer)}
+                        title={getDeleteBlockReason(customer)}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -374,6 +426,18 @@ export const CustomersPage = () => {
                               )}
                             </button>
                           ) : null}
+                          {canDeleteCustomer ? (
+                            <button
+                              aria-label={`Delete ${customer.fullName}`}
+                              className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-transparent"
+                              disabled={!customer.deletion.canDelete}
+                              onClick={() => setPendingDeleteCustomer(customer)}
+                              title={getDeleteBlockReason(customer)}
+                              type="button"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -450,6 +514,38 @@ export const CustomersPage = () => {
         }}
         open={Boolean(pendingStatusCustomer)}
         title="Confirm status change"
+      />
+
+      <ConfirmDialog
+        confirmLabel="Delete customer"
+        description="This removes the customer from the directory and detaches safe completed billing links. This action cannot be undone."
+        extraContent={
+          pendingDeleteCustomer ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {pendingDeleteCustomer.fullName} will be deleted permanently.
+            </div>
+          ) : null
+        }
+        isLoading={deleteMutation.isPending}
+        onClose={() => setPendingDeleteCustomer(null)}
+        onConfirm={() => {
+          if (!pendingDeleteCustomer) {
+            return;
+          }
+
+          deleteMutation.mutate(pendingDeleteCustomer.id, {
+            onError: (error: Error) => {
+              pushToast({
+                title: "Unable to delete customer",
+                description: error.message,
+                variant: "error",
+              });
+            },
+          });
+        }}
+        open={Boolean(pendingDeleteCustomer)}
+        title="Delete customer"
+        tone="danger"
       />
     </div>
   );

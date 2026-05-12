@@ -44,6 +44,7 @@ export const BillingPage = () => {
     medicineSearchQuery,
     heldBillQuery,
     customerOptionsQuery,
+    setIsPaidAmountManual,
     isSubmitting,
     resetDraft,
     hydrateMedicine,
@@ -239,6 +240,7 @@ export const BillingPage = () => {
           onFinalize={onFinalize}
           onQuickAddCustomer={() => setIsQuickCustomerOpen(true)}
           onSaveHeld={onSaveHeld}
+          setIsPaidAmountManual={setIsPaidAmountManual}
           onSelectCustomer={(customer) => {
             setDraft((current) => ({
               ...current,

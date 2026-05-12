@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Eye } from "lucide-react";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { formatCurrency, formatDateTime } from "../../../lib/utils";
 import type { BillListItem } from "../../../types/billing";
@@ -30,6 +31,7 @@ export const BillsRegister = ({
       data={bills}
       isLoading={isLoading}
       keyExtractor={(item) => item.id}
+      tableClassName="w-full table-fixed border-separate border-spacing-y-2"
       emptyState={{
         title: emptyTitle,
         description: emptyDescription,
@@ -49,25 +51,32 @@ export const BillsRegister = ({
         {
           header: "Bill",
           accessor: (bill) => (
-            <div>
-              <p className="font-semibold text-slate-950">{bill.billNumber}</p>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-slate-950">{bill.billNumber}</p>
               <p className="mt-1 text-sm text-slate-600">
                 {bill.customerPhone || "Walk-in billing"}
               </p>
             </div>
           ),
-          className: "rounded-l-3xl px-4 py-4",
+          className: "w-[13%] rounded-l-3xl px-3 py-4",
+          headerClassName: "w-[13%] px-3",
         },
         {
           header: "Customer",
           accessor: (bill) => (
-            <div>
-              <p className="font-medium text-slate-900">{bill.customerLabel}</p>
-              <p className="mt-1 text-sm text-slate-600">{bill.notes || "No notes"}</p>
+            <div className="min-w-0">
+              <p className="truncate font-medium text-slate-900">{bill.customerLabel}</p>
             </div>
           ),
+          className: "w-[19%] px-3 py-4",
+          headerClassName: "w-[19%] px-3",
         },
-        { header: "Status", accessor: (bill) => <StatusBadge label={bill.status} /> },
+        {
+          header: "Status",
+          accessor: (bill) => <StatusBadge label={bill.status} />,
+          className: "w-[13%] px-3 py-4",
+          headerClassName: "w-[13%] px-3",
+        },
         {
           header: "Payment",
           accessor: (bill) => (
@@ -76,6 +85,8 @@ export const BillsRegister = ({
               <p className="text-sm text-slate-600">{bill.paymentMethod.toUpperCase()}</p>
             </div>
           ),
+          className: "w-[13%] px-3 py-4",
+          headerClassName: "w-[13%] px-3",
         },
         {
           header: "Amount",
@@ -85,36 +96,30 @@ export const BillsRegister = ({
               <p className="mt-1 text-sm text-slate-600">Due {formatCurrency(bill.dueAmount)}</p>
             </div>
           ),
-        },
-        {
-          header: "Timeline",
-          accessor: (bill) => (
-            <div className="text-xs text-slate-500">
-              <p>Created: {formatDateTime(bill.createdAt)}</p>
-              <p className="mt-1">
-                Completed: {bill.completedAt ? formatDateTime(bill.completedAt) : "Pending"}
-              </p>
-            </div>
-          ),
+          className: "w-[13%] px-3 py-4",
+          headerClassName: "w-[13%] px-3",
         },
         {
           header: "Operator",
           accessor: (bill) => (
-            <div>
-              <p className="font-medium text-slate-900">{bill.createdBy.fullName}</p>
+            <div className="min-w-0">
+              <p className="truncate font-medium text-slate-900">{bill.createdBy.fullName}</p>
               <p className="mt-1 text-xs text-slate-500 uppercase tracking-wider">{bill.createdBy.role}</p>
             </div>
           ),
+          className: "w-[19%] px-3 py-4",
+          headerClassName: "w-[19%] px-3",
         },
         {
           header: "Actions",
           accessor: (bill) => (
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-1.5">
               <Link
-                className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                aria-label={`View ${bill.billNumber}`}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-700 transition hover:border-slate-300 hover:bg-white"
                 to={`/app/billing/${bill.id}`}
               >
-                View
+                <Eye aria-hidden="true" className="h-4 w-4" />
               </Link>
               {canOpenInPos && bill.status === "held" ? (
                 <Link
@@ -123,11 +128,11 @@ export const BillsRegister = ({
                 >
                   Open in POS
                 </Link>
-              ) : null}
+                ) : null}
             </div>
           ),
-          className: "rounded-r-3xl px-4 py-4 text-right",
-          headerClassName: "px-4 text-right",
+          className: "w-[10%] rounded-r-3xl px-3 py-4 text-right",
+          headerClassName: "w-[10%] px-3 text-right",
         },
       ]}
       renderCard={(bill) => (
@@ -174,10 +179,11 @@ export const BillsRegister = ({
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
-              className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+              aria-label={`View ${bill.billNumber}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-700 transition hover:border-slate-300 hover:bg-white"
               to={`/app/billing/${bill.id}`}
             >
-              View
+              <Eye aria-hidden="true" className="h-4 w-4" />
             </Link>
             {canOpenInPos && bill.status === "held" ? (
               <Link

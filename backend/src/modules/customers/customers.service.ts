@@ -7,6 +7,7 @@ import {
 } from "../../shared/utils/money";
 import { toEndOfDay } from "../../shared/utils/date-range";
 import { collapseWhitespace } from "../../shared/utils/strings";
+import { AccountingRepository } from "../accounting/accounting.repository";
 import { CustomersRepository } from "./customers.repository";
 import type {
   CreateCustomerInput,
@@ -62,6 +63,7 @@ const mapSalePaymentStatus = (paidMinorUnits: number, grandTotalMinorUnits: numb
 
 const toCustomerResponse = (
   record: Awaited<ReturnType<CustomersRepository["listCustomers"]>>[number],
+  deleteEligibility: CustomerDeleteEligibility,
 ) => ({
   id: record.customer.id,
   shopId: record.customer.shopId,
@@ -82,6 +84,7 @@ const toCustomerResponse = (
   status: record.customer.status,
   createdAt: record.customer.createdAt,
   updatedAt: record.customer.updatedAt,
+  deletion: deleteEligibility,
   summary: {
     totalBills: Number(record.metrics.totalBills ?? 0),
     totalPurchaseAmount: record.metrics.totalPurchaseAmount ?? "0.00",
@@ -151,8 +154,19 @@ const toCustomerPaymentResponse = (
   })),
 });
 
+type CustomerDeleteEligibility = {
+  canDelete: boolean;
+  hasHeldBills: boolean;
+  hasOutstandingDue: boolean;
+  hasAdvanceBalance: boolean;
+  hasPaymentHistory: boolean;
+};
+
 export class CustomersService {
-  constructor(private readonly customersRepository = new CustomersRepository()) {}
+  constructor(
+    private readonly customersRepository = new CustomersRepository(),
+    private readonly accountingRepository = new AccountingRepository(),
+  ) {}
 
   async listCustomers(shopId: string, query: ListCustomersQuery) {
     const normalizedQuery = {
@@ -165,8 +179,26 @@ export class CustomersService {
       this.customersRepository.countCustomers(shopId, normalizedQuery),
     ]);
 
+    const deleteEligibilityList = await Promise.all(
+      items.map((item) =>
+        this.getCustomerDeleteEligibility(shopId, item.customer.id),
+      ),
+    );
+    const deleteEligibilityByCustomerId = new Map(
+      items.map((item, index) => [
+        item.customer.id,
+        deleteEligibilityList[index] ?? this.getDefaultDeleteEligibility(),
+      ]),
+    );
+
     return buildPaginatedResponse(
-      items.map(toCustomerResponse),
+      items.map((item) =>
+        toCustomerResponse(
+          item,
+          deleteEligibilityByCustomerId.get(item.customer.id) ??
+            this.getDefaultDeleteEligibility(),
+        ),
+      ),
       total,
       normalizedQuery.page,
       normalizedQuery.pageSize,
@@ -195,8 +227,26 @@ export class CustomersService {
       this.customersRepository.countCustomerDueSummaries(shopId, normalizedQuery),
     ]);
 
+    const deleteEligibilityList = await Promise.all(
+      items.map((item) =>
+        this.getCustomerDeleteEligibility(shopId, item.customer.id),
+      ),
+    );
+    const deleteEligibilityByCustomerId = new Map(
+      items.map((item, index) => [
+        item.customer.id,
+        deleteEligibilityList[index] ?? this.getDefaultDeleteEligibility(),
+      ]),
+    );
+
     return buildPaginatedResponse(
-      items.map(toCustomerResponse),
+      items.map((item) =>
+        toCustomerResponse(
+          item,
+          deleteEligibilityByCustomerId.get(item.customer.id) ??
+            this.getDefaultDeleteEligibility(),
+        ),
+      ),
       total,
       normalizedQuery.page,
       normalizedQuery.pageSize,
@@ -229,8 +279,13 @@ export class CustomersService {
       }),
     ]);
 
+    const deleteEligibility = await this.getCustomerDeleteEligibility(
+      shopId,
+      customerId,
+    );
+
     return {
-      ...toCustomerResponse(customerProfile),
+      ...toCustomerResponse(customerProfile, deleteEligibility),
       summary: {
         totalBills: Number(customerProfile.metrics.totalBills ?? 0),
         totalPurchaseAmount: customerProfile.metrics.totalPurchaseAmount ?? "0.00",
@@ -339,6 +394,63 @@ export class CustomersService {
     }
 
     return this.getCustomerById(shopId, customerId);
+  }
+
+  async deleteCustomer(shopId: string, customerId: string) {
+    await this.ensureCustomerExists(shopId, customerId);
+
+    const deleteEligibility = await this.getCustomerDeleteEligibility(
+      shopId,
+      customerId,
+    );
+
+    if (!deleteEligibility.canDelete) {
+      throw buildAppError(
+        409,
+        "CUSTOMER_DELETE_BLOCKED",
+        "This customer cannot be deleted while draft bills, due, advance, or linked payment history still exists.",
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await this.ensureCustomerExists(shopId, customerId, tx);
+
+      const lockedDeleteEligibility = await this.getCustomerDeleteEligibility(
+        shopId,
+        customerId,
+        tx,
+      );
+
+      if (!lockedDeleteEligibility.canDelete) {
+        throw buildAppError(
+          409,
+          "CUSTOMER_DELETE_BLOCKED",
+          "This customer cannot be deleted while draft bills, due, advance, or linked payment history still exists.",
+        );
+      }
+
+      await this.customersRepository.unlinkCustomerFromSales(
+        shopId,
+        customerId,
+        tx,
+      );
+
+      const deletedCustomer = await this.customersRepository.deleteCustomer(
+        shopId,
+        customerId,
+        tx,
+      );
+
+      if (!deletedCustomer) {
+        throw buildAppError(
+          500,
+          "CUSTOMER_DELETE_FAILED",
+          "Failed to delete customer.",
+        );
+      }
+    });
+
+    return { id: customerId };
   }
 
   async updateCustomerStatus(
@@ -595,8 +707,70 @@ export class CustomersService {
     );
   }
 
-  private async ensureCustomerExists(shopId: string, customerId: string) {
-    const customer = await this.customersRepository.findCustomerById(shopId, customerId);
+  private getDefaultDeleteEligibility(): CustomerDeleteEligibility {
+    return {
+      canDelete: true,
+      hasHeldBills: false,
+      hasOutstandingDue: false,
+      hasAdvanceBalance: false,
+      hasPaymentHistory: false,
+    };
+  }
+
+  private async getCustomerDeleteEligibility(
+    shopId: string,
+    customerId: string,
+    executor?: Parameters<CustomersRepository["findCustomerById"]>[2],
+  ) {
+    const [heldBillCount, paymentRecordCount, financialSummary] = await Promise.all([
+      this.customersRepository.countHeldSalesByCustomer(shopId, customerId, executor),
+      this.customersRepository.countCustomerPaymentRecords(
+        shopId,
+        customerId,
+        executor,
+      ),
+      this.accountingRepository.getCustomerFinancialSummary(
+        shopId,
+        customerId,
+        executor,
+      ),
+    ]);
+
+    const outstandingDueMinorUnits = toMoneyMinorUnits(
+      financialSummary?.summary.outstandingAmount ?? 0,
+    );
+    const advanceMinorUnits = toMoneyMinorUnits(
+      financialSummary?.summary.advanceAmount ?? 0,
+    );
+
+    const hasHeldBills = heldBillCount > 0;
+    const hasOutstandingDue = outstandingDueMinorUnits > 0;
+    const hasAdvanceBalance = advanceMinorUnits > 0;
+    const hasPaymentHistory = paymentRecordCount > 0;
+
+    return {
+      canDelete:
+        !hasHeldBills &&
+        !hasOutstandingDue &&
+        !hasAdvanceBalance &&
+        !hasPaymentHistory,
+      hasHeldBills,
+      hasOutstandingDue,
+      hasAdvanceBalance,
+      hasPaymentHistory,
+    } satisfies CustomerDeleteEligibility;
+  }
+
+  private async ensureCustomerExists(
+    shopId: string,
+    customerId: string,
+    executor?: Parameters<CustomersRepository["findCustomerById"]>[2],
+  ) {
+    const customer = await this.customersRepository.findCustomerById(
+      shopId,
+      customerId,
+      executor,
+    );
 
     if (!customer) {
       throw buildAppError(404, "CUSTOMER_NOT_FOUND", "Customer not found.");

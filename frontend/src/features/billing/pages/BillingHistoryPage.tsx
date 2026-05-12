@@ -2,7 +2,6 @@ import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { SummaryCard } from "../../../components/ui/SummaryCard";
@@ -69,38 +68,33 @@ export const BillingHistoryPage = () => {
     <div className="space-y-6">
       <PageHeader
         actions={<BillingModuleNav canCreateBills={canCreateBills} />}
-        description="Browse completed and held bills with payment, operator, and customer visibility in one clean register."
         eyebrow="Billing / POS"
         title="Billing history"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 [&>article]:p-3.5">
         <SummaryCard
-          hint="Total matching bills"
           label="Bills"
           value={pagination?.total ?? 0}
         />
         <SummaryCard
-          hint="Completed bills on this page"
           label="Completed visible"
           tone={completedCount ? "accent" : "default"}
           value={completedCount}
         />
         <SummaryCard
-          hint="Held bills on this page"
           label="Held visible"
           tone={heldCount ? "warning" : "default"}
           value={heldCount}
         />
         <SummaryCard
-          hint="Visible bill value on this page"
           label="Visible total"
           value={formatCurrency(visibleValue)}
         />
       </div>
 
-      <FilterBar
-        actions={
+      <div className="space-y-3">
+        <div className="flex justify-end">
           <button
             className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
             onClick={() => {
@@ -117,11 +111,10 @@ export const BillingHistoryPage = () => {
           >
             Clear filters
           </button>
-        }
-        description="Keep billing history practical for daily counter reviews and accountant visibility."
-        title="Billing filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        </div>
+
+        <div className="rounded-[22px] border border-slate-200/75 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
             Search
             <input
@@ -227,10 +220,10 @@ export const BillingHistoryPage = () => {
             </select>
           </label>
         </div>
-      </FilterBar>
+        </div>
+      </div>
 
       <SectionCard
-        description="A compact billing register for sales activity, payment follow-up, and daily shop review."
         title="Billing register"
       >
         <BillsRegister

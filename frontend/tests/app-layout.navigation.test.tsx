@@ -90,4 +90,24 @@ describe("AppLayout navigation", () => {
     expect(screen.getByRole("link", { name: "Inventory" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Suppliers" })).toBeNull();
   });
+
+  it("renders a mobile navigation trigger so the sidebar can open on smaller screens", async () => {
+    mockUseSessionQuery.mockReturnValue({
+      data: {
+        shop: {
+          name: "Wellness Pharmacy",
+        },
+        user: {
+          role: "admin",
+          fullName: "Alex Admin",
+          email: "alex@example.com",
+          permissions: [],
+        },
+      },
+    });
+
+    render(<div>Dashboard</div>, { wrapper: createWrapper });
+
+    expect(await screen.findByRole("button", { name: "Open navigation" })).toBeTruthy();
+  });
 });

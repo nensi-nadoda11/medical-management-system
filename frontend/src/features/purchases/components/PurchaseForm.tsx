@@ -9,7 +9,14 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { GST_PERCENTAGES, type Medicine } from "../../../types/medicine";
 import type { PurchaseDetail, SavePurchasePayload } from "../../../types/purchase";
 import type { Supplier } from "../../../types/supplier";
-import { cn, formatCurrency, toDateInputValue } from "../../../lib/utils";
+import {
+  cn,
+  formatCurrency,
+  getAutoRoundedMoneyBreakdown,
+  isSameMoney,
+  normalizePaidAmountInput,
+  toDateInputValue,
+} from "../../../lib/utils";
 import {
   accountingQueryKeys,
   getSupplierDueSummary,
@@ -41,7 +48,6 @@ const purchaseFormSchema = z
     supplierInvoiceDate: z.string().trim().optional().or(z.literal("")),
     purchaseDate: z.string().trim().min(1, "Purchase date is required."),
     paidAmount: z.number().min(0, "Paid amount cannot be negative.").max(999999999.99, "Paid amount is too high."),
-    roundOffAmount: z.number().min(-9999.99, "Round off amount is too low.").max(9999.99, "Round off amount is too high."),
     notes: z.string().trim().max(2000).optional().or(z.literal("")),
     items: z.array(purchaseItemSchema).min(1, "Add at least one purchase item."),
   })
@@ -130,7 +136,6 @@ const buildDefaultValues = (
       supplierInvoiceDate: toDateInputValue(purchase.supplierInvoiceDate),
       purchaseDate: toDateInputValue(purchase.purchaseDate),
       paidAmount: Number(purchase.initialPaidAmount ?? purchase.paidAmount),
-      roundOffAmount: Number(purchase.roundOffAmount),
       notes: purchase.notes ?? "",
       items: purchase.items.map((item) => ({
         medicineId: item.medicine.id,
@@ -153,7 +158,6 @@ const buildDefaultValues = (
     supplierInvoiceDate: "",
     purchaseDate: toDateInputValue(new Date()),
     paidAmount: 0,
-    roundOffAmount: 0,
     notes: "",
     items: [
       {
@@ -187,8 +191,6 @@ const calculateLine = (item?: Partial<PurchaseFormValues["items"][number]>) => {
 
 const calculateTotals = (
   items: PurchaseFormValues["items"],
-  paidAmount: number,
-  roundOffAmount: number,
 ) => {
   const totals = items.reduce(
     (accumulator, item) => {
@@ -210,26 +212,29 @@ const calculateTotals = (
     },
   );
 
-  const grandTotal = totals.subtotal + totals.tax + Number(roundOffAmount || 0);
-  const dueAmount = grandTotal - Number(paidAmount || 0);
+  const autoRoundedAmounts = getAutoRoundedMoneyBreakdown(
+    totals.subtotal + totals.tax,
+  );
 
   return {
     ...totals,
-    grandTotal,
-    paidAmount: Number(paidAmount || 0),
-    dueAmount,
+    roundOffAmount: autoRoundedAmounts.roundOffAmount,
+    grandTotal: autoRoundedAmounts.roundedAmount,
   };
 };
 
-const toPayload = (values: PurchaseFormValues): SavePurchasePayload => ({
+const toPayload = (
+  values: PurchaseFormValues,
+  roundOffAmount: number,
+): SavePurchasePayload => ({
   supplierId: values.supplierId,
   supplierInvoiceNumber: values.supplierInvoiceNumber?.trim()
     ? values.supplierInvoiceNumber.trim()
     : null,
   supplierInvoiceDate: values.supplierInvoiceDate || null,
   purchaseDate: values.purchaseDate,
-  paidAmount: values.paidAmount,
-  roundOffAmount: values.roundOffAmount,
+  paidAmount: normalizePaidAmountInput(values.paidAmount),
+  roundOffAmount,
   notes: values.notes?.trim() ? values.notes.trim() : null,
   items: values.items.map((item) => ({
     medicineId: item.medicineId,
@@ -256,13 +261,14 @@ export const PurchaseForm = ({
 }: PurchaseFormProps) => {
   const [submissionIntent, setSubmissionIntent] =
     useState<PurchaseSubmissionIntent>("draft");
+  const [isPaidAmountManual, setIsPaidAmountManual] = useState(false);
 
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseFormSchema),
     defaultValues: buildDefaultValues(purchase, suppliers, medicines),
   });
 
-  const { control, register, handleSubmit, reset, formState } = form;
+  const { control, register, handleSubmit, reset, formState, setValue } = form;
   const { fields, append, remove } = useFieldArray({
     control,
     name: "items",
@@ -280,13 +286,16 @@ export const PurchaseForm = ({
     control,
     name: "paidAmount",
   });
-  const roundOffAmount = useWatch({
-    control,
-    name: "roundOffAmount",
-  });
 
   useEffect(() => {
     reset(buildDefaultValues(purchase, suppliers, medicines));
+    const initialPaidAmount = Number(
+      purchase?.initialPaidAmount ?? purchase?.paidAmount ?? 0,
+    );
+    const initialGrandTotal = Number(purchase?.grandTotal ?? 0);
+    setIsPaidAmountManual(
+      Boolean(purchase) && !isSameMoney(initialPaidAmount, initialGrandTotal),
+    );
   }, [medicines, purchase, reset, suppliers]);
 
   const supplierSummaryQuery = useQuery({
@@ -295,19 +304,32 @@ export const PurchaseForm = ({
     enabled: Boolean(supplierId),
   });
 
-  const totals = calculateTotals(
-    watchedItems ?? [],
-    Number(paidAmount ?? 0),
-    Number(roundOffAmount ?? 0),
-  );
+  const totals = calculateTotals(watchedItems ?? []);
+  const normalizedPaidAmount = normalizePaidAmountInput(paidAmount ?? 0);
+
+  useEffect(() => {
+    if (isPaidAmountManual) {
+      return;
+    }
+
+    if (isSameMoney(paidAmount ?? 0, totals.grandTotal)) {
+      return;
+    }
+
+    setValue("paidAmount", totals.grandTotal, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [isPaidAmountManual, paidAmount, setValue, totals.grandTotal]);
+
   const availableAdvance = Number(
     supplierSummaryQuery.data?.summary.advanceAmount ?? 0,
   );
   const previewAdvanceApplied = Math.min(
     availableAdvance,
-    Math.max(totals.grandTotal - totals.paidAmount, 0),
+    Math.max(totals.grandTotal - normalizedPaidAmount, 0),
   );
-  const settlementAppliedAmount = totals.paidAmount + previewAdvanceApplied;
+  const settlementAppliedAmount = normalizedPaidAmount + previewAdvanceApplied;
   const effectivePaidAmount = Math.min(
     totals.grandTotal,
     settlementAppliedAmount,
@@ -320,6 +342,7 @@ export const PurchaseForm = ({
     totals.grandTotal - effectivePaidAmount,
     0,
   );
+  const paidAmountField = register("paidAmount", { valueAsNumber: true });
 
   const canSubmit = suppliers.length > 0 && medicines.length > 0;
 
@@ -327,7 +350,7 @@ export const PurchaseForm = ({
     <form
       className="space-y-5"
       onSubmit={handleSubmit(async (values) => {
-        await onSubmit(toPayload(values), submissionIntent);
+        await onSubmit(toPayload(values, totals.roundOffAmount), submissionIntent);
       })}
     >
 
@@ -418,7 +441,26 @@ export const PurchaseForm = ({
                   className={inputClassName}
                   step="0.01"
                   type="number"
-                  {...register("paidAmount", { valueAsNumber: true })}
+                  {...paidAmountField}
+                  onBlur={(event) => {
+                    paidAmountField.onBlur(event);
+                    const normalizedValue = normalizePaidAmountInput(
+                      event.target.value,
+                    );
+                    setValue("paidAmount", normalizedValue, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    setIsPaidAmountManual(
+                      !isSameMoney(normalizedValue, totals.grandTotal),
+                    );
+                  }}
+                  onChange={(event) => {
+                    paidAmountField.onChange(event);
+                    setIsPaidAmountManual(
+                      !isSameMoney(event.target.value, totals.grandTotal),
+                    );
+                  }}
                 />
                 {formState.errors.paidAmount ? (
                   <span className="text-sm text-rose-600">
@@ -426,26 +468,11 @@ export const PurchaseForm = ({
                   </span>
                 ) : null}
                 <span className="text-xs text-slate-500">
-                  Enter only the amount already paid against this purchase.
+                  Full-payment value auto-rounds to the nearest rupee. You can still edit it for partial payment.
                 </span>
                 <span className="text-xs text-slate-500">
                   Existing supplier advance, if available, is auto-adjusted when this purchase is finalized.
                 </span>
-              </label>
-
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Round off amount
-                <input
-                  className={inputClassName}
-                  step="0.01"
-                  type="number"
-                  {...register("roundOffAmount", { valueAsNumber: true })}
-                />
-                {formState.errors.roundOffAmount ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.roundOffAmount.message}
-                  </span>
-                ) : null}
               </label>
 
               <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
@@ -854,7 +881,7 @@ export const PurchaseForm = ({
                 },
                 {
                   label: "Round off",
-                  value: formatCurrency(roundOffAmount),
+                  value: formatCurrency(totals.roundOffAmount),
                 },
                 {
                   label: "Grand total",
@@ -867,7 +894,7 @@ export const PurchaseForm = ({
                 },
                 {
                   label: "Entered payment",
-                  value: formatCurrency(totals.paidAmount),
+                  value: formatCurrency(normalizedPaidAmount),
                 },
                 {
                   label: "Advance used",

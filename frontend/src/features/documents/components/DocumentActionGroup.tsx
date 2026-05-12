@@ -16,6 +16,7 @@ interface DocumentActionGroupProps {
   previewVariant?: DocumentVariant;
   printVariant?: DocumentVariant;
   pdfVariant?: DocumentVariant;
+  buttonClassName?: string;
 }
 
 const baseButtonClassName =
@@ -29,6 +30,7 @@ export const DocumentActionGroup = ({
   previewVariant = "a4",
   printVariant = "a4",
   pdfVariant = "a4",
+  buttonClassName,
 }: DocumentActionGroupProps) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const { pushToast } = useToast();
@@ -38,7 +40,7 @@ export const DocumentActionGroup = ({
     <div className="flex flex-wrap items-center gap-2">
       {showPreview ? (
         <a
-          className={cn(baseButtonClassName, sizeClassName)}
+          className={cn(baseButtonClassName, sizeClassName, buttonClassName)}
           href={buildDocumentPreviewPath(kind, id, { variant: previewVariant })}
           rel="noreferrer"
           target="_blank"
@@ -47,7 +49,7 @@ export const DocumentActionGroup = ({
         </a>
       ) : null}
       <a
-        className={cn(baseButtonClassName, sizeClassName)}
+        className={cn(baseButtonClassName, sizeClassName, buttonClassName)}
         href={buildDocumentPreviewPath(kind, id, {
           variant: printVariant,
           autoprint: true,
@@ -58,7 +60,7 @@ export const DocumentActionGroup = ({
         Print
       </a>
       <button
-        className={cn(baseButtonClassName, sizeClassName)}
+        className={cn(baseButtonClassName, sizeClassName, buttonClassName)}
         disabled={isDownloading}
         onClick={() => {
           setIsDownloading(true);

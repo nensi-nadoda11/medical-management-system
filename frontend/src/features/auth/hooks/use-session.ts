@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError } from "../../../lib/api";
+import { syncStoredBranchId } from "../../../lib/branch-context";
 import { authService } from "../../../services/auth";
 
 export const authQueryKeys = {
@@ -12,7 +13,17 @@ export const useSessionQuery = () =>
     queryKey: authQueryKeys.session,
     queryFn: async () => {
       try {
-        return await authService.getSession();
+        const session = await authService.getSession();
+        const branchContext = session.branchContext;
+
+        if (branchContext?.currentBranch?.id && branchContext.accessibleBranches.length) {
+          syncStoredBranchId(
+            branchContext.accessibleBranches.map((branch) => branch.id),
+            branchContext.currentBranch.id,
+          );
+        }
+
+        return session;
       } catch (error) {
         if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
           return null;

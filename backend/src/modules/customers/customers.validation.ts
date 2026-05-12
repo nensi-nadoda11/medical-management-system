@@ -292,6 +292,12 @@ export const updateCustomerStatusSchema = z.object({
   }),
 });
 
+export const deleteCustomerSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+});
+
 export const listCustomerPurchasesSchema = z.object({
   params: z.object({
     id: z.string().uuid(),
@@ -343,6 +349,7 @@ export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>["body"];
 export type UpdateCustomerStatusInput = z.infer<
   typeof updateCustomerStatusSchema
 >["body"];
+export type DeleteCustomerParams = z.infer<typeof deleteCustomerSchema>["params"];
 export type ListCustomerPurchasesQuery = z.infer<
   typeof listCustomerPurchasesSchema
 >["query"];

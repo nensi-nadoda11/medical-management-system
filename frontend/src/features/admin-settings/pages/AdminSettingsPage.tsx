@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -116,6 +117,9 @@ export const AdminSettingsPage = () => {
   const [settingsDraft, setSettingsDraft] =
     useState<UpdateAdminShopSettingsPayload | null>(null);
   const [showRoleConfirm, setShowRoleConfirm] = useState(false);
+  const [expandedPermissionGroups, setExpandedPermissionGroups] = useState<
+    PermissionCatalogItem["group"][]
+  >([]);
 
   const catalogQuery = useQuery({
     queryKey: adminSettingsQueryKeys.catalog,
@@ -278,6 +282,12 @@ export const AdminSettingsPage = () => {
       .filter((entry) => entry.items.length > 0);
   }, [catalogQuery.data]);
 
+  useEffect(() => {
+    setExpandedPermissionGroups((current) =>
+      current.filter((group) => groupedCatalog.some((entry) => entry.group === group)),
+    );
+  }, [groupedCatalog]);
+
   const roleDraftDirty = roleOrder.some((role) => {
     const current =
       rolePermissionsQuery.data?.find((entry) => entry.role === role)?.permissions ?? [];
@@ -397,7 +407,6 @@ export const AdminSettingsPage = () => {
     <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
       <SectionCard
         title="Alerts and inventory"
-        description="Tune alert thresholds and operational stock behavior without changing master data."
         action={
           <div className="flex gap-2">
             <button
@@ -518,7 +527,6 @@ export const AdminSettingsPage = () => {
 
       <SectionCard
         title="Billing and notification behavior"
-        description="Control invoice behavior, billing flexibility, and notification delivery defaults."
       >
         <div className="grid gap-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -591,9 +599,6 @@ export const AdminSettingsPage = () => {
             <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-950">Notification channels</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Admin alerts use active admin accounts, while supplier reorder alerts use the latest purchase-linked supplier contact automatically.
-                  </p>
                 </div>
               <span
                 className={
@@ -669,10 +674,11 @@ export const AdminSettingsPage = () => {
   );
 
   const permissionsContent = (
-    <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+    <div className="grid items-stretch gap-5 xl:grid-cols-[1.2fr_0.8fr]">
       <SectionCard
+        className="h-full xl:h-[calc(100vh-13.5rem)]"
+        contentClassName="h-full overflow-y-auto pr-1"
         title="Role permission matrix"
-        description="Update role defaults in one place. Admin role changes are protected by self-lockout rules."
         action={
           <div className="flex gap-2">
             <button
@@ -707,63 +713,135 @@ export const AdminSettingsPage = () => {
           </div>
         }
       >
-        <div className="overflow-x-auto">
-          <div className="min-w-[760px] space-y-4">
-            {/* Matrix Header */}
-            <div className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              <div>Permission</div>
-              {roleOrder.map((role) => (
-                <div className="text-center" key={role}>
-                  {humanizeLabel(role)}
-                </div>
-              ))}
-            </div>
+        <div className="space-y-3">
+          {groupedCatalog.map((group) => {
+            const isExpanded = expandedPermissionGroups.includes(group.group);
 
-            {/* Matrix Body */}
-            <div className="space-y-6">
-              {groupedCatalog.map((group) => (
-                <div key={group.group}>
-                  <div className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    {humanizeLabel(group.group)}
+            return (
+              <div
+                className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50/80"
+                key={group.group}
+              >
+                <button
+                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-white/70"
+                  onClick={() =>
+                    setExpandedPermissionGroups((current) =>
+                      current.includes(group.group)
+                        ? current.filter((item) => item !== group.group)
+                        : [...current, group.group],
+                    )
+                  }
+                  type="button"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-700">
+                      {humanizeLabel(group.group)}
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    {group.items.map((permission) => (
-                      <div
-                        className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] items-center rounded-3xl border border-slate-200 bg-slate-50"
-                        key={permission.key}
-                      >
-                        <div className="px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-950">{permission.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-500">
-                            {permission.description}
-                          </p>
-                        </div>
-                        {roleOrder.map((role) => (
-                          <div className="flex justify-center px-4 py-3" key={`${permission.key}-${role}`}>
-                            <input
-                              checked={roleDraft[role].includes(permission.key)}
-                              className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                              onChange={() => toggleRolePermission(role, permission.key)}
-                              type="checkbox"
-                            />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600">
+                    {isExpanded ? (
+                      <ChevronDown aria-hidden="true" className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                    )}
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div className="border-t border-slate-200 bg-white px-3 py-3">
+                    <div className="space-y-2 md:hidden">
+                      {group.items.map((permission) => (
+                        <div
+                          className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                          key={permission.key}
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">
+                              {permission.label}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">
+                              {permission.description}
+                            </p>
                           </div>
-                        ))}
+
+                          <div className="mt-4 grid gap-2">
+                            {roleOrder.map((role) => (
+                              <label
+                                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700"
+                                key={`${permission.key}-${role}`}
+                              >
+                                <span>{humanizeLabel(role)}</span>
+                                <input
+                                  checked={roleDraft[role].includes(permission.key)}
+                                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                  onChange={() => toggleRolePermission(role, permission.key)}
+                                  type="checkbox"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto md:block">
+                      <div className="min-w-[760px] space-y-2">
+                        <div className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] px-4 pb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          <div>Permission</div>
+                          {roleOrder.map((role) => (
+                            <div className="text-center" key={role}>
+                              {humanizeLabel(role)}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-2">
+                          {group.items.map((permission) => (
+                            <div
+                              className="grid grid-cols-[minmax(260px,1fr)_120px_120px_120px] items-center rounded-3xl border border-slate-200 bg-slate-50"
+                              key={permission.key}
+                            >
+                              <div className="px-4 py-3">
+                                <p className="text-sm font-semibold text-slate-950">
+                                  {permission.label}
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                  {permission.description}
+                                </p>
+                              </div>
+                              {roleOrder.map((role) => (
+                                <div
+                                  className="flex justify-center px-4 py-3"
+                                  key={`${permission.key}-${role}`}
+                                >
+                                  <input
+                                    checked={roleDraft[role].includes(permission.key)}
+                                    className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                    onChange={() => toggleRolePermission(role, permission.key)}
+                                    type="checkbox"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </SectionCard>
 
       <SectionCard
+        className="h-full xl:h-[calc(100vh-13.5rem)]"
+        contentClassName="flex h-full flex-col overflow-hidden"
         title="User-specific overrides"
-        description="Grant extra access or block selected permissions for an individual user."
       >
         {eligibleUsers.length ? (
-          <div className="space-y-4">
+          <div className="flex h-full flex-col gap-4">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Select team member
               <select
@@ -783,25 +861,7 @@ export const AdminSettingsPage = () => {
               <LoadingState title="Loading permission detail" />
             ) : userDetailQuery.data ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    ["Inherited", userDetailQuery.data.inheritedPermissions.length],
-                    ["Allow overrides", overrideDraft.allow.length],
-                    ["Effective", userDetailQuery.data.effectivePermissions.length],
-                  ].map(([label, value]) => (
-                    <article
-                      className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3"
-                      key={label}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        {label}
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
-                    </article>
-                  ))}
-                </div>
-
-                <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                <div className="flex-1 space-y-3 overflow-y-auto pr-1">
                   {groupedCatalog.map((group) => (
                     <div key={group.group}>
                       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -865,7 +925,7 @@ export const AdminSettingsPage = () => {
                   ))}
                 </div>
 
-                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 pt-4">
                   <button
                     className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                     onClick={() =>

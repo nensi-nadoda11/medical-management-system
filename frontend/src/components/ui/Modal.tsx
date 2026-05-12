@@ -52,7 +52,7 @@ export const Modal = ({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] grid place-items-center p-4 sm:p-6 md:p-12">
+    <div className="fixed inset-0 z-[100] grid place-items-center p-3 sm:p-6 md:p-12">
       <div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={onClose}
@@ -60,7 +60,7 @@ export const Modal = ({
       <div
         className={`relative flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${panelClassName ?? ""}`}
       >
-        <div className="flex-none flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div className="flex-none flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-1">
             <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
             {description ? (
@@ -79,12 +79,12 @@ export const Modal = ({
           </button>
         </div>
         
-        <div className={`custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-6 py-6 ${bodyClassName ?? ""}`}>
+        <div className={`custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 ${bodyClassName ?? ""}`}>
           {children}
         </div>
         
         {footer ? (
-          <div className="flex-none flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/50 px-6 py-4 md:flex-row md:justify-end">
+          <div className="flex-none flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-6 md:flex-row md:justify-end">
             {footer}
           </div>
         ) : null}

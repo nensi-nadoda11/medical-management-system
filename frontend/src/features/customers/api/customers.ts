@@ -93,6 +93,12 @@ export const updateCustomerStatus = (
     data: payload,
   });
 
+export const deleteCustomer = (id: string) =>
+  apiRequest<{ id: string }>({
+    method: "DELETE",
+    url: `/customers/${id}`,
+  });
+
 export const listCustomerPurchases = (
   id: string,
   params: CustomerHistoryParams,

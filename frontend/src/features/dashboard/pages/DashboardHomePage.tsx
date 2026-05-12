@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ClipboardPlus,
   Clock3,
-  FilePlus2,
   HandCoins,
   LayoutGrid,
   PackagePlus,
@@ -26,7 +25,6 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { canAccessModule } from "../../../types/auth";
 import { billingQueryKeys, listBills } from "../../billing/api/billing";
 import { useSessionQuery } from "../../auth/hooks/use-session";
-import { customersQueryKeys, listCustomers } from "../../customers/api/customers";
 import {
   accountingQueryKeys,
   listAccountingCustomerPayments,
@@ -429,19 +427,6 @@ export const DashboardHomePage = () => {
     queryKey: billingQueryKeys.list(todayBillsParams),
     queryFn: () => listBills(todayBillsParams),
     enabled: canViewBilling && !canViewReports,
-    staleTime: 60_000,
-  });
-
-  const recentCustomersParams = {
-    page: 1,
-    pageSize: 50,
-    sortBy: "createdAt" as const,
-    sortOrder: "desc" as const,
-  };
-  const recentCustomersQuery = useQuery({
-    queryKey: customersQueryKeys.list(recentCustomersParams),
-    queryFn: () => listCustomers(recentCustomersParams),
-    enabled: canViewCustomers,
     staleTime: 60_000,
   });
 
@@ -903,15 +888,6 @@ export const DashboardHomePage = () => {
     todaySupplierPaymentsQuery.data?.summary.totalAmount ?? "0.00";
   const todaySupplierPaymentsCount =
     todaySupplierPaymentsQuery.data?.summary.totalPayments ?? 0;
-  const todayCustomerCount = (recentCustomersQuery.data?.items ?? []).filter(
-    (item) => toDateParam(new Date(item.createdAt)) === todayParam,
-  ).length;
-  const yesterdayDate = new Date(todayStart);
-  yesterdayDate.setDate(todayStart.getDate() - 1);
-  const yesterdayParam = toDateParam(yesterdayDate);
-  const yesterdayCustomerCount = (recentCustomersQuery.data?.items ?? []).filter(
-    (item) => toDateParam(new Date(item.createdAt)) === yesterdayParam,
-  ).length;
 
   const orderedSalesTrend = [...salesTrend].sort(
     (left, right) =>
@@ -1019,29 +995,29 @@ export const DashboardHomePage = () => {
           iconClassName: "bg-emerald-50 text-emerald-600",
         }
       : null,
-    canViewBilling
+    canViewPayments
       ? {
-          label: "Invoices Created",
-          value: formatNumber(todayBillsCount),
-          change: formatChange(
-            todayBillsCount,
-            previousSalesTrend?.totalBills ?? 0,
-          ),
-          changeTone: "positive" as const,
-          note: "vs yesterday",
-          icon: <FilePlus2 className="h-6 w-6" />,
-          iconClassName: "bg-sky-50 text-sky-600",
+          label: "Total Customer Due",
+          value: formatCurrency(customerDueSummary.totalOutstandingAmount),
+          change: formatNumber(customerDueSummary.entityCount),
+          changeTone: "negative" as const,
+          note: customerDueSummary.entityCount === 1 ? "customer due" : "customers due",
+          icon: <BadgeIndianRupee className="h-6 w-6" />,
+          iconClassName: "bg-rose-50 text-rose-600",
+          to: "/app/accounting/customers/outstanding",
         }
       : null,
-    canViewCustomers
+    canViewPayments
       ? {
-          label: "New Customers",
-          value: formatNumber(todayCustomerCount),
-          change: formatChange(todayCustomerCount, yesterdayCustomerCount),
-          changeTone: "positive" as const,
-          note: "vs yesterday",
-          icon: <UserPlus className="h-6 w-6" />,
-          iconClassName: "bg-amber-50 text-amber-500",
+          label: "Total Supplier Due",
+          value: formatCurrency(supplierPayableSummary.totalOutstandingAmount),
+          change: formatNumber(supplierPayableSummary.entityCount),
+          changeTone: "negative" as const,
+          note:
+            supplierPayableSummary.entityCount === 1 ? "supplier due" : "suppliers due",
+          icon: <BadgeIndianRupee className="h-6 w-6" />,
+          iconClassName: "bg-amber-50 text-amber-600",
+          to: "/app/accounting/suppliers/outstanding",
         }
       : null,
   ].filter(isPresent);
@@ -1729,37 +1705,57 @@ export const DashboardHomePage = () => {
 
         {adminStatCards.length ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {adminStatCards.map((card) => (
-              <article
-                className="rounded-[22px] border border-white/80 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.08),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.94))] px-4 py-3.5 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.22)]"
-                key={card.label}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[0.95rem] font-medium text-slate-500">{card.label}</p>
-                    <p className="mt-1.5 text-[1.75rem] font-semibold tracking-tight text-slate-950">
-                      {card.value}
-                    </p>
+            {adminStatCards.map((card) => {
+              const content = (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[0.95rem] font-medium text-slate-500">{card.label}</p>
+                      <p className="mt-1.5 text-[1.75rem] font-semibold tracking-tight text-slate-950">
+                        {card.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex h-12 w-12 items-center justify-center rounded-[16px] ${card.iconClassName}`}
+                    >
+                      {card.icon}
+                    </div>
                   </div>
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-[16px] ${card.iconClassName}`}
-                  >
-                    {card.icon}
+                  <div className="mt-2.5 flex items-center gap-2 text-[13px]">
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        card.changeTone === "positive" ? "text-emerald-600" : "text-rose-500",
+                      )}
+                    >
+                      {card.change}
+                    </span>
+                    <span className="text-slate-500">{card.note}</span>
                   </div>
-                </div>
-                <div className="mt-2.5 flex items-center gap-2 text-[13px]">
-                  <span
-                    className={cn(
-                      "font-semibold",
-                      card.changeTone === "positive" ? "text-emerald-600" : "text-rose-500",
-                    )}
+                </>
+              );
+
+              const className =
+                "block rounded-[22px] border border-white/80 bg-[radial-gradient(circle_at_top_left,rgba(109,61,245,0.08),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,255,0.94))] px-4 py-3.5 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.22)]";
+
+              if (card.to) {
+                return (
+                  <Link
+                    className={`${className} transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-[0_28px_62px_-42px_rgba(15,23,42,0.24)]`}
+                    key={card.label}
+                    to={card.to}
                   >
-                    {card.change}
-                  </span>
-                  <span className="text-slate-500">{card.note}</span>
-                </div>
-              </article>
-            ))}
+                    {content}
+                  </Link>
+                );
+              }
+
+              return (
+                <article className={className} key={card.label}>
+                  {content}
+                </article>
+              );
+            })}
           </div>
         ) : null}
 

@@ -1068,43 +1068,90 @@ export const DataManagementPage = () => {
             </div>
 
             {activeImportDetail.rows.length ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      <th className="px-4">Row</th>
-                      <th className="px-4">Status</th>
-                      <th className="px-4">Action</th>
-                      <th className="px-4">Identifier</th>
-                      <th className="px-4">Errors</th>
-                      <th className="px-4">Warnings</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeImportDetail.rows.map((row: ImportRowDetail) => (
-                      <tr className="bg-slate-50" key={row.id}>
-                        <td className="rounded-l-3xl px-4 py-4 text-sm font-semibold text-slate-950">
-                          {row.rowNumber}
-                        </td>
-                        <td className="px-4 py-4">
-                          <StatusBadge label={row.status} />
-                        </td>
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {row.action ? humanizeLabel(row.action) : "Not set"}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-slate-600">
-                          {row.identifier ?? "No identifier"}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-slate-600">
-                          {row.errors.join(" ") || "No issues"}
-                        </td>
-                        <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-600">
-                          {row.warnings.join(" ") || "None"}
-                        </td>
+              <div className="space-y-3">
+                <div className="grid gap-3 lg:hidden">
+                  {activeImportDetail.rows.map((row: ImportRowDetail) => (
+                    <article
+                      className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"
+                      key={row.id}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-950">
+                            Row {row.rowNumber}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {row.identifier ?? "No identifier"}
+                          </p>
+                        </div>
+                        <StatusBadge label={row.status} />
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Action
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">
+                            {row.action ? humanizeLabel(row.action) : "Not set"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Identifier
+                          </p>
+                          <p className="mt-1 break-words text-sm font-medium text-slate-900">
+                            {row.identifier ?? "No identifier"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {renderMessages(row.errors, "error")}
+                        {renderMessages(row.warnings, "warning")}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto lg:block">
+                  <table className="min-w-[1120px] w-full border-separate border-spacing-y-3">
+                    <thead>
+                      <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <th className="px-4">Row</th>
+                        <th className="px-4">Status</th>
+                        <th className="px-4">Action</th>
+                        <th className="px-4">Identifier</th>
+                        <th className="px-4">Errors</th>
+                        <th className="px-4">Warnings</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {activeImportDetail.rows.map((row: ImportRowDetail) => (
+                        <tr className="bg-slate-50" key={row.id}>
+                          <td className="rounded-l-3xl px-4 py-4 text-sm font-semibold text-slate-950">
+                            {row.rowNumber}
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge label={row.status} />
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {row.action ? humanizeLabel(row.action) : "Not set"}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600">
+                            {row.identifier ?? "No identifier"}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600">
+                            {row.errors.join(" ") || "No issues"}
+                          </td>
+                          <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-600">
+                            {row.warnings.join(" ") || "None"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <EmptyState

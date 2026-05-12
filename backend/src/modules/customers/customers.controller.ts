@@ -129,6 +129,22 @@ export class CustomersController {
     }
   };
 
+  deleteCustomer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await this.customersService.deleteCustomer(
+        getShopId(req),
+        getRouteId(req),
+      );
+
+      return res.status(200).json({
+        message: "Customer deleted successfully.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
   listCustomerPurchases = async (
     req: Request,
     res: Response,

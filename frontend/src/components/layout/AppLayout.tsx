@@ -9,6 +9,7 @@ import {
   GitBranch,
   HandCoins,
   Home,
+  Menu,
   PackageSearch,
   Pill,
   Receipt,
@@ -331,6 +332,23 @@ export const AppLayout = () => {
     });
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!isMobileNavigationOpen) {
+      return;
+    }
+
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isMobileNavigationOpen]);
+
   const session = sessionQuery.data;
   const branchContext = session?.branchContext;
   const accessibleBranches = branchContext?.accessibleBranches ?? [];
@@ -418,6 +436,7 @@ export const AppLayout = () => {
         />
 
         <aside
+          id="mobile-navigation"
           className={cn(
             "app-sidebar print-hidden fixed inset-y-3 left-3 z-40 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col rounded-[30px] border border-white/[0.08] bg-[linear-gradient(180deg,#0b1020_0%,#11182d_48%,#0d1425_100%)] p-4 text-slate-100 shadow-[0_40px_90px_-42px_rgba(15,23,42,0.82)] transition duration-200 lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[276px] lg:translate-x-0",
             isMobileNavigationOpen
@@ -452,6 +471,7 @@ export const AppLayout = () => {
                 </div>
               </div>
               <button
+                aria-label="Close navigation"
                 className="ui-icon-button lg:hidden"
                 onClick={() => setIsMobileNavigationOpen(false)}
                 type="button"
@@ -548,7 +568,18 @@ export const AppLayout = () => {
           <div className="flex min-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[30px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(248,250,255,0.96))] shadow-[0_34px_86px_-52px_rgba(15,23,42,0.3)] backdrop-blur-xl">
             <header className="app-header print-hidden shrink-0 border-b border-slate-200/75 px-4 py-4 lg:px-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex w-full items-center justify-between gap-3 xl:w-auto xl:justify-start">
+                  <button
+                    aria-controls="mobile-navigation"
+                    aria-expanded={isMobileNavigationOpen}
+                    aria-label="Open navigation"
+                    className="ui-icon-button lg:hidden"
+                    onClick={() => setIsMobileNavigationOpen(true)}
+                    type="button"
+                  >
+                    <Menu aria-hidden="true" className="h-[18px] w-[18px]" />
+                  </button>
+
                   <div className="flex flex-wrap items-center gap-2 md:hidden">
                     <span className="rounded-full border border-slate-200/80 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">
                       Workspace
@@ -570,12 +601,12 @@ export const AppLayout = () => {
                   </div>
 
                   {accessibleBranches.length > 1 ? (
-                    <label className="grid min-w-[220px] gap-1.5">
+                    <label className="grid min-w-0 gap-1.5 sm:min-w-[220px]">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
                         Active branch
                       </span>
                       <select
-                        className="ui-input !rounded-[18px] !py-2.5 !font-semibold"
+                        className="ui-input min-w-0 !rounded-[18px] !py-2.5 !font-semibold"
                         onChange={async (event) => {
                           const nextBranchId = event.target.value;
                           setStoredBranchId(nextBranchId);

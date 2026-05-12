@@ -2878,16 +2878,26 @@ export class DataManagementService {
     shopId: string,
     tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   ) {
+    const [existingCustomerSequence] = await tx
+      .select({
+        maxSequence: sql<number>`coalesce(max(${customers.customerSequence}), 0)`,
+      })
+      .from(customers)
+      .where(eq(customers.shopId, shopId));
+
+    const baselineNextSequence =
+      Number(existingCustomerSequence?.maxSequence ?? 0) + 1;
+
     const [counter] = await tx
       .insert(customerCounters)
       .values({
         shopId,
-        lastSequence: 1,
+        lastSequence: baselineNextSequence,
       })
       .onConflictDoUpdate({
         target: customerCounters.shopId,
         set: {
-          lastSequence: sql`${customerCounters.lastSequence} + 1`,
+          lastSequence: sql`greatest(${customerCounters.lastSequence} + 1, ${baselineNextSequence})`,
           updatedAt: new Date(),
         },
       })
@@ -2895,7 +2905,7 @@ export class DataManagementService {
         lastSequence: customerCounters.lastSequence,
       });
 
-    return counter?.lastSequence ?? 1;
+    return counter?.lastSequence ?? baselineNextSequence;
   }
 
   private async buildDatasetExport(shopId: string, query: ExportDatasetQuery) {

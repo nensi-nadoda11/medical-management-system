@@ -2,7 +2,13 @@ import { useDeferredValue, useEffect, useMemo, useState, useCallback } from "rea
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../../../hooks/use-toast";
-import { getDaysUntil, toSelectedCustomerSummary } from "../../../lib/utils";
+import {
+  getAutoRoundedMoneyBreakdown,
+  getDaysUntil,
+  isSameMoney,
+  normalizePaidAmountInput,
+  toSelectedCustomerSummary,
+} from "../../../lib/utils";
 import type {
   BillPaymentMethod,
   BillDetail,
@@ -61,7 +67,6 @@ export interface BillingDraftState {
   customerPhone: string;
   paymentMethod: BillPaymentMethod;
   paidAmount: string;
-  roundOffAmount: string;
   notes: string;
   items: BillingEditorItem[];
   isFefoEnabled: boolean;
@@ -73,7 +78,6 @@ const emptyDraft = (): BillingDraftState => ({
   customerPhone: "",
   paymentMethod: "cash",
   paidAmount: "0",
-  roundOffAmount: "0",
   notes: "",
   items: [],
   isFefoEnabled: true, // Defaulting FEFO to enabled
@@ -105,6 +109,7 @@ const getSelectedBatch = (item: BillingEditorItem) =>
 const toPayload = (
   draft: BillingDraftState,
   items: BillingEditorItem[],
+  roundOffAmount: number,
 ): SaveBillPayload => ({
   customerId: draft.selectedCustomer?.id,
   customerName: draft.selectedCustomer
@@ -114,8 +119,8 @@ const toPayload = (
     ? undefined
     : draft.customerPhone.trim() || undefined,
   paymentMethod: draft.paymentMethod,
-  paidAmount: Number(draft.paidAmount || 0),
-  roundOffAmount: Number(draft.roundOffAmount || 0),
+  paidAmount: normalizePaidAmountInput(draft.paidAmount),
+  roundOffAmount,
   notes: draft.notes.trim() || undefined,
   items: items.map((item) => ({
     medicineId: item.medicineId,
@@ -135,7 +140,6 @@ const loadHeldBillIntoDraft = (
   customerPhone: bill.customerPhone ?? "",
   paymentMethod: bill.paymentMethod,
   paidAmount: bill.initialPaidAmount ?? bill.paidAmount,
-  roundOffAmount: bill.roundOffAmount,
   notes: bill.notes ?? "",
   isFefoEnabled: true,
   items: bill.items.map((item, index) => {
@@ -193,6 +197,7 @@ export const useBillingWorkspace = () => {
   const [medicineSearch, setMedicineSearch] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [loadedHeldBillId, setLoadedHeldBillId] = useState<string | null>(null);
+  const [isPaidAmountManual, setIsPaidAmountManual] = useState(false);
 
   const deferredMedicineSearch = useDeferredValue(medicineSearch);
   const deferredCustomerSearch = useDeferredValue(customerSearch);
@@ -278,6 +283,7 @@ export const useBillingWorkspace = () => {
     if (!validHeldBillId) {
       Promise.resolve().then(() => {
         setLoadedHeldBillId(null);
+        setIsPaidAmountManual(false);
         setDraft(emptyDraft());
       });
       return;
@@ -339,6 +345,13 @@ export const useBillingWorkspace = () => {
         : null;
 
       Promise.resolve().then(() => {
+        const initialPaidAmount = Number(
+          heldBillQuery.data.initialPaidAmount ?? heldBillQuery.data.paidAmount,
+        );
+        const initialGrandTotal = Number(heldBillQuery.data.grandTotal);
+        setIsPaidAmountManual(
+          !isSameMoney(initialPaidAmount, initialGrandTotal),
+        );
         setDraft(
           loadHeldBillIntoDraft(heldBillQuery.data, optionMap, selectedCustomer),
         );
@@ -379,9 +392,9 @@ export const useBillingWorkspace = () => {
       0,
     );
     const taxAmount = itemTotals.reduce((sum, item) => sum + item.lineTaxAmount, 0);
-    const roundOff = Number(draft.roundOffAmount || 0);
-    const grandTotal = subtotal + taxAmount + roundOff;
-    const paidAmount = Number(draft.paidAmount || 0);
+    const autoRoundedAmounts = getAutoRoundedMoneyBreakdown(subtotal + taxAmount);
+    const grandTotal = autoRoundedAmounts.roundedAmount;
+    const paidAmount = normalizePaidAmountInput(draft.paidAmount);
     const availableAdvance = Number(
       selectedCustomerAdvanceQuery.data?.summary.advanceAmount ?? 0,
     );
@@ -403,7 +416,7 @@ export const useBillingWorkspace = () => {
       subtotal,
       discountAmount,
       taxAmount,
-      roundOff,
+      roundOff: autoRoundedAmounts.roundOffAmount,
       grandTotal,
       paidAmount,
       availableAdvance,
@@ -415,14 +428,31 @@ export const useBillingWorkspace = () => {
   }, [
     draft.items,
     draft.paidAmount,
-    draft.roundOffAmount,
     selectedCustomerAdvanceQuery.data?.summary.advanceAmount,
   ]);
+
+  useEffect(() => {
+    if (isPaidAmountManual || isSameMoney(draft.paidAmount, totals.grandTotal)) {
+      return;
+    }
+
+    setDraft((current) => {
+      if (isSameMoney(current.paidAmount, totals.grandTotal)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        paidAmount: totals.grandTotal.toFixed(2),
+      };
+    });
+  }, [draft.paidAmount, isPaidAmountManual, totals.grandTotal]);
 
   const resetDraft = useCallback(() => {
     setSearchParams({});
     setLoadedHeldBillId(null);
     setCustomerSearch("");
+    setIsPaidAmountManual(false);
     setDraft(emptyDraft());
   }, [setSearchParams]);
 
@@ -498,7 +528,7 @@ export const useBillingWorkspace = () => {
       throw new Error("Add at least one medicine before saving the bill.");
     }
 
-    const payload = toPayload(draft, draft.items);
+    const payload = toPayload(draft, draft.items, totals.roundOff);
     const result = validHeldBillId
       ? await updateHeldMutation.mutateAsync({ id: validHeldBillId, payload })
       : await createHeldMutation.mutateAsync(payload);
@@ -514,7 +544,7 @@ export const useBillingWorkspace = () => {
       throw new Error("Add at least one medicine before completing the bill.");
     }
 
-    const payload = toPayload(draft, draft.items);
+    const payload = toPayload(draft, draft.items, totals.roundOff);
     const result = validHeldBillId
       ? await updateHeldMutation
           .mutateAsync({ id: validHeldBillId, payload })
@@ -523,6 +553,7 @@ export const useBillingWorkspace = () => {
 
     await queryClient.invalidateQueries({ queryKey: billingQueryKeys.all });
     setLoadedHeldBillId(null);
+    setIsPaidAmountManual(false);
     setDraft(emptyDraft());
     navigate(`/app/billing/${result.id}`);
     return result;
@@ -539,6 +570,7 @@ export const useBillingWorkspace = () => {
     setMedicineSearch,
     customerSearch,
     setCustomerSearch,
+    setIsPaidAmountManual,
     totals,
     validHeldBillId,
     heldBillsQuery,

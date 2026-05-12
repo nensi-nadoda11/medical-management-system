@@ -7,6 +7,7 @@ import { CustomersController } from "./customers.controller";
 import {
   createCustomerPaymentSchema,
   createCustomerSchema,
+  deleteCustomerSchema,
   getCustomerByIdSchema,
   listCustomerDueSummarySchema,
   listCustomerOptionsSchema,
@@ -68,6 +69,13 @@ router.patch(
   requirePermission("customers.edit"),
   validateRequest(updateCustomerStatusSchema),
   controller.updateCustomerStatus,
+);
+router.delete(
+  "/:id",
+  requireAuth,
+  requirePermission("customers.edit"),
+  validateRequest(deleteCustomerSchema),
+  controller.deleteCustomer,
 );
 router.get(
   "/:id/purchases",

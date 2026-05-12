@@ -20,6 +20,14 @@ export interface CustomerSummary {
   lastPurchaseDate: string | null;
 }
 
+export interface CustomerDeletionState {
+  canDelete: boolean;
+  hasHeldBills: boolean;
+  hasOutstandingDue: boolean;
+  hasAdvanceBalance: boolean;
+  hasPaymentHistory: boolean;
+}
+
 export interface CustomerListItem {
   id: string;
   shopId: string;
@@ -40,6 +48,7 @@ export interface CustomerListItem {
   status: MasterStatus;
   createdAt: string;
   updatedAt: string;
+  deletion: CustomerDeletionState;
   summary: CustomerSummary;
 }
 

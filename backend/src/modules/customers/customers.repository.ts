@@ -401,16 +401,26 @@ export class CustomersRepository {
   }
 
   async getNextCustomerSequence(shopId: string, executor: DbExecutor) {
+    const [existingCustomerSequence] = await getDbExecutor(executor)
+      .select({
+        maxSequence: sql<number>`coalesce(max(${customers.customerSequence}), 0)`,
+      })
+      .from(customers)
+      .where(eq(customers.shopId, shopId));
+
+    const baselineNextSequence =
+      Number(existingCustomerSequence?.maxSequence ?? 0) + 1;
+
     const [counter] = await getDbExecutor(executor)
       .insert(customerCounters)
       .values({
         shopId,
-        lastSequence: 1,
+        lastSequence: baselineNextSequence,
       })
       .onConflictDoUpdate({
         target: customerCounters.shopId,
         set: {
-          lastSequence: sql`${customerCounters.lastSequence} + 1`,
+          lastSequence: sql`greatest(${customerCounters.lastSequence} + 1, ${baselineNextSequence})`,
           updatedAt: new Date(),
         },
       })
@@ -418,7 +428,7 @@ export class CustomersRepository {
         lastSequence: customerCounters.lastSequence,
       });
 
-    return counter?.lastSequence ?? 1;
+    return counter?.lastSequence ?? baselineNextSequence;
   }
 
   async createCustomer(payload: typeof customers.$inferInsert, executor?: DbExecutor) {
@@ -460,6 +470,73 @@ export class CustomersRepository {
       })
       .where(eq(customers.id, customerId))
       .returning();
+
+    return customer ?? null;
+  }
+
+  async countHeldSalesByCustomer(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const [result] = await getDbExecutor(executor)
+      .select({ total: count() })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.shopId, shopId),
+          eq(sales.customerId, customerId),
+          eq(sales.status, "held"),
+        ),
+      );
+
+    return result?.total ?? 0;
+  }
+
+  async countCustomerPaymentRecords(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const [result] = await getDbExecutor(executor)
+      .select({ total: count() })
+      .from(customerPayments)
+      .where(
+        and(
+          eq(customerPayments.shopId, shopId),
+          eq(customerPayments.customerId, customerId),
+        ),
+      );
+
+    return result?.total ?? 0;
+  }
+
+  async unlinkCustomerFromSales(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const updatedSales = await getDbExecutor(executor)
+      .update(sales)
+      .set({
+        customerId: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sales.shopId, shopId), eq(sales.customerId, customerId)))
+      .returning({ id: sales.id });
+
+    return updatedSales.length;
+  }
+
+  async deleteCustomer(
+    shopId: string,
+    customerId: string,
+    executor?: DbExecutor,
+  ) {
+    const [customer] = await getDbExecutor(executor)
+      .delete(customers)
+      .where(and(eq(customers.shopId, shopId), eq(customers.id, customerId)))
+      .returning({ id: customers.id });
 
     return customer ?? null;
   }

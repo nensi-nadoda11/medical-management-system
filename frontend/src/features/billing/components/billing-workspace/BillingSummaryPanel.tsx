@@ -4,6 +4,8 @@ import {
   cn,
   formatCurrency,
   formatDate,
+  isSameMoney,
+  normalizePaidAmountInput,
 } from "../../../../lib/utils";
 import type { BillingDraftState } from "../../hooks/useBillingWorkspace";
 import type { CustomerOption } from "../../../../types/customer";
@@ -11,6 +13,7 @@ import type { CustomerOption } from "../../../../types/customer";
 interface BillingSummaryPanelProps {
   draft: BillingDraftState;
   onDraftChange: (updater: (current: BillingDraftState) => BillingDraftState) => void;
+  setIsPaidAmountManual: (value: boolean) => void;
   customerSearch: string;
   onCustomerSearchChange: (value: string) => void;
   customerOptions: CustomerOption[];
@@ -41,6 +44,7 @@ const inputClassName =
 export const BillingSummaryPanel = ({
   draft,
   onDraftChange,
+  setIsPaidAmountManual,
   customerSearch,
   onCustomerSearchChange,
   customerOptions,
@@ -240,11 +244,31 @@ export const BillingSummaryPanel = ({
                 className={inputClassName}
                 min={0}
                 onChange={(event) =>
+                  {
+                    const normalizedValue = normalizePaidAmountInput(
+                      event.target.value,
+                    );
+                    setIsPaidAmountManual(
+                      !isSameMoney(normalizedValue, totals.grandTotal),
+                    );
+                    onDraftChange((current) => ({
+                      ...current,
+                      paidAmount: event.target.value,
+                    }));
+                  }
+                }
+                onBlur={(event) => {
+                  const normalizedValue = normalizePaidAmountInput(
+                    event.target.value,
+                  );
+                  setIsPaidAmountManual(
+                    !isSameMoney(normalizedValue, totals.grandTotal),
+                  );
                   onDraftChange((current) => ({
                     ...current,
-                    paidAmount: event.target.value,
-                  }))
-                }
+                    paidAmount: normalizedValue.toFixed(2),
+                  }));
+                }}
                 step="0.01"
                 type="number"
                 value={draft.paidAmount}

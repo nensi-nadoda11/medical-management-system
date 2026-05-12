@@ -33,6 +33,11 @@ const CustomerAccountingPage = lazyPage(() =>
     (module) => ({ default: module.CustomerAccountingPage }),
   ),
 );
+const OutstandingCustomerDuesPage = lazyPage(() =>
+  import("../../features/accounting/pages/OutstandingCustomerDuesPage").then(
+    (module) => ({ default: module.OutstandingCustomerDuesPage }),
+  ),
+);
 const CustomerLedgerPage = lazyPage(() =>
   import("../../features/accounting/pages/CustomerLedgerPage").then((module) => ({
     default: module.CustomerLedgerPage,
@@ -41,6 +46,11 @@ const CustomerLedgerPage = lazyPage(() =>
 const SupplierAccountingPage = lazyPage(() =>
   import("../../features/accounting/pages/SupplierAccountingPage").then(
     (module) => ({ default: module.SupplierAccountingPage }),
+  ),
+);
+const OutstandingSupplierDuesPage = lazyPage(() =>
+  import("../../features/accounting/pages/OutstandingSupplierDuesPage").then(
+    (module) => ({ default: module.OutstandingSupplierDuesPage }),
   ),
 );
 const SupplierLedgerPage = lazyPage(() =>
@@ -314,12 +324,20 @@ export const AppRouter = () => (
             path="accounting/customers"
           />
           <Route
+            element={renderLazyRoute(<OutstandingCustomerDuesPage />)}
+            path="accounting/customers/outstanding"
+          />
+          <Route
             element={renderLazyRoute(<CustomerLedgerPage />)}
             path="accounting/customers/:id"
           />
           <Route
             element={renderLazyRoute(<SupplierAccountingPage />)}
             path="accounting/suppliers"
+          />
+          <Route
+            element={renderLazyRoute(<OutstandingSupplierDuesPage />)}
+            path="accounting/suppliers/outstanding"
           />
           <Route
             element={renderLazyRoute(<SupplierLedgerPage />)}
