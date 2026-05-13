@@ -91,7 +91,6 @@ export const PurchaseCreatePage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Create supplier purchase orders in a compact data-entry workflow, then receive them into stock when ready."
         eyebrow="Purchase management"
         title="Create Purchase Order"
       />

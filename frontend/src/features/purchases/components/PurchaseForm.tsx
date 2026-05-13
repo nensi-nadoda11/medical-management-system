@@ -111,6 +111,15 @@ interface PurchaseFormProps {
   ) => Promise<void>;
 }
 
+const getInitialPaidAmountManualState = (purchase?: PurchaseDetail | null) => {
+  const initialPaidAmount = Number(
+    purchase?.initialPaidAmount ?? purchase?.paidAmount ?? 0,
+  );
+  const initialGrandTotal = Number(purchase?.grandTotal ?? 0);
+
+  return Boolean(purchase) && !isSameMoney(initialPaidAmount, initialGrandTotal);
+};
+
 const createEmptyItem = (): PurchaseFormValues["items"][number] => ({
   medicineId: "",
   batchNumber: "",
@@ -250,7 +259,7 @@ const toPayload = (
   })),
 });
 
-export const PurchaseForm = ({
+const PurchaseFormContent = ({
   mode,
   purchase,
   suppliers,
@@ -261,14 +270,16 @@ export const PurchaseForm = ({
 }: PurchaseFormProps) => {
   const [submissionIntent, setSubmissionIntent] =
     useState<PurchaseSubmissionIntent>("draft");
-  const [isPaidAmountManual, setIsPaidAmountManual] = useState(false);
+  const [isPaidAmountManual, setIsPaidAmountManual] = useState(() =>
+    getInitialPaidAmountManualState(purchase),
+  );
 
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseFormSchema),
     defaultValues: buildDefaultValues(purchase, suppliers, medicines),
   });
 
-  const { control, register, handleSubmit, reset, formState, setValue } = form;
+  const { control, register, handleSubmit, formState, setValue } = form;
   const { fields, append, remove } = useFieldArray({
     control,
     name: "items",
@@ -286,17 +297,6 @@ export const PurchaseForm = ({
     control,
     name: "paidAmount",
   });
-
-  useEffect(() => {
-    reset(buildDefaultValues(purchase, suppliers, medicines));
-    const initialPaidAmount = Number(
-      purchase?.initialPaidAmount ?? purchase?.paidAmount ?? 0,
-    );
-    const initialGrandTotal = Number(purchase?.grandTotal ?? 0);
-    setIsPaidAmountManual(
-      Boolean(purchase) && !isSameMoney(initialPaidAmount, initialGrandTotal),
-    );
-  }, [medicines, purchase, reset, suppliers]);
 
   const supplierSummaryQuery = useQuery({
     queryKey: accountingQueryKeys.supplierSummary(supplierId ?? ""),
@@ -345,6 +345,54 @@ export const PurchaseForm = ({
   const paidAmountField = register("paidAmount", { valueAsNumber: true });
 
   const canSubmit = suppliers.length > 0 && medicines.length > 0;
+  const billingSummaryItems = [
+    {
+      label: "Taxable amount",
+      value: formatCurrency(totals.subtotal),
+    },
+    {
+      label: "Discount amount",
+      value: formatCurrency(totals.discount),
+    },
+    {
+      label: "Tax amount",
+      value: formatCurrency(totals.tax),
+    },
+    {
+      label: "Grand total",
+      value: formatCurrency(totals.grandTotal),
+      tone: "primary" as const,
+    },
+    {
+      label: "Advance total",
+      value: formatCurrency(availableAdvance),
+    },
+    {
+      label: "Entered payment",
+      value: formatCurrency(normalizedPaidAmount),
+    },
+    {
+      label: "Advance used",
+      value: formatCurrency(previewAdvanceApplied),
+    },
+    {
+      label: "Effective paid",
+      value: formatCurrency(effectivePaidAmount),
+    },
+    ...(newAdvanceAmount > 0
+      ? [
+          {
+            label: "New advance",
+            value: formatCurrency(newAdvanceAmount),
+          },
+        ]
+      : []),
+    {
+      label: "Due amount",
+      value: formatCurrency(adjustedDueAmount),
+      tone: "warning" as const,
+    },
+  ];
 
   return (
     <form
@@ -361,183 +409,240 @@ export const PurchaseForm = ({
         />
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        <div className="space-y-5">
-          <FormSection
-            description="Capture the header information once, then keep line entry fast and easy to scan."
-            title="Purchase order header"
-          >
-            <div className="grid items-start gap-3.5 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-                Supplier
-                <select className={inputClassName} {...register("supplierId")}>
-                  <option value="">Select supplier</option>
-                  {suppliers.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.supplierName}
-                      {supplier.companyName ? ` - ${supplier.companyName}` : ""}
-                      {supplier.status === "inactive" ? " (inactive)" : ""}
-                    </option>
-                  ))}
-                </select>
-                {formState.errors.supplierId ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.supplierId.message}
-                  </span>
-                ) : null}
-                <span className="text-xs text-slate-500">
-                  Choose the supplier whose invoice you are recording for this purchase.
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.95fr)] xl:items-stretch">
+        <FormSection className="h-full" title="Purchase order header">
+          <div className="grid items-start gap-3.5 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              Supplier
+              <select className={inputClassName} {...register("supplierId")}>
+                <option value="">Select supplier</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.supplierName}
+                    {supplier.companyName ? ` - ${supplier.companyName}` : ""}
+                    {supplier.status === "inactive" ? " (inactive)" : ""}
+                  </option>
+                ))}
+              </select>
+              {formState.errors.supplierId ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.supplierId.message}
                 </span>
-                <span className="text-xs text-slate-500">
-                  Draft saves act as purchase orders; finalizing receives the stock into inventory.
+              ) : null}
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Supplier invoice number
+              <input
+                className={inputClassName}
+                placeholder="Optional invoice reference"
+                {...register("supplierInvoiceNumber")}
+              />
+              {formState.errors.supplierInvoiceNumber ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.supplierInvoiceNumber.message}
                 </span>
-              </label>
+              ) : null}
+            </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Supplier invoice number
-                <input
-                  className={inputClassName}
-                  placeholder="Optional invoice reference"
-                  {...register("supplierInvoiceNumber")}
-                />
-                {formState.errors.supplierInvoiceNumber ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.supplierInvoiceNumber.message}
-                  </span>
-                ) : null}
-              </label>
-
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Supplier invoice date
-                <input
-                  className={inputClassName}
-                  type="date"
-                  {...register("supplierInvoiceDate")}
-                />
-                {formState.errors.supplierInvoiceDate ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.supplierInvoiceDate.message}
-                  </span>
-                ) : null}
-              </label>
-
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Purchase date
-                <input
-                  className={inputClassName}
-                  type="date"
-                  {...register("purchaseDate")}
-                />
-                {formState.errors.purchaseDate ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.purchaseDate.message}
-                  </span>
-                ) : null}
-              </label>
-
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                Paid amount
-                <input
-                  className={inputClassName}
-                  step="0.01"
-                  type="number"
-                  {...paidAmountField}
-                  onBlur={(event) => {
-                    paidAmountField.onBlur(event);
-                    const normalizedValue = normalizePaidAmountInput(
-                      event.target.value,
-                    );
-                    setValue("paidAmount", normalizedValue, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    });
-                    setIsPaidAmountManual(
-                      !isSameMoney(normalizedValue, totals.grandTotal),
-                    );
-                  }}
-                  onChange={(event) => {
-                    paidAmountField.onChange(event);
-                    setIsPaidAmountManual(
-                      !isSameMoney(event.target.value, totals.grandTotal),
-                    );
-                  }}
-                />
-                {formState.errors.paidAmount ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.paidAmount.message}
-                  </span>
-                ) : null}
-                <span className="text-xs text-slate-500">
-                  Full-payment value auto-rounds to the nearest rupee. You can still edit it for partial payment.
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Supplier invoice date
+              <input
+                className={inputClassName}
+                type="date"
+                {...register("supplierInvoiceDate")}
+              />
+              {formState.errors.supplierInvoiceDate ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.supplierInvoiceDate.message}
                 </span>
-                <span className="text-xs text-slate-500">
-                  Existing supplier advance, if available, is auto-adjusted when this purchase is finalized.
+              ) : null}
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Purchase date
+              <input
+                className={inputClassName}
+                type="date"
+                {...register("purchaseDate")}
+              />
+              {formState.errors.purchaseDate ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.purchaseDate.message}
                 </span>
-              </label>
+              ) : null}
+            </label>
 
-              <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-                Notes
-                <textarea
-                  className={`${inputClassName} min-h-28 resize-none`}
-                  placeholder="Optional operational notes"
-                  {...register("notes")}
-                />
-                {formState.errors.notes ? (
-                  <span className="text-sm text-rose-600">
-                    {formState.errors.notes.message}
-                  </span>
-                ) : null}
-              </label>
-            </div>
-          </FormSection>
-
-          <FormSection
-            title="Purchase order items"
-          >
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                  onClick={() => append(createEmptyItem())}
-                  type="button"
-                >
-                  Add item row
-                </button>
-              </div>
-
-              <div className="grid gap-3 xl:hidden">
-                {fields.map((field, index) => {
-                  const item = watchedItems?.[index];
-                  const medicine = medicines.find(
-                    (medicineOption) => medicineOption.id === item?.medicineId,
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Paid amount
+              <input
+                className={inputClassName}
+                step="0.01"
+                type="number"
+                {...paidAmountField}
+                onBlur={(event) => {
+                  paidAmountField.onBlur(event);
+                  const normalizedValue = normalizePaidAmountInput(
+                    event.target.value,
                   );
-                  const line = calculateLine(item);
+                  setValue("paidAmount", normalizedValue, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                  setIsPaidAmountManual(
+                    !isSameMoney(normalizedValue, totals.grandTotal),
+                  );
+                }}
+                onChange={(event) => {
+                  paidAmountField.onChange(event);
+                  setIsPaidAmountManual(
+                    !isSameMoney(event.target.value, totals.grandTotal),
+                  );
+                }}
+              />
+              {formState.errors.paidAmount ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.paidAmount.message}
+                </span>
+              ) : null}
+            </label>
 
-                  return (
-                    <article
-                      className="rounded-[22px] border border-slate-200 bg-white p-4"
-                      key={field.id}
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Notes
+              <textarea
+                className={`${inputClassName} min-h-[96px] resize-none`}
+                placeholder="Optional operational notes"
+                {...register("notes")}
+              />
+              {formState.errors.notes ? (
+                <span className="text-sm text-rose-600">
+                  {formState.errors.notes.message}
+                </span>
+              ) : null}
+            </label>
+
+            <div className="grid gap-2 text-sm font-medium text-slate-700">
+              <span className="opacity-0">Payment note</span>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs leading-6 text-slate-500">
+                <p>
+                  Full-payment value auto-rounds to the nearest rupee. You can
+                  still edit it for partial payment.
+                </p>
+                <p className="mt-1.5">
+                  Existing supplier advance, if available, is auto-adjusted when
+                  this purchase is finalized.
+                </p>
+              </div>
+            </div>
+          </div>
+        </FormSection>
+
+        <FormSection className="h-full" title="Billing summary">
+          <div className="flex h-full flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {billingSummaryItems.map(({ label, value, tone }, index) => (
+                <div
+                  className={cn(
+                    "flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm",
+                    tone === "primary"
+                      ? "bg-slate-950 text-white"
+                      : tone === "warning"
+                        ? "bg-amber-50 text-amber-900"
+                        : "border border-slate-200 bg-white text-slate-700",
+                    billingSummaryItems.length % 2 !== 0 &&
+                      index === billingSummaryItems.length - 1
+                      ? "sm:col-span-2"
+                      : "",
+                  )}
+                  key={label}
+                >
+                  <span>{label}</span>
+                  <span className="font-semibold">{value}</span>
+                </div>
+              ))}
+            </div>
+
+            {errorMessage ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <div className="space-y-3 border-t border-slate-200/80 pt-3">
+              <button
+                className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting || !canSubmit}
+                onClick={() => setSubmissionIntent("draft")}
+                type="submit"
+              >
+                {isSubmitting
+                  ? "Saving..."
+                  : mode === "create"
+                    ? "Save as purchase order"
+                    : "Update purchase order"}
+              </button>
+              <button
+                className="w-full rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting || !canSubmit}
+                onClick={() => setSubmissionIntent("finalize")}
+                type="submit"
+              >
+                {isSubmitting
+                  ? "Processing..."
+                  : mode === "create"
+                    ? "Save and receive stock"
+                    : "Update and receive stock"}
+              </button>
+            </div>
+          </div>
+        </FormSection>
+      </div>
+
+      <FormSection title="Purchase order items">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+              onClick={() => append(createEmptyItem())}
+              type="button"
+            >
+              Add item row
+            </button>
+          </div>
+
+          <div className="grid gap-3 xl:hidden">
+            {fields.map((field, index) => {
+              const item = watchedItems?.[index];
+              const medicine = medicines.find(
+                (medicineOption) => medicineOption.id === item?.medicineId,
+              );
+              const line = calculateLine(item);
+
+              return (
+                <article
+                  className="rounded-[22px] border border-slate-200 bg-white p-4"
+                  key={field.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        Item {index + 1}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {medicine?.genericName || "Select medicine and batch details"}
+                      </p>
+                    </div>
+                    <button
+                      className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      disabled={fields.length === 1}
+                      onClick={() => remove(index)}
+                      type="button"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">
-                            Item {index + 1}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {medicine?.genericName || "Select medicine and batch details"}
-                          </p>
-                        </div>
-                        <button
-                          className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                          disabled={fields.length === 1}
-                          onClick={() => remove(index)}
-                          type="button"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      Remove
+                    </button>
+                  </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
                         <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                           Medicine
                           <select className={inputClassName} {...register(`items.${index}.medicineId`)}>
@@ -858,122 +963,17 @@ export const PurchaseForm = ({
               ) : null}
             </div>
           </FormSection>
-        </div>
-
-        <div className="space-y-5">
-          <FormSection
-            description="Review quantity, tax, and payable values before saving the draft purchase order or receiving stock."
-            title="Billing summary"
-          >
-            <div className="space-y-3">
-              {[
-                {
-                  label: "Taxable amount",
-                  value: formatCurrency(totals.subtotal),
-                },
-                {
-                  label: "Discount amount",
-                  value: formatCurrency(totals.discount),
-                },
-                {
-                  label: "Tax amount",
-                  value: formatCurrency(totals.tax),
-                },
-                {
-                  label: "Round off",
-                  value: formatCurrency(totals.roundOffAmount),
-                },
-                {
-                  label: "Grand total",
-                  value: formatCurrency(totals.grandTotal),
-                  tone: "primary",
-                },
-                {
-                  label: "Advance total",
-                  value: formatCurrency(availableAdvance),
-                },
-                {
-                  label: "Entered payment",
-                  value: formatCurrency(normalizedPaidAmount),
-                },
-                {
-                  label: "Advance used",
-                  value: formatCurrency(previewAdvanceApplied),
-                },
-                {
-                  label: "Effective paid",
-                  value: formatCurrency(effectivePaidAmount),
-                },
-                ...(newAdvanceAmount > 0
-                  ? [
-                      {
-                        label: "New advance",
-                        value: formatCurrency(newAdvanceAmount),
-                      },
-                    ]
-                  : []),
-                {
-                  label: "Due amount",
-                  value: formatCurrency(adjustedDueAmount),
-                  tone: "warning",
-                },
-              ].map(({ label, value, tone }) => (
-                <div
-                  className={cn(
-                    "flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm",
-                    tone === "primary"
-                      ? "bg-slate-950 text-white"
-                      : tone === "warning"
-                        ? "bg-amber-50 text-amber-900"
-                        : "border border-slate-200 bg-white text-slate-700",
-                  )}
-                  key={label}
-                >
-                  <span>{label}</span>
-                  <span className="font-semibold">{value}</span>
-                </div>
-              ))}
-            </div>
-          </FormSection>
-
-
-          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
-
-            {errorMessage ? (
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {errorMessage}
-              </div>
-            ) : null}
-
-            <div className="mt-4 flex flex-col gap-3">
-              <button
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSubmitting || !canSubmit}
-                onClick={() => setSubmissionIntent("draft")}
-                type="submit"
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : mode === "create"
-                    ? "Save as purchase order"
-                    : "Update purchase order"}
-              </button>
-              <button
-                className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSubmitting || !canSubmit}
-                onClick={() => setSubmissionIntent("finalize")}
-                type="submit"
-              >
-                {isSubmitting
-                  ? "Processing..."
-                  : mode === "create"
-                    ? "Save and receive stock"
-                    : "Update and receive stock"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </form>
   );
+};
+
+export const PurchaseForm = (props: PurchaseFormProps) => {
+  const stateKey = [
+    props.mode,
+    props.purchase?.id ?? "create",
+    props.suppliers.map((supplier) => supplier.id).join(","),
+    props.medicines.map((medicine) => medicine.id).join(","),
+  ].join(":");
+
+  return <PurchaseFormContent key={stateKey} {...props} />;
 };

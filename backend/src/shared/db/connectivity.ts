@@ -25,6 +25,7 @@ const DATABASE_CONNECTIVITY_ERROR_CODES = new Set([
   "ENETUNREACH",
   "ENOTFOUND",
   "EAI_AGAIN",
+  "EACCES",
 ]);
 
 const LOCAL_DATABASE_HOSTS = new Set([
@@ -85,7 +86,9 @@ export const isDatabaseConnectivityError = (error: unknown): boolean => {
     message.includes("connect etimedout") ||
     message.includes("connect econnrefused") ||
     message.includes("connect enetunreach") ||
-    message.includes("connect ehostunreach")
+    message.includes("connect ehostunreach") ||
+    message.includes("self-signed certificate in certificate chain") ||
+    message.includes("unable to verify the first certificate")
   );
 };
 

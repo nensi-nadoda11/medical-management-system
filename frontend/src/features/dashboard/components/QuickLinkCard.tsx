@@ -7,6 +7,8 @@ interface QuickLinkCardProps {
   description: string;
   to: string;
   metric?: string;
+  hideDescription?: boolean;
+  compact?: boolean;
   tone?: "default" | "accent" | "warning" | "danger";
 }
 
@@ -26,11 +28,15 @@ export const QuickLinkCard = ({
   description,
   to,
   metric,
+  hideDescription = false,
+  compact = false,
   tone = "default",
 }: QuickLinkCardProps) => (
   <Link
     className={cn(
-      "group min-w-0 rounded-[24px] border p-4 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.34)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_28px_60px_-40px_rgba(15,23,42,0.36)]",
+      compact
+        ? "group min-w-0 rounded-[24px] border p-3.5 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.34)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_28px_60px_-40px_rgba(15,23,42,0.36)]"
+        : "group min-w-0 rounded-[24px] border p-4 shadow-[0_24px_56px_-42px_rgba(15,23,42,0.34)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_28px_60px_-40px_rgba(15,23,42,0.36)]",
       toneClassNames[tone],
     )}
     to={to}
@@ -38,7 +44,9 @@ export const QuickLinkCard = ({
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-950">{title}</p>
-        <p className="mt-1.5 text-sm leading-6 text-slate-600">{description}</p>
+        {!hideDescription ? (
+          <p className="mt-1.5 text-sm leading-6 text-slate-600">{description}</p>
+        ) : null}
       </div>
       <span className="text-slate-400 transition group-hover:text-slate-700" aria-hidden="true">
         <svg
@@ -56,7 +64,12 @@ export const QuickLinkCard = ({
       </span>
     </div>
     {metric ? (
-      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <p
+        className={cn(
+          compact ? "mt-2.5" : "mt-3",
+          "text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+        )}
+      >
         {metric}
       </p>
     ) : null}

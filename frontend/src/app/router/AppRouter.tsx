@@ -123,11 +123,6 @@ const SetPasswordPage = lazyPage(() =>
     default: module.SetPasswordPage,
   })),
 );
-const InventoryExpiryReportPage = lazyPage(() =>
-  import("../../features/inventory/pages/ExpiryReportPage").then((module) => ({
-    default: module.ExpiryReportPage,
-  })),
-);
 const InventoryDetailPage = lazyPage(() =>
   import("../../features/inventory/pages/InventoryDetailPage").then((module) => ({
     default: module.InventoryDetailPage,
@@ -496,7 +491,7 @@ export const AppRouter = () => (
             path="inventory/low-stock"
           />
           <Route
-            element={renderLazyRoute(<InventoryExpiryReportPage />)}
+            element={<Navigate replace to="/app/reports/expiry" />}
             path="inventory/expiry"
           />
           <Route

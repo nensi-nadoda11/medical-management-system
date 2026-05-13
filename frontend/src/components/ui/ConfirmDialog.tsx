@@ -11,6 +11,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onClose: () => void;
   isLoading?: boolean;
+  isConfirmDisabled?: boolean;
   tone?: "danger" | "default";
   extraContent?: ReactNode;
 }
@@ -24,6 +25,7 @@ export const ConfirmDialog = ({
   onConfirm,
   onClose,
   isLoading = false,
+  isConfirmDisabled = false,
   tone = "default",
   extraContent,
 }: ConfirmDialogProps) => (
@@ -43,7 +45,7 @@ export const ConfirmDialog = ({
         </button>
         <button
           className={tone === "danger" ? "ui-btn ui-btn--danger" : "ui-btn ui-btn--primary"}
-          disabled={isLoading}
+          disabled={isLoading || isConfirmDisabled}
           onClick={onConfirm}
           type="button"
         >

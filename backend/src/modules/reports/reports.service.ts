@@ -87,12 +87,12 @@ const formatDateRangeLabel = (dateFrom?: Date, dateTo?: Date) => {
 };
 
 const toMoneyNumber = (value?: string | number | null) => Number(value ?? 0);
-const formatExportDate = (value?: Date | null) =>
+const formatExportDate = (value?: string | Date | null) =>
   value
     ? new Intl.DateTimeFormat("en-IN", {
         dateStyle: "medium",
         timeStyle: "short",
-      }).format(value)
+      }).format(new Date(value))
     : "";
 
 const formatPaymentMethodLabel = (
@@ -1156,9 +1156,7 @@ export class ReportsService {
         revenue: item.revenue,
         cost: item.cost,
         profit: item.profit,
-        lastSoldAt: item.lastSoldAt
-          ? item.lastSoldAt.toISOString().slice(0, 10)
-          : "",
+        lastSoldAt: formatExportDate(item.lastSoldAt),
       })),
       "usage-report",
     );

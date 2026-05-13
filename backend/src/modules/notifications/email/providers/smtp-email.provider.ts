@@ -22,6 +22,9 @@ export class SmtpEmailProvider implements EmailProvider {
       host: options.host,
       port: options.port,
       secure: options.secure || options.port === 465,
+      connectionTimeout: 8_000,
+      greetingTimeout: 8_000,
+      socketTimeout: 10_000,
       auth: {
         user: options.user,
         pass: options.pass,

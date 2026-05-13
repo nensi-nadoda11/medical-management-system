@@ -4,39 +4,39 @@ import { Link, useParams } from "react-router-dom";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
-import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
-import {
-  formatCurrency,
-  formatDate,
-  formatDateTime,
-  humanizeLabel,
-} from "../../../lib/utils";
+import { formatCurrency, formatDate } from "../../../lib/utils";
 import { hasPermission } from "../../../types/auth";
 import { billingQueryKeys } from "../../billing/api/billing";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import { customersQueryKeys } from "../../customers/api/customers";
-import { buildDocumentPreviewPath } from "../../documents/api/documents";
 import {
   accountingQueryKeys,
   createAccountingCustomerPayment,
   getCustomerDueSummary,
-  getCustomerLedger,
 } from "../api/accounting";
 import { AccountingModuleNav } from "../components/AccountingModuleNav";
 import { CustomerPaymentEntryModal } from "../components/CustomerPaymentEntryModal";
 
 const inputClassName =
-  "rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
+  "min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const secondaryButtonClassName =
   "rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white";
+
+const getDateValue = (value: string) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+};
 
 export const CustomerLedgerPage = () => {
   const { id = "" } = useParams();
@@ -46,30 +46,20 @@ export const CustomerLedgerPage = () => {
   const user = sessionQuery.data?.user;
   const canRecordPayments = hasPermission(user, "payments.create");
 
-  const [ledgerPage, setLedgerPage] = useState(1);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [draftSearch, setDraftSearch] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
+  const [draftSortOrder, setDraftSortOrder] = useState<"asc" | "desc">("desc");
+  const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [paymentPreset, setPaymentPreset] = useState<{
     saleId?: string;
     saleLabel?: string;
     lockSale?: boolean;
   } | null>(null);
-
-  const ledgerParams = {
-    page: ledgerPage,
-    pageSize: 12,
-    sortOrder,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-  };
-
-  const ledgerQuery = useQuery({
-    queryKey: accountingQueryKeys.customerLedger(id, ledgerParams),
-    queryFn: () => getCustomerLedger(id, ledgerParams),
-    enabled: Boolean(id),
-  });
 
   const dueSummaryQuery = useQuery({
     queryKey: accountingQueryKeys.customerSummary(id),
@@ -102,20 +92,15 @@ export const CustomerLedgerPage = () => {
     },
   });
 
-  if (ledgerQuery.isLoading || dueSummaryQuery.isLoading) {
+  if (dueSummaryQuery.isLoading) {
     return <LoadingState title="Loading customer ledger" />;
   }
 
-  if (ledgerQuery.error || dueSummaryQuery.error || !ledgerQuery.data || !dueSummaryQuery.data) {
+  if (dueSummaryQuery.error || !dueSummaryQuery.data) {
     return (
       <ErrorState
-        description={
-          ledgerQuery.error?.message ??
-          dueSummaryQuery.error?.message ??
-          "Unable to load customer ledger."
-        }
+        description={dueSummaryQuery.error?.message ?? "Unable to load customer ledger."}
         onRetry={() => {
-          ledgerQuery.refetch();
           dueSummaryQuery.refetch();
         }}
         title="Unable to load customer ledger"
@@ -123,53 +108,38 @@ export const CustomerLedgerPage = () => {
     );
   }
 
-  const { customer, ledger } = ledgerQuery.data;
-  const summary = dueSummaryQuery.data.summary;
-  const openSales = dueSummaryQuery.data.openSales;
+  const { customer, summary, openSales } = dueSummaryQuery.data;
   const customerLabel = `${customer.fullName} / ${customer.customerCode} / ${customer.mobileNumber}`;
+  const hasActiveFilters = Boolean(searchTerm || dateFrom || dateTo || sortOrder !== "desc");
+
+  const filteredOpenSales = [...openSales]
+    .filter((sale) => {
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      const matchesSearch = normalizedSearch
+        ? sale.billNumber.toLowerCase().includes(normalizedSearch)
+        : true;
+      const saleDateValue = getDateValue(sale.billDate);
+      const fromDateValue = dateFrom ? getDateValue(dateFrom) : null;
+      const toDateValue = dateTo ? getDateValue(dateTo) : null;
+      const matchesFrom =
+        fromDateValue !== null && saleDateValue !== null ? saleDateValue >= fromDateValue : true;
+      const matchesTo =
+        toDateValue !== null && saleDateValue !== null ? saleDateValue <= toDateValue : true;
+
+      return matchesSearch && matchesFrom && matchesTo;
+    })
+    .sort((leftSale, rightSale) => {
+      const leftDateValue = getDateValue(leftSale.billDate) ?? 0;
+      const rightDateValue = getDateValue(rightSale.billDate) ?? 0;
+
+      return sortOrder === "asc"
+        ? leftDateValue - rightDateValue
+        : rightDateValue - leftDateValue;
+    });
 
   const openPaymentModal = (preset?: typeof paymentPreset) => {
     setPaymentPreset(preset ?? null);
     setIsPaymentOpen(true);
-  };
-
-  const renderReference = (referenceType: string, referenceId: string, notes: string | null) => {
-    if (referenceType === "sale") {
-      return (
-        <Link
-          className="font-semibold text-slate-950 hover:text-teal-700"
-          to={`/app/billing/${referenceId}`}
-        >
-          {notes || "Open bill"}
-        </Link>
-      );
-    }
-
-    if (referenceType === "sale_return") {
-      return (
-        <Link
-          className="font-semibold text-slate-950 hover:text-teal-700"
-          to={`/app/billing/returns/${referenceId}`}
-        >
-          {notes || "Open return"}
-        </Link>
-      );
-    }
-
-    if (referenceType === "customer_payment") {
-      return (
-        <a
-          className="font-semibold text-slate-950 hover:text-teal-700"
-          href={buildDocumentPreviewPath("customer-receipt", referenceId)}
-          rel="noreferrer"
-          target="_blank"
-        >
-          {notes || "Open receipt"}
-        </a>
-      );
-    }
-
-    return <span className="font-medium text-slate-900">{notes || humanizeLabel(referenceType)}</span>;
   };
 
   return (
@@ -195,105 +165,125 @@ export const CustomerLedgerPage = () => {
             ) : null}
           </>
         }
-        description="Single-customer ledger statement with open bills, running balance movement, and chronological transaction history for reconciliation."
-        eyebrow="Accounting / Customer Ledger"
+        className="px-5 py-4 md:px-6 md:py-4"
         title={customer.fullName}
+        titleClassName="text-[1.9rem] md:text-[2.1rem]"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard hint="Customer code" label="Code" value={customer.customerCode} />
-        <SummaryCard
-          hint="Total billed to this customer."
-          label="Total billed"
-          value={formatCurrency(summary.totalSales)}
-        />
-        <SummaryCard
-          hint="Current receivable still pending."
-          label="Current due"
-          tone={Number(summary.outstandingAmount) > 0 ? "warning" : "default"}
-          value={formatCurrency(summary.outstandingAmount)}
-        />
-        <SummaryCard
-          hint="Extra money currently lying as customer advance."
-          label="Advance balance"
-          tone={Number(summary.advanceAmount) > 0 ? "accent" : "default"}
-          value={formatCurrency(summary.advanceAmount)}
-        />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: "Code",
+            value: customer.customerCode,
+            valueClassName: "text-slate-950",
+          },
+          {
+            label: "Total billed",
+            value: formatCurrency(summary.totalSales),
+            valueClassName: "text-slate-950",
+          },
+          {
+            label: "Current due",
+            value: formatCurrency(summary.outstandingAmount),
+            valueClassName:
+              Number(summary.outstandingAmount) > 0 ? "text-amber-700" : "text-slate-950",
+          },
+          {
+            label: "Advance balance",
+            value: formatCurrency(summary.advanceAmount),
+            valueClassName:
+              Number(summary.advanceAmount) > 0 ? "text-emerald-700" : "text-slate-950",
+          },
+        ].map((item) => (
+          <article
+            className="rounded-[22px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))] px-5 py-4 shadow-[0_18px_42px_-38px_rgba(15,23,42,0.22)]"
+            key={item.label}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+              {item.label}
+            </p>
+            <p className={`mt-2 text-[1.6rem] font-semibold tracking-tight ${item.valueClassName}`}>
+              {item.value}
+            </p>
+          </article>
+        ))}
       </div>
 
-      <FilterBar
-        actions={
-          <button
-            className="rounded-2xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-              setSortOrder("desc");
-              setLedgerPage(1);
-            }}
-            type="button"
+      <div className="rounded-[24px] border border-white/75 bg-[linear-gradient(180deg,rgba(248,250,255,0.94),rgba(255,255,255,0.98))] p-4 shadow-[0_20px_48px_-40px_rgba(15,23,42,0.2)]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center">
+          <input
+            className={`${inputClassName} xl:w-[15rem]`}
+            onChange={(event) => setDraftSearch(event.target.value)}
+            placeholder="Search bill"
+            type="search"
+            value={draftSearch}
+          />
+          <input
+            className={`${inputClassName} xl:w-[11.5rem]`}
+            onChange={(event) => setDraftDateFrom(event.target.value)}
+            type="date"
+            value={draftDateFrom}
+          />
+          <input
+            className={`${inputClassName} xl:w-[11.5rem]`}
+            onChange={(event) => setDraftDateTo(event.target.value)}
+            type="date"
+            value={draftDateTo}
+          />
+          <select
+            className={`${inputClassName} xl:w-[12rem]`}
+            onChange={(event) => setDraftSortOrder(event.target.value as "asc" | "desc")}
+            value={draftSortOrder}
           >
-            Clear filters
-          </button>
-        }
-        description="Review the statement by date range and switch between newest-first or oldest-first transaction order."
-        title="Ledger filters"
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date from
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setLedgerPage(1);
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
+          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => {
+                setSearchTerm(draftSearch);
+                setDateFrom(draftDateFrom);
+                setDateTo(draftDateTo);
+                setSortOrder(draftSortOrder);
               }}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Date to
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setLedgerPage(1);
-              }}
-              type="date"
-              value={dateTo}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Order
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortOrder(event.target.value as "asc" | "desc");
-                setLedgerPage(1);
-              }}
-              value={sortOrder}
+              type="button"
             >
-              <option value="desc">Newest first</option>
-              <option value="asc">Oldest first</option>
-            </select>
-          </label>
+              Search
+            </button>
+            <button
+              className="rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              onClick={() => {
+                setDraftSearch("");
+                setDraftDateFrom("");
+                setDraftDateTo("");
+                setDraftSortOrder("desc");
+                setSearchTerm("");
+                setDateFrom("");
+                setDateTo("");
+                setSortOrder("desc");
+              }}
+              type="button"
+            >
+              Clear filters
+            </button>
+          </div>
         </div>
-      </FilterBar>
+      </div>
 
       <div id="open-bills">
-        <SectionCard
-          description="Open customer bills stay visible here so receipt entry can be done against the exact bill whenever needed."
-          title="Open bills"
-        >
-          {openSales.length ? (
+        <SectionCard title="Open bills">
+          {filteredOpenSales.length ? (
             <div className="space-y-4">
               <div className="grid gap-3 xl:hidden">
-                {openSales.map((sale) => (
+                {filteredOpenSales.map((sale) => (
                   <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={sale.id}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <Link className="text-sm font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
+                        <Link
+                          className="text-sm font-semibold text-slate-950 hover:text-teal-700"
+                          to={`/app/billing/${sale.id}`}
+                        >
                           {sale.billNumber}
                         </Link>
                         <p className="mt-1 text-sm text-slate-600">{formatDate(sale.billDate)}</p>
@@ -308,7 +298,9 @@ export const CustomerLedgerPage = () => {
                         ["Due", formatCurrency(sale.dueAmount)],
                       ].map(([label, value]) => (
                         <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
+                          <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            {label}
+                          </dt>
                           <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
                         </div>
                       ))}
@@ -337,7 +329,7 @@ export const CustomerLedgerPage = () => {
                 ))}
               </div>
 
-              <div className="hidden overflow-x-auto xl:block">
+              <div className="ui-subtle-scrollbar hidden overflow-x-auto xl:block">
                 <table className="min-w-[1240px] w-full border-separate border-spacing-y-3">
                   <thead>
                     <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -352,10 +344,13 @@ export const CustomerLedgerPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {openSales.map((sale) => (
+                    {filteredOpenSales.map((sale) => (
                       <tr className="rounded-3xl bg-slate-50" key={sale.id}>
                         <td className="rounded-l-3xl px-4 py-4">
-                          <Link className="font-semibold text-slate-950 hover:text-teal-700" to={`/app/billing/${sale.id}`}>
+                          <Link
+                            className="font-semibold text-slate-950 hover:text-teal-700"
+                            to={`/app/billing/${sale.id}`}
+                          >
                             {sale.billNumber}
                           </Link>
                         </td>
@@ -363,8 +358,12 @@ export const CustomerLedgerPage = () => {
                         <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.netTotal)}</td>
                         <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.returnedAmount)}</td>
                         <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(sale.allocatedAmount)}</td>
-                        <td className="px-4 py-4 text-sm font-semibold text-amber-700">{formatCurrency(sale.dueAmount)}</td>
-                        <td className="px-4 py-4"><StatusBadge label={sale.paymentStatus} /></td>
+                        <td className="px-4 py-4 text-sm font-semibold text-amber-700">
+                          {formatCurrency(sale.dueAmount)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <StatusBadge label={sale.paymentStatus} />
+                        </td>
                         <td className="rounded-r-3xl px-4 py-4">
                           <div className="flex flex-wrap gap-2">
                             <Link className={secondaryButtonClassName} to={`/app/billing/${sale.id}`}>
@@ -394,87 +393,17 @@ export const CustomerLedgerPage = () => {
               </div>
             </div>
           ) : (
-            <EmptyState description="This customer has no open receivable bills right now." title="No open bills" />
+            <EmptyState
+              description={
+                hasActiveFilters
+                  ? "No open bills match the selected filters."
+                  : "This customer has no open receivable bills right now."
+              }
+              title={hasActiveFilters ? "No matching bills" : "No open bills"}
+            />
           )}
         </SectionCard>
       </div>
-
-      <SectionCard
-        description="Chronological ledger statement showing invoice, return, payment, debit, credit, and running balance for audit and reconciliation."
-        title="Ledger activity"
-      >
-        {ledger.items.length ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 xl:hidden">
-              {ledger.items.map((entry) => (
-                <article className="rounded-[22px] border border-slate-200 bg-slate-50 p-4" key={entry.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{formatDateTime(entry.entryDate)}</p>
-                      <p className="mt-1 text-sm text-slate-600">{renderReference(entry.referenceType, entry.referenceId, entry.notes)}</p>
-                    </div>
-                    <StatusBadge label={entry.transactionType} />
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Debit", formatCurrency(entry.debit)],
-                      ["Credit", formatCurrency(entry.credit)],
-                      ["Balance", formatCurrency(entry.balanceAfter)],
-                      ["Created by", entry.createdBy?.fullName || "System"],
-                    ].map(([label, value]) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5" key={label}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</dt>
-                        <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[1260px] w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <th className="px-4">Date</th>
-                    <th className="px-4">Transaction</th>
-                    <th className="px-4">Reference</th>
-                    <th className="px-4">Debit</th>
-                    <th className="px-4">Credit</th>
-                    <th className="px-4">Balance</th>
-                    <th className="px-4">Created by</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledger.items.map((entry) => (
-                    <tr className="rounded-3xl bg-slate-50" key={entry.id}>
-                      <td className="rounded-l-3xl px-4 py-4 text-sm text-slate-700">{formatDateTime(entry.entryDate)}</td>
-                      <td className="px-4 py-4"><StatusBadge label={entry.transactionType} /></td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
-                        {renderReference(entry.referenceType, entry.referenceId, entry.notes)}
-                      </td>
-                      <td className="px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(entry.debit)}</td>
-                      <td className="px-4 py-4 text-sm font-medium text-emerald-700">{formatCurrency(entry.credit)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-950">{formatCurrency(entry.balanceAfter)}</td>
-                      <td className="rounded-r-3xl px-4 py-4 text-sm text-slate-700">{entry.createdBy?.fullName || "System"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <Pagination
-              onPageChange={setLedgerPage}
-              page={ledger.pagination.page}
-              pageSize={ledger.pagination.pageSize}
-              totalItems={ledger.pagination.total}
-              totalPages={ledger.pagination.totalPages}
-            />
-          </div>
-        ) : (
-          <EmptyState description="Ledger entries will appear here once this customer has financial activity." title="No ledger entries" />
-        )}
-      </SectionCard>
 
       <CustomerPaymentEntryModal
         errorMessage={paymentMutation.error?.message}

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 interface EmptyStateProps {
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
 }
 
@@ -12,7 +12,9 @@ export const EmptyState = ({ title, description, action }: EmptyStateProps) => (
       <span className="text-lg font-semibold text-slate-500">i</span>
     </div>
     <h3 className="mt-5 text-base font-semibold text-slate-900">{title}</h3>
-    <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">{description}</p>
+    {description ? (
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">{description}</p>
+    ) : null}
     {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
   </div>
 );

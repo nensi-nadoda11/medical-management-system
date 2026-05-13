@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import { env } from "../config/env";
+import { buildDatabaseSslConfig } from "./database-ssl";
 import {
   getDatabaseConnectivityErrorCode,
   isDatabaseConnectivityError,
@@ -14,17 +15,21 @@ export const databaseConnectionSummary = summarizeDatabaseConnection(
   env.DATABASE_URL,
 );
 
+const databaseSslConfig = buildDatabaseSslConfig({
+  sslRequired: databaseConnectionSummary.sslRequired,
+  allowInvalidCertificates: env.DATABASE_SSL_ALLOW_INVALID_CERTS,
+  caCertPath: env.DATABASE_SSL_CA_CERT_PATH,
+});
+
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: 20,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
   keepAlive: true,
-  ...(databaseConnectionSummary.sslRequired
+  ...(databaseSslConfig
     ? {
-        ssl: {
-          rejectUnauthorized: false,
-        },
+        ssl: databaseSslConfig,
       }
     : {}),
 });

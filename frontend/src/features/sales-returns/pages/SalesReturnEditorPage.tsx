@@ -8,12 +8,14 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { SummaryCard } from "../../../components/ui/SummaryCard";
 import { useToast } from "../../../hooks/use-toast";
 import { formatCurrency, formatDate, formatDateTime, humanizeLabel } from "../../../lib/utils";
 import { hasPermission } from "../../../types/auth";
 import { billingQueryKeys, listBills, type BillListItem } from "../../billing/api/billing";
-import { BillingModuleNav } from "../../billing/components/BillingModuleNav";
+import {
+  BillingModuleNav,
+  billingModuleButtonClassName,
+} from "../../billing/components/BillingModuleNav";
 import { useSessionQuery } from "../../auth/hooks/use-session";
 import {
   completeSalesReturn,
@@ -102,6 +104,8 @@ export const SalesReturnEditorPage = () => {
   const [notes, setNotes] = useState("");
   const [itemDrafts, setItemDrafts] = useState<Record<string, ItemDraft>>({});
   const initializedKeyRef = useRef<string>("");
+  const normalizedSaleSearch = saleSearch.trim();
+  const hasSaleSearch = normalizedSaleSearch.length > 0;
 
   const existingReturnQuery = useQuery({
     enabled: isEditing,
@@ -120,9 +124,9 @@ export const SalesReturnEditorPage = () => {
   });
 
   const completedBillsQuery = useQuery({
-    enabled: !activeSaleId && !isEditing,
+    enabled: !activeSaleId && !isEditing && hasSaleSearch,
     queryKey: billingQueryKeys.list({
-      search: saleSearch || undefined,
+      search: normalizedSaleSearch || undefined,
       status: "completed",
       page: 1,
       pageSize: 8,
@@ -131,7 +135,7 @@ export const SalesReturnEditorPage = () => {
     }),
     queryFn: () =>
       listBills({
-        search: saleSearch || undefined,
+        search: normalizedSaleSearch || undefined,
         status: "completed",
         page: 1,
         pageSize: 8,
@@ -448,7 +452,7 @@ export const SalesReturnEditorPage = () => {
             <BillingModuleNav canCreateBills={canCreateBills} />
             {activeSaleId ? (
               <Link
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className={billingModuleButtonClassName}
                 to={`/app/billing/${activeSaleId}`}
               >
                 View bill
@@ -456,7 +460,7 @@ export const SalesReturnEditorPage = () => {
             ) : null}
             {!isEditing && activeSaleId ? (
               <button
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className={billingModuleButtonClassName}
                 onClick={() => {
                   initializedKeyRef.current = "";
                   setSelectedSaleId("");
@@ -469,16 +473,12 @@ export const SalesReturnEditorPage = () => {
             ) : null}
           </>
         }
-        description="Create a compact item-wise return against a completed bill, with backend-safe quantity checks and refund capture."
         eyebrow="Billing / Sales Returns"
         title={isEditing ? "Edit draft return" : "Create sales return"}
       />
 
       {!activeSaleId && !isEditing ? (
-        <SectionCard
-          description="Search a completed bill first. Returns can only be created against completed sales."
-          title="Select completed bill"
-        >
+        <SectionCard title="Select completed bill">
           <div className="space-y-4">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Search bill
@@ -490,15 +490,15 @@ export const SalesReturnEditorPage = () => {
               />
             </label>
 
-            {completedBillsQuery.isLoading ? (
+            {hasSaleSearch && completedBillsQuery.isLoading ? (
               <LoadingState title="Loading completed bills" />
-            ) : completedBillsQuery.error ? (
+            ) : hasSaleSearch && completedBillsQuery.error ? (
               <ErrorState
                 description={completedBillsQuery.error.message}
                 onRetry={() => completedBillsQuery.refetch()}
                 title="Unable to load completed bills"
               />
-            ) : completedBillsQuery.data?.items.length ? (
+            ) : hasSaleSearch && completedBillsQuery.data?.items.length ? (
               <div className="grid gap-3 lg:grid-cols-2">
                 {completedBillsQuery.data.items.map((bill: BillListItem) => (
                   <article
@@ -535,12 +535,12 @@ export const SalesReturnEditorPage = () => {
                   </article>
                 ))}
               </div>
-            ) : (
+            ) : hasSaleSearch ? (
               <EmptyState
                 description="No completed bills match your current search."
                 title="No completed bills found"
               />
-            )}
+            ) : null}
           </div>
         </SectionCard>
       ) : null}
@@ -557,16 +557,29 @@ export const SalesReturnEditorPage = () => {
         ) : returnableSaleQuery.data ? (
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard hint="Original bill number" label="Bill" value={returnableSaleQuery.data.sale.billNumber} />
-              <SummaryCard hint="Customer on bill" label="Customer" value={returnableSaleQuery.data.sale.customerLabel} />
-              <SummaryCard hint="Original sale value" label="Bill total" value={formatCurrency(returnableSaleQuery.data.sale.grandTotal)} />
-              <SummaryCard hint="Preview from selected items" label="Return preview" value={formatCurrency(previewTotal)} />
+              {[
+                ["Bill", returnableSaleQuery.data.sale.billNumber],
+                ["Customer", returnableSaleQuery.data.sale.customerLabel],
+                ["Bill total", formatCurrency(returnableSaleQuery.data.sale.grandTotal)],
+                ["Return preview", formatCurrency(previewTotal)],
+              ].map(([label, value]) => (
+                <article
+                  className="rounded-[22px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,255,0.94))] px-5 py-4 shadow-[0_18px_44px_-38px_rgba(15,23,42,0.2)]"
+                  key={label}
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                    {label}
+                  </p>
+                  <p className="mt-3 break-words text-[1.3rem] font-semibold tracking-tight text-slate-950 md:text-[1.55rem]">
+                    {value}
+                  </p>
+                </article>
+              ))}
             </div>
 
-            <SectionCard description="Review the original bill context before posting the return." title="Original bill summary">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <SectionCard title="Original bill summary">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {[
-                  ["Completed at", formatDateTime(returnableSaleQuery.data.sale.completedAt)],
                   ["Payment status", humanizeLabel(returnableSaleQuery.data.sale.paymentStatus)],
                   ["Payment method", humanizeLabel(returnableSaleQuery.data.sale.paymentMethod)],
                   ["Created by", returnableSaleQuery.data.sale.createdBy.fullName],
@@ -584,7 +597,7 @@ export const SalesReturnEditorPage = () => {
               </div>
             </SectionCard>
 
-            <SectionCard description="Choose only the lines and quantities being returned. Remaining quantity is protected by the backend." title="Return items">
+            <SectionCard title="Return items">
               {activeItems.some((item) => item.remainingReturnableQuantity > 0) ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 xl:hidden">
@@ -703,7 +716,10 @@ export const SalesReturnEditorPage = () => {
                     })}
                   </div>
 
-                  <div className="hidden overflow-x-auto xl:block">
+                  <div
+                    className="hidden overflow-x-auto xl:block [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/45 [&::-webkit-scrollbar-track]:bg-transparent"
+                    style={{ scrollbarColor: "rgba(148, 163, 184, 0.45) transparent" }}
+                  >
                     <table className="min-w-[1320px] w-full border-separate border-spacing-y-3">
                       <thead>
                         <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -819,13 +835,17 @@ export const SalesReturnEditorPage = () => {
               )}
             </SectionCard>
 
-            <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-              <SectionCard description="Capture how the refund should be recorded for this return." title="Refund details">
-                <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid items-stretch gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+              <SectionCard
+                className="h-full"
+                contentClassName="flex h-full flex-col"
+                title="Refund details"
+              >
+                <div className="grid gap-4 md:grid-cols-2 md:items-start">
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Refund amount
                     <input
-                      className={inputClassName}
+                      className={`${inputClassName} h-14`}
                       min="0"
                       onChange={(event) => {
                         const value = event.target.value;
@@ -849,7 +869,7 @@ export const SalesReturnEditorPage = () => {
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Refund method
                     <select
-                      className={inputClassName}
+                      className={`${inputClassName} h-14`}
                       disabled={Number.parseFloat(refundAmount || "0") <= 0}
                       onChange={(event) =>
                         setRefundMethod(event.target.value as SalesReturnRefundMethod | "")
@@ -868,7 +888,7 @@ export const SalesReturnEditorPage = () => {
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Refund status
                     <select
-                      className={inputClassName}
+                      className={`${inputClassName} h-14`}
                       disabled={Number.parseFloat(refundAmount || "0") <= 0}
                       onChange={(event) =>
                         setRefundStatus(event.target.value as SalesReturnRefundStatus)
@@ -885,10 +905,10 @@ export const SalesReturnEditorPage = () => {
                     </select>
                   </label>
 
-                  <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Notes
                     <textarea
-                      className={`${inputClassName} min-h-28 resize-y`}
+                      className={`${inputClassName} min-h-[9rem] resize-y py-3`}
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Optional return notes"
                       value={notes}
@@ -897,8 +917,12 @@ export const SalesReturnEditorPage = () => {
                 </div>
               </SectionCard>
 
-              <SectionCard description="Preview totals before saving the draft or posting the stock reversal." title="Return totals">
-                <div className="space-y-3">
+              <SectionCard
+                className="h-full"
+                contentClassName="flex h-full flex-col"
+                title="Return totals"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Selected items", selectedItems.length.toString()],
                     ["Return amount", formatCurrency(previewTotal)],
@@ -908,13 +932,13 @@ export const SalesReturnEditorPage = () => {
                     ["Refund status", humanizeLabel(normalizeRefundFields(Number.parseFloat(refundAmount || "0"), refundMethod, refundStatus).refundStatus)],
                   ].map(([label, value]) => (
                     <div
-                      className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3"
                       key={label}
                     >
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                         {label}
                       </p>
-                      <p className="mt-1.5 text-sm font-semibold text-slate-950">{value}</p>
+                      <p className="text-sm font-semibold text-right text-slate-950">{value}</p>
                     </div>
                   ))}
                 </div>

@@ -1,21 +1,46 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { LoadingState } from "../../../components/ui/LoadingState";
+import { useToast } from "../../../hooks/use-toast";
+import { cn } from "../../../lib/utils";
 import { downloadDocumentPdf, documentsQueryKeys, getDocumentPreview, isDocumentKind } from "../api/documents";
 import { DocumentPreview } from "../components/DocumentPreview";
 import type { DocumentVariant } from "../../../types/document";
+
+const activeVariantButtonStyle = {
+  backgroundColor: "#020617",
+  borderColor: "#020617",
+  color: "#ffffff",
+  WebkitTextFillColor: "#ffffff",
+} as const;
+
+const idleVariantButtonStyle = {
+  color: "#020617",
+  WebkitTextFillColor: "#020617",
+} as const;
 
 export const DocumentPreviewPage = () => {
   const { kind, id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const hasPrintedRef = useRef(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { pushToast } = useToast();
   const variant = (searchParams.get("variant") as DocumentVariant | null) ?? "a4";
   const shouldAutoPrint = searchParams.get("autoprint") === "1";
   const activeKind = isDocumentKind(kind) ? kind : null;
+  const secondaryButtonClassName =
+    "rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:border-slate-300 hover:bg-slate-50";
+  const variantButtonClassName = (isActive: boolean) =>
+    cn(
+      "inline-flex min-w-[5.25rem] items-center justify-center rounded-2xl border px-4 py-2.5 text-sm font-semibold transition",
+      isActive
+        ? "border-slate-950 bg-slate-950 text-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.85)] hover:bg-slate-900 hover:text-white"
+        : "border-slate-200 bg-white text-slate-950 hover:border-slate-300 hover:bg-slate-50",
+    );
 
   useEffect(() => {
     const previousOverflowX = window.document.body.style.overflowX;
@@ -94,7 +119,7 @@ export const DocumentPreviewPage = () => {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className={secondaryButtonClassName}
               onClick={() => navigate(-1)}
               type="button"
             >
@@ -103,21 +128,21 @@ export const DocumentPreviewPage = () => {
             {activeKind === "sale-invoice" ? (
               <>
                 <Link
-                  className={`rounded-2xl px-4 py-2.5 text-sm font-semibold transition ${
-                    variant === "a4"
-                      ? "bg-slate-950 text-white"
-                      : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
+                  aria-current={variant === "a4" ? "page" : undefined}
+                  className={variantButtonClassName(variant === "a4")}
+                  style={variant === "a4" ? activeVariantButtonStyle : idleVariantButtonStyle}
                   to={`/documents/${activeKind}/${id}?variant=a4`}
                 >
                   A4
                 </Link>
                 <Link
-                  className={`rounded-2xl px-4 py-2.5 text-sm font-semibold transition ${
+                  aria-current={variant === "compact" ? "page" : undefined}
+                  className={variantButtonClassName(variant === "compact")}
+                  style={
                     variant === "compact"
-                      ? "bg-slate-950 text-white"
-                      : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
+                      ? activeVariantButtonStyle
+                      : idleVariantButtonStyle
+                  }
                   to={`/documents/${activeKind}/${id}?variant=compact`}
                 >
                   Compact
@@ -125,20 +150,30 @@ export const DocumentPreviewPage = () => {
               </>
             ) : null}
             <button
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className={secondaryButtonClassName}
               onClick={() => window.print()}
               type="button"
             >
               Print
             </button>
             <button
-              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={isDownloading}
               onClick={() => {
-                void downloadDocumentPdf(activeKind, id, variant);
+                setIsDownloading(true);
+                void downloadDocumentPdf(activeKind, id, variant)
+                  .catch((error: Error) => {
+                    pushToast({
+                      title: "Unable to download PDF",
+                      description: error.message,
+                      variant: "error",
+                    });
+                  })
+                  .finally(() => setIsDownloading(false));
               }}
               type="button"
             >
-              Download PDF
+              {isDownloading ? "Preparing..." : "Download PDF"}
             </button>
           </div>
         </div>

@@ -55,16 +55,44 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
     if (axios.isAxiosError(error)) {
+      let errorPayload:
+        | {
+            error?: {
+              code?: string;
+              message?: string;
+              details?: unknown;
+            };
+            message?: string;
+          }
+        | undefined;
+
+      if (
+        typeof Blob !== "undefined" &&
+        error.response?.data instanceof Blob &&
+        error.response.data.type.includes("application/json")
+      ) {
+        try {
+          errorPayload = JSON.parse(await error.response.data.text()) as typeof errorPayload;
+        } catch {
+          errorPayload = undefined;
+        }
+      } else if (
+        error.response?.data &&
+        typeof error.response.data === "object"
+      ) {
+        errorPayload = error.response.data as typeof errorPayload;
+      }
+
       const message =
-        error.response?.data?.error?.message ??
-        error.response?.data?.message ??
+        errorPayload?.error?.message ??
+        errorPayload?.message ??
         error.message ??
         "Something went wrong. Please try again.";
       const status = error.response?.status ?? 500;
-      const code = error.response?.data?.error?.code;
-      const details = error.response?.data?.error?.details;
+      const code = errorPayload?.error?.code;
+      const details = errorPayload?.error?.details;
 
       if (typeof window !== "undefined" && status === 401) {
         window.dispatchEvent(

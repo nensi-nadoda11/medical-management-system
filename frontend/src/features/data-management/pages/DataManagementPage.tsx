@@ -11,6 +11,7 @@ import { Pagination } from "../../../components/ui/Pagination";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { useToast } from "../../../hooks/use-toast";
+import { ApiError } from "../../../lib/api";
 import {
   cn,
   formatDateTime,
@@ -56,6 +57,34 @@ const duplicateModeLabels: Record<DuplicateMode, string> = {
   update_existing: "Update existing",
   fail_duplicates: "Fail on duplicates",
   upsert: "Upsert",
+};
+
+const formatImportValidationError = (error: Error) => {
+  if (!(error instanceof ApiError) || !Array.isArray(error.details)) {
+    return error.message;
+  }
+
+  const missingHeaders = error.details
+    .flatMap((detail) => {
+      if (
+        detail &&
+        typeof detail === "object" &&
+        "path" in detail &&
+        "message" in detail &&
+        detail.message === "Required header is missing."
+      ) {
+        return [String(detail.path)];
+      }
+
+      return [];
+    })
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  if (!missingHeaders.length) {
+    return error.message;
+  }
+
+  return `${error.message} Missing: ${missingHeaders.join(", ")}.`;
 };
 
 const readFileAsBase64 = (file: File) =>
@@ -203,7 +232,7 @@ export const DataManagementPage = () => {
     onError: (error: Error) => {
       pushToast({
         title: "Unable to validate file",
-        description: error.message,
+        description: formatImportValidationError(error),
         variant: "error",
       });
     },
@@ -318,6 +347,12 @@ export const DataManagementPage = () => {
     },
   });
 
+  const expectedRestoreConfirmation = restoreTarget
+    ? `RESTORE ${restoreTarget.fileName}`
+    : "";
+  const isRestoreConfirmationValid =
+    !restoreTarget || restoreConfirmationText.trim() === expectedRestoreConfirmation;
+
   const overviewStats = useMemo(
     () => [
       ["Preview rows", previewJob?.totalRows ?? 0],
@@ -426,6 +461,9 @@ export const DataManagementPage = () => {
               </div>
             }
           >
+            <p className="text-sm text-slate-500">
+              Use the import template or a previously exported file for the same data type.
+            </p>
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.4fr_auto]">
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Import type
@@ -1176,6 +1214,7 @@ export const DataManagementPage = () => {
         confirmLabel="Run restore"
         tone="danger"
         isLoading={restoreMutation.isPending}
+        isConfirmDisabled={!isRestoreConfirmationValid}
         onClose={() => {
           setRestoreTarget(null);
           setRestoreConfirmationText("");
@@ -1185,14 +1224,19 @@ export const DataManagementPage = () => {
           restoreTarget ? (
             <div className="space-y-3">
               <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Type <strong>{`RESTORE ${restoreTarget.fileName}`}</strong> to confirm this restore.
+                Type <strong>{expectedRestoreConfirmation}</strong> to confirm this restore.
               </div>
               <input
                 className={inputClassName}
                 onChange={(event) => setRestoreConfirmationText(event.target.value)}
-                placeholder={`RESTORE ${restoreTarget.fileName}`}
+                placeholder={expectedRestoreConfirmation}
                 value={restoreConfirmationText}
               />
+              {restoreConfirmationText.trim().length > 0 && !isRestoreConfirmationValid ? (
+                <p className="text-sm text-rose-600">
+                  Enter the exact confirmation text before running restore.
+                </p>
+              ) : null}
             </div>
           ) : null
         }

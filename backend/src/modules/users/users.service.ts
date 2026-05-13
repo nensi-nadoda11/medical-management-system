@@ -1,4 +1,5 @@
 import { env } from "../../config/env";
+import { resolveAppBaseUrl } from "../../config/runtime-config";
 import { db } from "../../db/client";
 import { AppError } from "../../shared/errors/app-error";
 import { hashPassword } from "../../shared/security/password";
@@ -17,7 +18,11 @@ import type {
 } from "./users.validation";
 
 const getAppBaseUrl = () =>
-  env.APP_BASE_URL ?? env.allowedOrigins[0] ?? "http://localhost:5173";
+  resolveAppBaseUrl({
+    nodeEnv: env.NODE_ENV,
+    appBaseUrl: env.APP_BASE_URL,
+    allowedOrigins: env.allowedOrigins,
+  });
 
 const buildAppError = (statusCode: number, code: string, message: string) =>
   new AppError({
@@ -106,6 +111,7 @@ export class UsersService {
     invitedByUserId: string,
     input: InviteUserInput,
   ) {
+    const appBaseUrl = getAppBaseUrl();
     const normalizedEmail = normalizeEmail(input.email);
     const existingUser = await this.usersRepository.findByEmail(normalizedEmail);
 
@@ -162,7 +168,7 @@ export class UsersService {
       throw buildSafeInternalError("Failed to create the invitation.");
     }
 
-    const inviteLink = `${getAppBaseUrl()}/set-password?token=${token}`;
+    const inviteLink = `${appBaseUrl}/set-password?token=${token}`;
 
     try {
       await emailService.send({
@@ -200,6 +206,7 @@ export class UsersService {
   }
 
   async resendInvitation(shopId: string, invitationId: string) {
+    const appBaseUrl = getAppBaseUrl();
     const invitation = await this.usersRepository.findInvitationById(invitationId);
 
     if (!invitation || invitation.shopId !== shopId) {
@@ -250,7 +257,7 @@ export class UsersService {
       throw buildSafeInternalError("Failed to update the invitation.");
     }
 
-    const inviteLink = `${getAppBaseUrl()}/set-password?token=${token}`;
+    const inviteLink = `${appBaseUrl}/set-password?token=${token}`;
 
     try {
       await emailService.send({

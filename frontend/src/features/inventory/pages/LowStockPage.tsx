@@ -2,9 +2,7 @@ import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
-import { FilterBar } from "../../../components/ui/FilterBar";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { Pagination } from "../../../components/ui/Pagination";
@@ -122,124 +120,113 @@ export const LowStockPage = () => {
             Back to inventory
           </Link>
         }
-        description="A dedicated refill-focused view so the admin can quickly see what needs replenishment."
+        className="py-4"
         eyebrow="Inventory control"
         title="Low Stock"
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SummaryCard
-          hint="Total medicines currently below reorder"
           label="Low stock medicines"
           tone="danger"
           value={pagination?.total ?? 0}
         />
         <SummaryCard
-          hint="Visible shortage quantity compared with reorder levels"
           label="Visible shortage"
           tone="warning"
           value={formatNumber(totalShortage)}
         />
         <SummaryCard
-          hint="Use this list for replenishment planning"
           label="Current page items"
           value={items.length}
         />
       </div>
 
-      <FilterBar
-        description="Simple filters keep the replenishment list easy to scan."
-        title="Low stock filters"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="grid gap-2 text-sm font-medium text-slate-700 xl:col-span-2">
-            Search
-            <input
-              className={inputClassName}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search medicine, generic name, or barcode"
-              value={search}
-            />
-          </label>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,3fr)_minmax(180px,1.15fr)_minmax(180px,1.15fr)_minmax(150px,0.9fr)_minmax(150px,0.9fr)] xl:items-end">
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Search
+          <input
+            className={inputClassName}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Search medicine, generic name, or barcode"
+            value={search}
+          />
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Category
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setCategoryId(event.target.value);
-                setPage(1);
-              }}
-              value={categoryId}
-            >
-              <option value="">All categories</option>
-              {(categoriesQuery.data?.items ?? []).map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Category
+          <select
+            className={inputClassName}
+            onChange={(event) => {
+              setCategoryId(event.target.value);
+              setPage(1);
+            }}
+            value={categoryId}
+          >
+            <option value="">All categories</option>
+            {(categoriesQuery.data?.items ?? []).map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Manufacturer
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setManufacturerId(event.target.value);
-                setPage(1);
-              }}
-              value={manufacturerId}
-            >
-              <option value="">All manufacturers</option>
-              {(manufacturersQuery.data?.items ?? []).map((manufacturer) => (
-                <option key={manufacturer.id} value={manufacturer.id}>
-                  {manufacturer.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Manufacturer
+          <select
+            className={inputClassName}
+            onChange={(event) => {
+              setManufacturerId(event.target.value);
+              setPage(1);
+            }}
+            value={manufacturerId}
+          >
+            <option value="">All manufacturers</option>
+            {(manufacturersQuery.data?.items ?? []).map((manufacturer) => (
+              <option key={manufacturer.id} value={manufacturer.id}>
+                {manufacturer.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Sort by
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortBy(event.target.value as typeof sortBy);
-                setPage(1);
-              }}
-              value={sortBy}
-            >
-              <option value="availableQuantity">Current stock</option>
-              <option value="reorderLevel">Reorder level</option>
-              <option value="medicineName">Medicine name</option>
-            </select>
-          </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Sort by
+          <select
+            className={inputClassName}
+            onChange={(event) => {
+              setSortBy(event.target.value as typeof sortBy);
+              setPage(1);
+            }}
+            value={sortBy}
+          >
+            <option value="availableQuantity">Current stock</option>
+            <option value="reorderLevel">Reorder level</option>
+            <option value="medicineName">Medicine name</option>
+          </select>
+        </label>
 
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Order
-            <select
-              className={inputClassName}
-              onChange={(event) => {
-                setSortOrder(event.target.value as "asc" | "desc");
-                setPage(1);
-              }}
-              value={sortOrder}
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </label>
-        </div>
-      </FilterBar>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Order
+          <select
+            className={inputClassName}
+            onChange={(event) => {
+              setSortOrder(event.target.value as "asc" | "desc");
+              setPage(1);
+            }}
+            value={sortOrder}
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+      </div>
 
-      <SectionCard
-        description="Medicines that need refill attention now."
-        title="Low stock register"
-      >
+      <SectionCard title="Low stock register">
         {items.length ? (
           <div className="space-y-4">
             <div className="grid gap-3 xl:hidden">
@@ -364,10 +351,9 @@ export const LowStockPage = () => {
             ) : null}
           </div>
         ) : (
-          <EmptyState
-            description="No low stock medicines match the current filters."
-            title="Low stock is clear"
-          />
+          <div className="rounded-[28px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,251,0.96))] px-6 py-12 text-center shadow-[0_24px_58px_-46px_rgba(15,23,42,0.26)]">
+            <p className="text-base font-semibold text-slate-900">Low stock is clear</p>
+          </div>
         )}
       </SectionCard>
     </div>

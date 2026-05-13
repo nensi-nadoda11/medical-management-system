@@ -16,8 +16,10 @@ export const downloadBlob = (blob: Blob, filename: string) => {
   anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  }, 1000);
 };
 
 export const downloadApiFile = async (
@@ -37,4 +39,3 @@ export const downloadApiFile = async (
     parseFilename(response.headers["content-disposition"], fallbackFilename),
   );
 };
-

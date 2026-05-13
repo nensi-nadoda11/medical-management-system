@@ -502,6 +502,36 @@ a {
     border-color: #e2e8f0 !important;
   }
 
+  .sale-invoice-document {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .sale-invoice-document__hero {
+    padding: 14px 16px !important;
+  }
+
+  .sale-invoice-document__meta {
+    gap: 8px !important;
+  }
+
+  .sale-invoice-document__summary {
+    gap: 10px !important;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr) !important;
+  }
+
+  .sale-invoice-document__payment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sale-invoice-document__totals-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sale-invoice-document__table table {
+    border-spacing: 0 6px !important;
+  }
+
   .app-frame,
   .app-shell,
   .app-content {

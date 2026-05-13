@@ -366,8 +366,7 @@ export const useBillingWorkspace = () => {
     });
   }, [validHeldBillId, heldBillQuery.data, loadedHeldBillId, pushToast, queryClient]);
 
-  // Totals calculation
-  const totals = useMemo(() => {
+  const lineTotals = useMemo(() => {
     const itemTotals = draft.items.map((item) => {
       const batch = getSelectedBatch(item);
       const rate = Number(batch?.saleRate ?? 0);
@@ -393,8 +392,26 @@ export const useBillingWorkspace = () => {
     );
     const taxAmount = itemTotals.reduce((sum, item) => sum + item.lineTaxAmount, 0);
     const autoRoundedAmounts = getAutoRoundedMoneyBreakdown(subtotal + taxAmount);
-    const grandTotal = autoRoundedAmounts.roundedAmount;
-    const paidAmount = normalizePaidAmountInput(draft.paidAmount);
+
+    return {
+      subtotal,
+      discountAmount,
+      taxAmount,
+      roundOff: autoRoundedAmounts.roundOffAmount,
+      grandTotal: autoRoundedAmounts.roundedAmount,
+      availableAdvance: Number(
+        selectedCustomerAdvanceQuery.data?.summary.advanceAmount ?? 0,
+      ),
+    };
+  }, [draft.items, selectedCustomerAdvanceQuery.data?.summary.advanceAmount]);
+
+  const effectivePaidAmountInput = isPaidAmountManual
+    ? draft.paidAmount
+    : lineTotals.grandTotal.toFixed(2);
+
+  const totals = useMemo(() => {
+    const paidAmount = normalizePaidAmountInput(effectivePaidAmountInput);
+    const grandTotal = lineTotals.grandTotal;
     const availableAdvance = Number(
       selectedCustomerAdvanceQuery.data?.summary.advanceAmount ?? 0,
     );
@@ -413,10 +430,7 @@ export const useBillingWorkspace = () => {
     );
 
     return {
-      subtotal,
-      discountAmount,
-      taxAmount,
-      roundOff: autoRoundedAmounts.roundOffAmount,
+      ...lineTotals,
       grandTotal,
       paidAmount,
       availableAdvance,
@@ -425,28 +439,18 @@ export const useBillingWorkspace = () => {
       newAdvanceAmount,
       dueAmount,
     };
-  }, [
-    draft.items,
-    draft.paidAmount,
-    selectedCustomerAdvanceQuery.data?.summary.advanceAmount,
-  ]);
+  }, [effectivePaidAmountInput, lineTotals, selectedCustomerAdvanceQuery.data?.summary.advanceAmount]);
 
-  useEffect(() => {
-    if (isPaidAmountManual || isSameMoney(draft.paidAmount, totals.grandTotal)) {
-      return;
-    }
-
-    setDraft((current) => {
-      if (isSameMoney(current.paidAmount, totals.grandTotal)) {
-        return current;
-      }
-
-      return {
-        ...current,
-        paidAmount: totals.grandTotal.toFixed(2),
-      };
-    });
-  }, [draft.paidAmount, isPaidAmountManual, totals.grandTotal]);
+  const effectiveDraft = useMemo(
+    () =>
+      isPaidAmountManual || draft.paidAmount === effectivePaidAmountInput
+        ? draft
+        : {
+            ...draft,
+            paidAmount: effectivePaidAmountInput,
+          },
+    [draft, effectivePaidAmountInput, isPaidAmountManual],
+  );
 
   const resetDraft = useCallback(() => {
     setSearchParams({});
@@ -528,7 +532,11 @@ export const useBillingWorkspace = () => {
       throw new Error("Add at least one medicine before saving the bill.");
     }
 
-    const payload = toPayload(draft, draft.items, totals.roundOff);
+    const payload = toPayload(
+      effectiveDraft,
+      effectiveDraft.items,
+      totals.roundOff,
+    );
     const result = validHeldBillId
       ? await updateHeldMutation.mutateAsync({ id: validHeldBillId, payload })
       : await createHeldMutation.mutateAsync(payload);
@@ -544,7 +552,11 @@ export const useBillingWorkspace = () => {
       throw new Error("Add at least one medicine before completing the bill.");
     }
 
-    const payload = toPayload(draft, draft.items, totals.roundOff);
+    const payload = toPayload(
+      effectiveDraft,
+      effectiveDraft.items,
+      totals.roundOff,
+    );
     const result = validHeldBillId
       ? await updateHeldMutation
           .mutateAsync({ id: validHeldBillId, payload })
@@ -564,7 +576,7 @@ export const useBillingWorkspace = () => {
   };
 
   return {
-    draft,
+    draft: effectiveDraft,
     setDraft,
     medicineSearch,
     setMedicineSearch,

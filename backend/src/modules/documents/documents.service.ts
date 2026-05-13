@@ -266,22 +266,16 @@ export class DocumentsService {
       },
       totals: [
         { label: "Subtotal", value: formatCurrency(record.sale.subtotal) },
-        { label: "Discount", value: formatCurrency(record.sale.discountAmount) },
         { label: "Tax", value: formatCurrency(record.sale.taxAmount) },
-        { label: "Round Off", value: formatCurrency(record.sale.roundOffAmount) },
+        { label: "Discount", value: formatCurrency(record.sale.discountAmount) },
         { label: "Paid", value: formatCurrency(record.sale.paidAmount) },
-        {
-          label: "Grand Total",
-          value: formatCurrency(record.sale.grandTotal),
-          emphasis: "strong",
-        },
       ],
       paymentSummary: [
         { label: "Payment Status", value: humanize(record.sale.paymentStatus) },
         { label: "Due Amount", value: formatCurrency(record.sale.dueAmount) },
       ],
       notes: record.sale.notes ? [record.sale.notes] : undefined,
-      footerLines: buildBaseFooter(),
+      footerLines: [],
     } satisfies GeneratedDocumentTemplate;
   }
 

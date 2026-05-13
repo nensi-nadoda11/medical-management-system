@@ -1,9 +1,18 @@
-import type { Request, Response } from "express";
+import type { Request, RequestHandler, Response } from "express";
 
 import { env } from "../../config/env";
 import { asyncHandler } from "../../shared/http/async-handler";
 import { buildAuthCookieOptions } from "./auth.cookies";
 import { authService } from "./auth.service";
+
+type AuthController = {
+  registerAdmin: RequestHandler;
+  verifyRegistration: RequestHandler;
+  resendRegistrationOtp: RequestHandler;
+  login: RequestHandler;
+  getSession: RequestHandler;
+  logout: RequestHandler;
+};
 
 const clearCookieOptions = {
   ...buildAuthCookieOptions(),
@@ -11,7 +20,7 @@ const clearCookieOptions = {
   maxAge: 0,
 };
 
-export const authController = {
+export const authController: AuthController = {
   registerAdmin: asyncHandler(async (req: Request, res: Response) => {
     const result = await authService.registerAdmin(req.body);
 

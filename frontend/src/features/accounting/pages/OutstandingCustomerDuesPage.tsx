@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BadgeIndianRupee, ReceiptText, Users } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -27,10 +27,6 @@ export const OutstandingCustomerDuesPage = () => {
   const [sortBy, setSortBy] = useState<CustomerDueSortBy>("outstandingAmount");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const deferredSearch = useDeferredValue(search);
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch, sortBy, sortOrder]);
 
   const outstandingCustomersQuery = useQuery({
     queryKey: accountingQueryKeys.outstandingCustomers({
@@ -108,7 +104,10 @@ export const OutstandingCustomerDuesPage = () => {
             <span className="text-sm font-medium text-slate-700">Search</span>
             <input
               className="ui-input"
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="Search customer"
               value={search}
             />
@@ -118,7 +117,10 @@ export const OutstandingCustomerDuesPage = () => {
             <span className="text-sm font-medium text-slate-700">Sort by</span>
             <select
               className="ui-input"
-              onChange={(event) => setSortBy(event.target.value as CustomerDueSortBy)}
+              onChange={(event) => {
+                setSortBy(event.target.value as CustomerDueSortBy);
+                setPage(1);
+              }}
               value={sortBy}
             >
               <option value="outstandingAmount">Due amount</option>
@@ -131,7 +133,10 @@ export const OutstandingCustomerDuesPage = () => {
             <span className="text-sm font-medium text-slate-700">Order</span>
             <select
               className="ui-input"
-              onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+              onChange={(event) => {
+                setSortOrder(event.target.value as SortOrder);
+                setPage(1);
+              }}
               value={sortOrder}
             >
               <option value="desc">Descending</option>

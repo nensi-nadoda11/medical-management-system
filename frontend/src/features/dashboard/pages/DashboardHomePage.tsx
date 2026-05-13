@@ -69,6 +69,7 @@ import {
   formatDateTime,
   formatNumber,
   getDaysUntil,
+  humanizeLabel,
 } from "../../../lib/utils";
 import { AlertList } from "../components/AlertList";
 import { ActivityList, type DashboardActivityItem } from "../components/ActivityList";
@@ -174,6 +175,7 @@ const renderSectionError = (message: string) => (
 
 export const DashboardHomePage = () => {
   const [adminSalesPeriod, setAdminSalesPeriod] = useState<SalesOverviewPeriod>("week");
+  const [dashboardSnapshotTime] = useState(() => Date.now());
   const sessionQuery = useSessionQuery();
   const session = sessionQuery.data;
   const shop = session?.shop;
@@ -403,7 +405,7 @@ export const DashboardHomePage = () => {
   const billParams = {
     status: "completed" as const,
     page: 1,
-    pageSize: 4,
+    pageSize: 12,
     sortBy: "completedAt" as const,
     sortOrder: "desc" as const,
   };
@@ -776,7 +778,7 @@ export const DashboardHomePage = () => {
       label: "completed",
       tone: item.paymentStatus,
       title: item.billNumber,
-      description: `${item.customerLabel} • ${item.paymentMethod}`,
+      description: `${item.customerLabel} | ${humanizeLabel(item.paymentMethod)} paid`,
       amount: formatCurrency(item.grandTotal),
       occurredAt: item.completedAt ?? item.createdAt,
       to: `/app/billing/${item.id}`,
@@ -837,42 +839,25 @@ export const DashboardHomePage = () => {
     )
     .slice(0, 8);
 
-  const recentBillItems: DashboardActivityItem[] = (billsQuery.data?.items ?? []).map(
-    (item: BillListItem) => ({
+  const recentBillCutoff = dashboardSnapshotTime - 24 * 60 * 60 * 1000;
+  const recentBillItems: DashboardActivityItem[] = (billsQuery.data?.items ?? [])
+    .filter((item: BillListItem) => {
+      const occurredAt = item.completedAt ?? item.createdAt;
+
+      return occurredAt ? new Date(occurredAt).getTime() >= recentBillCutoff : false;
+    })
+    .map((item: BillListItem) => ({
       id: `recent-bill-${item.id}`,
       label: item.status,
       tone: item.paymentStatus,
       title: item.billNumber,
-      description: `${item.customerLabel} • ${item.paymentMethod}`,
+      description: `${item.customerLabel} | ${humanizeLabel(item.paymentMethod)} paid`,
       amount: formatCurrency(item.grandTotal),
       occurredAt: item.completedAt ?? item.createdAt,
       to: `/app/billing/${item.id}`,
     }),
   );
 
-  const recentCustomerPaymentItems: DashboardActivityItem[] = (
-    customerPaymentsQuery.data?.items ?? []
-  ).map((item: AccountingCustomerPayment) => ({
-    id: `recent-customer-payment-${item.id}`,
-    label: "payment_received",
-    title: item.customer.fullName,
-    description: `${item.paymentMethod} payment${item.linkedSale ? ` • ${item.linkedSale.billNumber}` : ""}`,
-    amount: formatCurrency(item.amount),
-    occurredAt: item.paymentDate,
-    to: `/app/accounting/customers/${item.customer.id}`,
-  }));
-
-  const recentSupplierPaymentItems: DashboardActivityItem[] = (
-    supplierPaymentsQuery.data?.items ?? []
-  ).map((item: AccountingSupplierPayment) => ({
-    id: `recent-supplier-payment-${item.id}`,
-    label: "payment_made",
-    title: item.supplier.supplierName,
-    description: `${item.paymentMethod} payment${item.linkedPurchase ? ` • ${item.linkedPurchase.purchaseNumber}` : ""}`,
-    amount: formatCurrency(item.amount),
-    occurredAt: item.paymentDate,
-    to: `/app/accounting/suppliers/${item.supplier.id}`,
-  }));
 
   const todaySalesAmount = canViewReports
     ? reportsSummary.todaySales.totalSales
@@ -1288,10 +1273,7 @@ export const DashboardHomePage = () => {
 
   const accountantVisibleSections =
     accountantTopMetrics.length ||
-    accountantQuickLinks.length ||
-    recentCustomerPaymentItems.length ||
-    recentSupplierPaymentItems.length ||
-    canViewPayments;
+    accountantQuickLinks.length;
 
   const visibleSections =
     topMetrics.length ||
@@ -1332,9 +1314,11 @@ export const DashboardHomePage = () => {
         ) : null}
 
         {staffTopMetrics.length ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {staffTopMetrics.map((item) => (
               <MetricCard
+                compact
+                hideHint
                 hint={item.hint}
                 key={item.label}
                 label={item.label}
@@ -1350,7 +1334,9 @@ export const DashboardHomePage = () => {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {staffQuickLinks.map((item) => (
               <QuickLinkCard
+                compact
                 description={item.description}
+                hideDescription
                 key={item.title}
                 metric={item.metric}
                 title={item.title}
@@ -1364,6 +1350,8 @@ export const DashboardHomePage = () => {
         <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           {canViewBilling ? (
             <SectionCard
+              className="xl:col-span-2"
+              contentClassName="h-[16.75rem] overflow-y-auto pr-1.5 custom-scrollbar"
               title="Recent bills"
               action={
                 <Link
@@ -1377,13 +1365,19 @@ export const DashboardHomePage = () => {
               {billsQuery.error ? (
                 renderSectionError("Recent billing activity is not available right now.")
               ) : (
-                <ActivityList items={recentBillItems} />
+                <ActivityList
+                  compact
+                  emptyMessage="No bills were completed in the last 24 hours."
+                  inlineDescription
+                  items={recentBillItems}
+                />
               )}
             </SectionCard>
           ) : null}
 
           {canViewInventory ? (
             <SectionCard
+              className="xl:col-span-2"
               title="Stock attention"
               contentClassName="overflow-y-auto pr-1.5 custom-scrollbar"
               action={
@@ -1524,7 +1518,9 @@ export const DashboardHomePage = () => {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {accountantTopMetrics.map((item) => (
               <MetricCard
+                compact
                 hint={item.hint}
+                hideHint
                 key={item.label}
                 label={item.label}
                 to={item.to}
@@ -1539,7 +1535,9 @@ export const DashboardHomePage = () => {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {accountantQuickLinks.map((item) => (
               <QuickLinkCard
+                compact
                 description={item.description}
+                hideDescription
                 key={item.title}
                 metric={item.metric}
                 title={item.title}
@@ -1550,121 +1548,6 @@ export const DashboardHomePage = () => {
           </div>
         ) : null}
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          {canViewPayments ? (
-            <SectionCard title="Recent customer payments">
-              {customerPaymentsQuery.error ? (
-                renderSectionError("Recent customer payments are not available right now.")
-              ) : (
-                <ActivityList items={recentCustomerPaymentItems} />
-              )}
-            </SectionCard>
-          ) : null}
-
-          {canViewPayments ? (
-            <SectionCard title="Recent supplier payments">
-              {supplierPaymentsQuery.error ? (
-                renderSectionError("Recent supplier payments are not available right now.")
-              ) : (
-                <ActivityList items={recentSupplierPaymentItems} />
-              )}
-            </SectionCard>
-          ) : null}
-        </div>
-
-        {canViewPayments ? (
-          <SectionCard title="Pending follow-up">
-            {customerDueQuery.error || supplierPayableQuery.error ? (
-              renderSectionError("Outstanding follow-up lists are not available right now.")
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="ui-feed-list lg:!max-h-[25rem]">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Customer dues
-                    </p>
-                    <Link className="ui-link-inline" to="/app/accounting/customers">
-                      View all
-                    </Link>
-                  </div>
-                  {(customerDueQuery.data?.items ?? []).length ? (
-                    customerDueQuery.data!.items.map((item) => (
-                      <Link
-                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
-                        key={item.id}
-                        to={`/app/accounting/customers/${item.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-950">
-                              {item.fullName}
-                            </p>
-                            <p className="mt-1.5 text-sm text-slate-600">
-                              {item.customerCode} • {item.mobileNumber}
-                            </p>
-                          </div>
-                          <p className="text-sm font-semibold text-amber-700">
-                            {formatCurrency(item.summary.outstandingAmount)}
-                          </p>
-                        </div>
-                        <p className="mt-3 text-sm text-slate-600">
-                          {formatNumber(item.summary.openBillCount)} open bills • last bill{" "}
-                          {formatDate(item.summary.lastBillDate)}
-                        </p>
-                      </Link>
-                    ))
-                  ) : (
-                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                      No outstanding customer dues right now.
-                    </div>
-                  )}
-                </div>
-
-                <div className="ui-feed-list lg:!max-h-[25rem]">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Supplier payables
-                    </p>
-                    <Link className="ui-link-inline" to="/app/accounting/suppliers">
-                      View all
-                    </Link>
-                  </div>
-                  {(supplierPayableQuery.data?.items ?? []).length ? (
-                    supplierPayableQuery.data!.items.map((item) => (
-                      <Link
-                        className="block rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-4 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.28)] transition hover:border-slate-300 hover:bg-white"
-                        key={item.id}
-                        to={`/app/accounting/suppliers/${item.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-950">
-                              {item.supplierName}
-                            </p>
-                            <p className="mt-1.5 text-sm text-slate-600">
-                              {item.companyName || "Independent"} • {item.mobileNumber}
-                            </p>
-                          </div>
-                          <p className="text-sm font-semibold text-amber-700">
-                            {formatCurrency(item.summary.outstandingAmount)}
-                          </p>
-                        </div>
-                        <p className="mt-3 text-sm text-slate-600">
-                          {formatNumber(item.summary.openPurchaseCount)} open purchases • last purchase{" "}
-                          {formatDate(item.summary.lastPurchaseDate)}
-                        </p>
-                      </Link>
-                    ))
-                  ) : (
-                    <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                      No supplier payables are outstanding right now.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </SectionCard>
-        ) : null}
       </div>
     );
   }

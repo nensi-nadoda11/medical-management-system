@@ -282,11 +282,13 @@ export const AdminSettingsPage = () => {
       .filter((entry) => entry.items.length > 0);
   }, [catalogQuery.data]);
 
-  useEffect(() => {
-    setExpandedPermissionGroups((current) =>
-      current.filter((group) => groupedCatalog.some((entry) => entry.group === group)),
-    );
-  }, [groupedCatalog]);
+  const visibleExpandedPermissionGroups = useMemo(
+    () =>
+      expandedPermissionGroups.filter((group) =>
+        groupedCatalog.some((entry) => entry.group === group),
+      ),
+    [expandedPermissionGroups, groupedCatalog],
+  );
 
   const roleDraftDirty = roleOrder.some((role) => {
     const current =
@@ -715,7 +717,9 @@ export const AdminSettingsPage = () => {
       >
         <div className="space-y-3">
           {groupedCatalog.map((group) => {
-            const isExpanded = expandedPermissionGroups.includes(group.group);
+            const isExpanded = visibleExpandedPermissionGroups.includes(
+              group.group,
+            );
 
             return (
               <div

@@ -1,8 +1,17 @@
 import type { AddressInfo } from "node:net";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import "./test-env";
+
+const mocks = vi.hoisted(() => ({
+  checkCriticalDependencies: vi.fn(),
+}));
+
+vi.mock("../src/shared/runtime/critical-dependencies", () => ({
+  checkCriticalDependencies: mocks.checkCriticalDependencies,
+}));
+
 import { app } from "../src/app";
 
 let server: ReturnType<typeof app.listen>;
@@ -39,6 +48,14 @@ afterAll(async () => {
 
 describe("application routes", () => {
   it("returns a healthy status payload", async () => {
+    mocks.checkCriticalDependencies.mockResolvedValueOnce({
+      status: "ok",
+      dependencies: [
+        { name: "database", status: "ok" },
+        { name: "email", status: "ok" },
+      ],
+    });
+
     const response = await fetch(`${baseUrl}/api/v1/health`);
 
     expect(response.status).toBe(200);
@@ -46,6 +63,93 @@ describe("application routes", () => {
       success: true,
       data: {
         status: "ok",
+        checks: {
+          database: {
+            status: "ok",
+          },
+          email: {
+            status: "ok",
+          },
+        },
+      },
+    });
+  });
+
+  it("returns a service unavailable payload when a critical dependency is down", async () => {
+    mocks.checkCriticalDependencies.mockResolvedValueOnce({
+      status: "error",
+      dependencies: [
+        {
+          name: "database",
+          status: "error",
+          startupBlocking: true,
+          code: "ECONNREFUSED",
+        },
+        {
+          name: "email",
+          status: "ok",
+          startupBlocking: false,
+        },
+      ],
+    });
+
+    const response = await fetch(`${baseUrl}/api/v1/health`);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+      },
+      data: {
+        status: "error",
+        checks: {
+          database: {
+            status: "error",
+            code: "ECONNREFUSED",
+          },
+          email: {
+            status: "ok",
+          },
+        },
+      },
+    });
+  });
+
+  it("returns a degraded but successful payload when only email is unavailable", async () => {
+    mocks.checkCriticalDependencies.mockResolvedValueOnce({
+      status: "degraded",
+      dependencies: [
+        {
+          name: "database",
+          status: "ok",
+          startupBlocking: true,
+        },
+        {
+          name: "email",
+          status: "error",
+          startupBlocking: false,
+          code: "EMAIL_CHECK_FAILED",
+        },
+      ],
+    });
+
+    const response = await fetch(`${baseUrl}/api/v1/health`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        status: "degraded",
+        checks: {
+          database: {
+            status: "ok",
+          },
+          email: {
+            status: "error",
+            code: "EMAIL_CHECK_FAILED",
+          },
+        },
       },
     });
   });

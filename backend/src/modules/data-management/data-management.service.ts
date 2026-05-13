@@ -13,6 +13,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { env } from "../../config/env";
 import { db } from "../../db/client";
 import {
   customerCounters,
@@ -107,6 +108,7 @@ type JsonRecord = Record<string, unknown>;
 type TemplateDefinition = {
   sheetName: string;
   headers: string[];
+  requiredHeaders: string[];
   example: Record<string, string>;
 };
 
@@ -224,7 +226,23 @@ type BackupPayload = {
   };
 };
 
-const BACKUP_DIRECTORY = path.resolve(process.cwd(), "storage", "backups");
+const buildBackupReferenceNameMap = (rows: Array<Record<string, unknown>> | undefined) =>
+  new Map(
+    (rows ?? [])
+      .map((row) => {
+        const id = toOptionalString(row.id, 64);
+        const name = toOptionalString(row.name, 160);
+
+        if (!id || !name) {
+          return null;
+        }
+
+        return [id, name] as const;
+      })
+      .filter((entry): entry is readonly [string, string] => entry !== null),
+  );
+
+const BACKUP_DIRECTORY = env.backupStorageDirectory;
 const GST_PERCENTAGES = [0, 5, 12, 18, 28];
 const MEDICINE_FORMS: MedicineForm[] = [
   "tablet",
@@ -283,6 +301,15 @@ const IMPORT_TEMPLATES: Record<ImportType, TemplateDefinition> = {
       "status",
       "notes",
     ],
+    requiredHeaders: [
+      "medicineName",
+      "genericName",
+      "form",
+      "unit",
+      "categoryName",
+      "manufacturerName",
+      "gstPercent",
+    ],
     example: {
       medicineName: "Paracetamol 500",
       genericName: "Paracetamol",
@@ -321,6 +348,7 @@ const IMPORT_TEMPLATES: Record<ImportType, TemplateDefinition> = {
       "status",
       "notes",
     ],
+    requiredHeaders: ["supplierName", "mobileNumber"],
     example: {
       supplierName: "Raj Medical Agencies",
       companyName: "Raj Healthcare Pvt Ltd",
@@ -358,6 +386,7 @@ const IMPORT_TEMPLATES: Record<ImportType, TemplateDefinition> = {
       "status",
       "notes",
     ],
+    requiredHeaders: ["fullName", "mobileNumber"],
     example: {
       fullName: "Anita Sharma",
       mobileNumber: "+919812345678",
@@ -779,7 +808,7 @@ export class DataManagementService {
       headerIndex.set(toHeaderKey(header), index);
     });
 
-    const missingHeaders = template.headers.filter(
+    const missingHeaders = template.requiredHeaders.filter(
       (header) => !headerIndex.has(toHeaderKey(header)),
     );
 
@@ -787,7 +816,7 @@ export class DataManagementService {
       throw buildAppError(
         422,
         "IMPORT_HEADERS_INVALID",
-        "The uploaded file headers do not match the selected import template.",
+        "The uploaded file is missing required columns for the selected import type.",
         missingHeaders.map((header) => ({
           path: header,
           message: "Required header is missing.",
@@ -1217,6 +1246,11 @@ export class DataManagementService {
       throw buildAppError(404, "SHOP_NOT_FOUND", "Shop not found.");
     }
 
+    const categoryNameById = new Map(categoriesData.map((item) => [item.id, item.name]));
+    const manufacturerNameById = new Map(
+      manufacturersData.map((item) => [item.id, item.name]),
+    );
+
     const payload: BackupPayload = {
       version: 1,
       type: "shop_snapshot",
@@ -1249,7 +1283,12 @@ export class DataManagementService {
           ? {
               categories: categoriesData.map((item) => ({ ...item })),
               manufacturers: manufacturersData.map((item) => ({ ...item })),
-              medicines: medicinesData.map((item) => ({ ...item })),
+              medicines: medicinesData.map((item) => ({
+                ...item,
+                categoryName: categoryNameById.get(item.categoryId) ?? null,
+                manufacturerName:
+                  manufacturerNameById.get(item.manufacturerId) ?? null,
+              })),
             }
           : {}),
         ...(input.includeContacts
@@ -1534,12 +1573,20 @@ export class DataManagementService {
           restoreSummary,
           tx,
         );
+        const backupCategoryNameById = buildBackupReferenceNameMap(
+          payload.data.categories,
+        );
+        const backupManufacturerNameById = buildBackupReferenceNameMap(
+          payload.data.manufacturers,
+        );
 
         await this.restoreMedicines(
           auth.shopId,
           payload.data.medicines ?? [],
           categoryMap,
           manufacturerMap,
+          backupCategoryNameById,
+          backupManufacturerNameById,
           restoreSummary,
           tx,
         );
@@ -3343,6 +3390,8 @@ export class DataManagementService {
     rows: Array<Record<string, unknown>>,
     categoryMap: Map<string, typeof medicineCategories.$inferSelect>,
     manufacturerMap: Map<string, typeof manufacturers.$inferSelect>,
+    backupCategoryNameById: Map<string, string>,
+    backupManufacturerNameById: Map<string, string>,
     summary: RestoreSummary,
     tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   ) {
@@ -3368,11 +3417,17 @@ export class DataManagementService {
         row.unit && MEDICINE_UNITS.includes(row.unit as MedicineUnit)
           ? (row.unit as MedicineUnit)
           : undefined;
-      const category = toOptionalString(row.categoryName, 120)
-        ? categoryMap.get(normalizeName(String(row.categoryName)))
+      const categoryName =
+        toOptionalString(row.categoryName, 120) ??
+        backupCategoryNameById.get(String(row.categoryId ?? ""));
+      const manufacturerName =
+        toOptionalString(row.manufacturerName, 160) ??
+        backupManufacturerNameById.get(String(row.manufacturerId ?? ""));
+      const category = categoryName
+        ? categoryMap.get(normalizeName(categoryName))
         : undefined;
-      const manufacturer = toOptionalString(row.manufacturerName, 160)
-        ? manufacturerMap.get(normalizeName(String(row.manufacturerName)))
+      const manufacturer = manufacturerName
+        ? manufacturerMap.get(normalizeName(manufacturerName))
         : undefined;
 
       if (!medicineName || !genericName || !form || !unit || !category || !manufacturer) {

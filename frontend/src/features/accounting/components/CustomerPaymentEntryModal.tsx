@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -37,7 +37,7 @@ interface CustomerPaymentEntryModalProps {
   onSubmit: (payload: SaveCustomerAccountingPaymentPayload) => Promise<void>;
 }
 
-export const CustomerPaymentEntryModal = ({
+const CustomerPaymentEntryModalContent = ({
   open,
   isSubmitting,
   errorMessage,
@@ -46,8 +46,8 @@ export const CustomerPaymentEntryModal = ({
   onSubmit,
 }: CustomerPaymentEntryModalProps) => {
   const [search, setSearch] = useState("");
-  const [customerId, setCustomerId] = useState("");
-  const [saleId, setSaleId] = useState("");
+  const [customerId, setCustomerId] = useState(preset?.customerId ?? "");
+  const [saleId, setSaleId] = useState(preset?.saleId ?? "");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
     useState<AccountingPaymentMethod>("cash");
@@ -69,6 +69,16 @@ export const CustomerPaymentEntryModal = ({
     queryFn: () => getCustomerDueSummary(customerId),
   });
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setCustomerId(preset?.customerId ?? "");
+    setSaleId(preset?.saleId ?? "");
+    setLocalError(null);
+  }, [open, preset?.customerId, preset?.saleId]);
+
   const resetState = () => {
     setSearch("");
     setCustomerId(preset?.customerId ?? "");
@@ -81,46 +91,27 @@ export const CustomerPaymentEntryModal = ({
     setLocalError(null);
   };
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  const customerOptionsItems = customerOptionsQuery.data?.items ?? [];
+  const customerOptions =
+    preset?.customerId &&
+    !customerOptionsItems.some((item) => item.id === preset.customerId)
+      ? [
+          {
+            id: preset.customerId,
+            fullName: preset.customerLabel,
+            customerCode: "",
+            mobileNumber: "",
+            city: null,
+            status: "active" as const,
+            totalDueAmount: "0.00",
+            lastPurchaseDate: null,
+          },
+          ...customerOptionsItems,
+        ]
+      : customerOptionsItems;
 
-    resetState();
-  }, [open, preset?.customerId, preset?.saleId]);
-
-  const customerOptions = useMemo(() => {
-    const items = customerOptionsQuery.data?.items ?? [];
-
-    if (!preset?.customerId) {
-      return items;
-    }
-
-    const exists = items.some((item) => item.id === preset.customerId);
-
-    if (exists) {
-      return items;
-    }
-
-    return [
-      {
-        id: preset.customerId,
-        fullName: preset.customerLabel,
-        customerCode: "",
-        mobileNumber: "",
-        city: null,
-        status: "active" as const,
-        totalDueAmount: "0.00",
-        lastPurchaseDate: null,
-      },
-      ...items,
-    ];
-  }, [customerOptionsQuery.data?.items, preset?.customerId, preset?.customerLabel]);
-
-  const selectedCustomer = useMemo(
-    () => customerOptions.find((item) => item.id === customerId) ?? null,
-    [customerId, customerOptions],
-  );
+  const selectedCustomer =
+    customerOptions.find((item) => item.id === customerId) ?? null;
 
   const selectedSale = dueSummaryQuery.data?.openSales.find((sale) => sale.id === saleId);
   const selectedSaleLabel =
@@ -338,4 +329,16 @@ export const CustomerPaymentEntryModal = ({
       </div>
     </Modal>
   );
+};
+
+export const CustomerPaymentEntryModal = (
+  props: CustomerPaymentEntryModalProps,
+) => {
+  const stateKey = [
+    props.open ? "open" : "closed",
+    props.preset?.customerId ?? "",
+    props.preset?.saleId ?? "",
+  ].join(":");
+
+  return <CustomerPaymentEntryModalContent key={stateKey} {...props} />;
 };

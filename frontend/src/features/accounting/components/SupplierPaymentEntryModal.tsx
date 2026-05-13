@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Modal } from "../../../components/ui/Modal";
@@ -40,7 +40,7 @@ interface SupplierPaymentEntryModalProps {
   onSubmit: (payload: SaveSupplierAccountingPaymentPayload) => Promise<void>;
 }
 
-export const SupplierPaymentEntryModal = ({
+const SupplierPaymentEntryModalContent = ({
   open,
   isSubmitting,
   errorMessage,
@@ -49,8 +49,8 @@ export const SupplierPaymentEntryModal = ({
   onSubmit,
 }: SupplierPaymentEntryModalProps) => {
   const [search, setSearch] = useState("");
-  const [supplierId, setSupplierId] = useState("");
-  const [purchaseId, setPurchaseId] = useState("");
+  const [supplierId, setSupplierId] = useState(preset?.supplierId ?? "");
+  const [purchaseId, setPurchaseId] = useState(preset?.purchaseId ?? "");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
     useState<AccountingPaymentMethod>("cash");
@@ -72,6 +72,16 @@ export const SupplierPaymentEntryModal = ({
     queryFn: () => getSupplierDueSummary(supplierId),
   });
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setSupplierId(preset?.supplierId ?? "");
+    setPurchaseId(preset?.purchaseId ?? "");
+    setLocalError(null);
+  }, [open, preset?.supplierId, preset?.purchaseId]);
+
   const resetState = () => {
     setSearch("");
     setSupplierId(preset?.supplierId ?? "");
@@ -84,44 +94,25 @@ export const SupplierPaymentEntryModal = ({
     setLocalError(null);
   };
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  const supplierOptionsItems = supplierOptionsQuery.data?.items ?? [];
+  const supplierOptions =
+    preset?.supplierId &&
+    !supplierOptionsItems.some((item) => item.id === preset.supplierId)
+      ? [
+          {
+            id: preset.supplierId,
+            supplierName: preset.supplierLabel,
+            companyName: null,
+            mobileNumber: "",
+            status: "active" as const,
+            openingBalance: "0.00",
+          },
+          ...supplierOptionsItems,
+        ]
+      : supplierOptionsItems;
 
-    resetState();
-  }, [open, preset?.supplierId, preset?.purchaseId]);
-
-  const supplierOptions = useMemo(() => {
-    const items = supplierOptionsQuery.data?.items ?? [];
-
-    if (!preset?.supplierId) {
-      return items;
-    }
-
-    const exists = items.some((item) => item.id === preset.supplierId);
-
-    if (exists) {
-      return items;
-    }
-
-    return [
-      {
-        id: preset.supplierId,
-        supplierName: preset.supplierLabel,
-        companyName: null,
-        mobileNumber: "",
-        status: "active" as const,
-        openingBalance: "0.00",
-      },
-      ...items,
-    ];
-  }, [preset?.supplierId, preset?.supplierLabel, supplierOptionsQuery.data?.items]);
-
-  const selectedSupplier = useMemo(
-    () => supplierOptions.find((item) => item.id === supplierId) ?? null,
-    [supplierId, supplierOptions],
-  );
+  const selectedSupplier =
+    supplierOptions.find((item) => item.id === supplierId) ?? null;
 
   const selectedPurchase = dueSummaryQuery.data?.openPurchases.find(
     (purchase) => purchase.id === purchaseId,
@@ -341,4 +332,16 @@ export const SupplierPaymentEntryModal = ({
       </div>
     </Modal>
   );
+};
+
+export const SupplierPaymentEntryModal = (
+  props: SupplierPaymentEntryModalProps,
+) => {
+  const stateKey = [
+    props.open ? "open" : "closed",
+    props.preset?.supplierId ?? "",
+    props.preset?.purchaseId ?? "",
+  ].join(":");
+
+  return <SupplierPaymentEntryModalContent key={stateKey} {...props} />;
 };

@@ -1,6 +1,9 @@
 import { config } from "dotenv";
 import { z } from "zod";
 
+import { resolveBackupStorageDirectory } from "./backup-storage";
+import { buildAllowedOrigins } from "./runtime-config";
+
 config();
 
 const booleanSchema = z.preprocess((value) => {
@@ -29,17 +32,28 @@ const optionalString = z
   .optional()
   .transform((value) => (value && value.length > 0 ? value : undefined));
 
+const optionalUrlString = z
+  .string()
+  .trim()
+  .url("APP_BASE_URL must be a valid absolute URL.")
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : undefined));
+
 const envSchema = z
   .object({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
     PORT: z.coerce.number().int().positive().default(4000),
+    ALLOW_DEGRADED_STARTUP: booleanSchema.default(false),
     DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required."),
+    DATABASE_SSL_ALLOW_INVALID_CERTS: booleanSchema.default(false),
+    DATABASE_SSL_CA_CERT_PATH: optionalString,
     CORS_ALLOWED_ORIGINS: z
       .string()
       .default("http://localhost:5173,http://localhost:5174"),
-    APP_BASE_URL: optionalString,
+    APP_BASE_URL: optionalUrlString,
+    BACKUP_STORAGE_DIR: optionalString,
     TRUST_PROXY: booleanSchema.default(false),
     INVITATION_EXPIRY_HOURS: z.coerce.number().int().positive(),
     INVITATION_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive(),
@@ -201,6 +215,24 @@ const envSchema = z
           "AUTH_COOKIE_SECURE must be true when AUTH_COOKIE_SAME_SITE is none.",
       });
     }
+
+    if (input.NODE_ENV === "production" && !input.APP_BASE_URL) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["APP_BASE_URL"],
+        message:
+          "APP_BASE_URL is required in production to generate invitation links.",
+      });
+    }
+
+    if (input.NODE_ENV === "production" && input.DATABASE_SSL_ALLOW_INVALID_CERTS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DATABASE_SSL_ALLOW_INVALID_CERTS"],
+        message:
+          "DATABASE_SSL_ALLOW_INVALID_CERTS cannot be true in production. Provide a trusted certificate instead.",
+      });
+    }
   });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -211,13 +243,6 @@ if (!parsedEnv.success) {
     .join("; ");
   throw new Error(`Invalid environment configuration: ${message}`);
 }
-
-const defaultLocalOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:5173",
-  "http://127.0.0.1:5174",
-];
 
 const parseWhatsappShopSenderMap = (value?: string) => {
   if (!value) {
@@ -254,20 +279,18 @@ const parseWhatsappShopSenderMap = (value?: string) => {
   return Object.fromEntries(senderMapEntries);
 };
 
-const allowedOrigins = Array.from(
-  new Set(
-    [
-      ...parsedEnv.data.CORS_ALLOWED_ORIGINS.split(",")
-        .map((origin) => origin.trim())
-        .filter(Boolean),
-      ...defaultLocalOrigins,
-    ],
-  ),
-);
+const allowedOrigins = buildAllowedOrigins({
+  nodeEnv: parsedEnv.data.NODE_ENV,
+  corsAllowedOrigins: parsedEnv.data.CORS_ALLOWED_ORIGINS,
+});
 
 const whatsappShopSenderMap = parseWhatsappShopSenderMap(
   parsedEnv.data.TWILIO_WHATSAPP_SHOP_SENDER_MAP,
 );
+
+const backupStorageDirectory = resolveBackupStorageDirectory({
+  configuredPath: parsedEnv.data.BACKUP_STORAGE_DIR,
+});
 
 export const env = {
   ...parsedEnv.data,
@@ -276,5 +299,6 @@ export const env = {
     parsedEnv.data.NODE_ENV === "production",
   DEFAULT_PHONE_COUNTRY: parsedEnv.data.DEFAULT_PHONE_COUNTRY.toUpperCase(),
   allowedOrigins,
+  backupStorageDirectory,
   whatsappShopSenderMap,
 } as const;

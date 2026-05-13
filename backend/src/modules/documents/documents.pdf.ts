@@ -16,6 +16,21 @@ const COLORS = {
   white: "#ffffff",
 };
 
+const invoiceTotalLabels = new Set(["Subtotal", "Discount", "Tax", "Paid"]);
+const invoiceTotalOrder = new Map([
+  ["Subtotal", 0],
+  ["Tax", 1],
+  ["Discount", 2],
+  ["Paid", 3],
+]);
+
+const orderInvoiceTotals = (fields: DocumentField[]) =>
+  [...fields].sort(
+    (left, right) =>
+      (invoiceTotalOrder.get(left.label) ?? Number.MAX_SAFE_INTEGER) -
+      (invoiceTotalOrder.get(right.label) ?? Number.MAX_SAFE_INTEGER),
+  );
+
 const bufferFromPdf = (doc: PDFKit.PDFDocument) =>
   new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -46,6 +61,7 @@ const drawPageChrome = (
 ) => {
   const usableWidth =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const footerY = doc.page.height - doc.page.margins.bottom - 12;
 
   doc
     .save()
@@ -87,12 +103,12 @@ const drawPageChrome = (
   doc
     .font("Helvetica")
     .fontSize(8)
-    .text(template.generatedAt, doc.page.margins.left, doc.page.height - 28, {
+    .text(template.generatedAt, doc.page.margins.left, footerY, {
       width: usableWidth,
       align: "left",
     });
 
-  doc.text(`Page ${pageNumber}`, doc.page.margins.left, doc.page.height - 28, {
+  doc.text(`Page ${pageNumber}`, doc.page.margins.left, footerY, {
     width: usableWidth,
     align: "right",
   });
@@ -170,6 +186,51 @@ const drawFieldCards = (
       });
 
     cursorY = Math.max(cursorY, cardY + 52);
+  });
+
+  return cursorY;
+};
+
+const drawTwoColumnFieldCards = (
+  doc: PDFKit.PDFDocument,
+  fields: DocumentField[],
+  x: number,
+  y: number,
+  width: number,
+) => {
+  const gap = 10;
+  const cardWidth = (width - gap) / 2;
+  let cursorY = y;
+
+  fields.forEach((field, index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const cardX = x + column * (cardWidth + gap);
+    const cardY = y + row * 46;
+
+    doc
+      .save()
+      .roundedRect(cardX, cardY, cardWidth, 38, 12)
+      .fill(COLORS.panel)
+      .restore();
+
+    doc
+      .fillColor(COLORS.muted)
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .text(field.label.toUpperCase(), cardX + 10, cardY + 7, {
+        width: cardWidth - 20,
+      });
+
+    doc
+      .fillColor(COLORS.ink)
+      .font(field.emphasis === "strong" ? "Helvetica-Bold" : "Helvetica")
+      .fontSize(9.2)
+      .text(field.value, cardX + 10, cardY + 19, {
+        width: cardWidth - 20,
+      });
+
+    cursorY = Math.max(cursorY, cardY + 46);
   });
 
   return cursorY;
@@ -382,6 +443,68 @@ const drawSummaryBox = (
   return estimatedHeight;
 };
 
+const drawCompactGridSummaryBox = (
+  doc: PDFKit.PDFDocument,
+  title: string,
+  fields: DocumentField[],
+  x: number,
+  y: number,
+  width: number,
+  columns: number,
+) => {
+  const gap = 10;
+  const cardWidth = (width - gap * (columns - 1)) / columns;
+  const rows = Math.ceil(fields.length / columns);
+  const boxHeight = 26 + rows * 42 + Math.max(0, rows - 1) * 8 + 12;
+
+  doc
+    .save()
+    .roundedRect(x, y, width, boxHeight, 14)
+    .fill(COLORS.panel)
+    .restore();
+
+  doc
+    .fillColor(COLORS.bannerSoft)
+    .font("Helvetica-Bold")
+    .fontSize(9)
+    .text(title, x + 12, y + 10, { width: width - 24 });
+
+  fields.forEach((field, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const cardX = x + column * (cardWidth + gap);
+    const cardY = y + 26 + row * 50;
+
+    doc
+      .save()
+      .roundedRect(cardX, cardY, cardWidth, 34, 10)
+      .fill(COLORS.white)
+      .strokeColor(COLORS.border)
+      .lineWidth(0.8)
+      .stroke()
+      .restore();
+
+    doc
+      .fillColor(COLORS.muted)
+      .font("Helvetica-Bold")
+      .fontSize(7.8)
+      .text(field.label.toUpperCase(), cardX + 8, cardY + 6, {
+        width: cardWidth - 16,
+      });
+
+    doc
+      .fillColor(COLORS.ink)
+      .font(field.emphasis === "strong" ? "Helvetica-Bold" : "Helvetica-Bold")
+      .fontSize(9)
+      .text(field.value, cardX + 8, cardY + 19, {
+        width: cardWidth - 16,
+        align: "right",
+      });
+  });
+
+  return boxHeight;
+};
+
 const drawNotes = (
   doc: PDFKit.PDFDocument,
   notes: string[],
@@ -424,12 +547,28 @@ const drawNotes = (
 };
 
 export const renderDocumentPdf = async (template: GeneratedDocumentTemplate) => {
+  const isSaleInvoiceA4 =
+    template.kind === "sale_invoice" && template.variant === "a4";
+  const visibleTotals = isSaleInvoiceA4
+    ? orderInvoiceTotals(
+        template.totals.filter((field) => invoiceTotalLabels.has(field.label)),
+      )
+    : template.totals;
+  const visibleFooterLines = isSaleInvoiceA4 ? [] : template.footerLines;
+  const customerParty = isSaleInvoiceA4
+    ? template.parties.find((party) => party.title.toLowerCase() === "customer")
+    : null;
+  const remainingParties = customerParty
+    ? template.parties.filter((party) => party !== customerParty)
+    : template.parties;
   const shouldUseLandscape =
-    template.variant !== "compact" && template.table.columns.length >= 7;
+    !isSaleInvoiceA4 &&
+    template.variant !== "compact" &&
+    template.table.columns.length >= 7;
   const doc = new PDFDocument({
     size: "A4",
     layout: shouldUseLandscape ? "landscape" : "portrait",
-    margin: shouldUseLandscape ? 28 : 36,
+    margin: shouldUseLandscape ? 28 : isSaleInvoiceA4 ? 28 : 36,
   });
   const bufferPromise = bufferFromPdf(doc);
   const usableWidth =
@@ -452,93 +591,148 @@ export const renderDocumentPdf = async (template: GeneratedDocumentTemplate) => 
     cursorY += 28;
   }
 
-  doc
-    .fillColor(COLORS.ink)
-    .font("Helvetica")
-    .fontSize(10)
-    .text(template.subtitle, contentX, cursorY, {
-      width: contentWidth,
-    });
-  cursorY += 28;
+  if (!isSaleInvoiceA4) {
+    doc
+      .fillColor(COLORS.ink)
+      .font("Helvetica")
+      .fontSize(10)
+      .text(template.subtitle, contentX, cursorY, {
+        width: contentWidth,
+      });
+    cursorY += 28;
+  } else {
+    cursorY += 6;
+  }
 
-  cursorY = drawFieldCards(
-    doc,
-    template.metadata,
-    contentX,
-    cursorY,
-    contentWidth,
-    template.variant === "compact" ? 1 : 2,
-  );
+  if (customerParty) {
+    cursorY = ensurePageSpace(doc, cursorY, 84);
+    cursorY = drawPartyBlocks(doc, [customerParty], contentX, cursorY, contentWidth, 1);
+    cursorY += 2;
+  }
 
-  if (template.parties.length) {
+  cursorY = isSaleInvoiceA4
+    ? drawTwoColumnFieldCards(doc, template.metadata, contentX, cursorY, contentWidth)
+    : drawFieldCards(
+        doc,
+        template.metadata,
+        contentX,
+        cursorY,
+        contentWidth,
+        template.variant === "compact" ? 1 : 2,
+      );
+
+  if (remainingParties.length) {
     cursorY += 4;
     cursorY = ensurePageSpace(doc, cursorY, 108);
     cursorY = drawPartyBlocks(
       doc,
-      template.parties,
+      remainingParties,
       contentX,
       cursorY,
       contentWidth,
-      template.variant === "compact" ? 1 : Math.min(template.parties.length, 2),
+      template.variant === "compact" ? 1 : Math.min(remainingParties.length, 2),
     );
   }
 
   cursorY = ensurePageSpace(doc, cursorY, 100);
   cursorY = drawTable(doc, template, contentX, cursorY + 2, contentWidth);
 
-  const summaryWidth =
-    template.variant === "compact" ? contentWidth : Math.min(260, contentWidth);
-  const summaryX =
-    template.variant === "compact" ? contentX : contentX + contentWidth - summaryWidth;
   const paymentFields = template.paymentSummary ?? [];
-  const totalsHeight = Math.max(60, template.totals.length * 18 + 26);
-  const paymentHeight = paymentFields.length
-    ? Math.max(60, paymentFields.length * 18 + 26)
-    : 0;
-  const combinedHeight =
-    totalsHeight + (paymentHeight ? paymentHeight + 10 : 0) + 10;
+  if (isSaleInvoiceA4) {
+    const paymentWidth = Math.max(contentWidth * 0.42, 220);
+    const totalsWidth = contentWidth - paymentWidth - 12;
+    const paymentRows = paymentFields.length ? Math.ceil(paymentFields.length / 2) : 0;
+    const totalsRows = Math.ceil(visibleTotals.length / 2);
+    const estimatedSummaryHeight =
+      Math.max(
+        paymentRows ? 26 + paymentRows * 42 + Math.max(0, paymentRows - 1) * 8 + 12 : 0,
+        26 + totalsRows * 42 + Math.max(0, totalsRows - 1) * 8 + 12,
+      ) + 20;
 
-  cursorY = ensurePageSpace(doc, cursorY, combinedHeight);
-
-  const totalsBoxHeight = drawSummaryBox(
-    doc,
-    "Totals",
-    template.totals,
-    summaryX,
-    cursorY,
-    summaryWidth,
-  );
-
-  if (paymentFields.length) {
-    drawSummaryBox(
+    cursorY = ensurePageSpace(doc, cursorY, estimatedSummaryHeight);
+    const paymentHeight = paymentFields.length
+      ? drawCompactGridSummaryBox(
+          doc,
+          "Payment Summary",
+          paymentFields,
+          contentX,
+          cursorY + 12,
+          paymentWidth,
+          2,
+        )
+      : 0;
+    const totalsHeight = drawCompactGridSummaryBox(
       doc,
-      "Payment",
-      paymentFields,
+      "Totals",
+      visibleTotals,
+      contentX + paymentWidth + 12,
+      cursorY + 12,
+      totalsWidth,
+      2,
+    );
+
+    cursorY += Math.max(paymentHeight, totalsHeight) + 20;
+  } else {
+    const summaryWidth =
+      template.variant === "compact" ? contentWidth : Math.min(260, contentWidth);
+    const summaryX =
+      template.variant === "compact" ? contentX : contentX + contentWidth - summaryWidth;
+    const totalsHeight = Math.max(60, visibleTotals.length * 18 + 26);
+    const paymentHeight = paymentFields.length
+      ? Math.max(60, paymentFields.length * 18 + 26)
+      : 0;
+    const combinedHeight =
+      totalsHeight + (paymentHeight ? paymentHeight + 10 : 0) + 10;
+
+    cursorY = ensurePageSpace(doc, cursorY, combinedHeight);
+
+    const totalsBoxHeight = drawSummaryBox(
+      doc,
+      "Totals",
+      visibleTotals,
       summaryX,
-      cursorY + totalsBoxHeight + 10,
+      cursorY,
       summaryWidth,
     );
+
+    if (paymentFields.length) {
+      drawSummaryBox(
+        doc,
+        "Payment",
+        paymentFields,
+        summaryX,
+        cursorY + totalsBoxHeight + 10,
+        summaryWidth,
+      );
+    }
+
+    if (template.notes?.length) {
+      cursorY = ensurePageSpace(doc, cursorY + combinedHeight, 120);
+      cursorY += combinedHeight + 8;
+      cursorY += drawNotes(doc, template.notes, contentX, cursorY, contentWidth);
+    } else {
+      cursorY += combinedHeight;
+    }
   }
 
-  if (template.notes?.length) {
-    cursorY = ensurePageSpace(doc, cursorY + combinedHeight, 120);
-    cursorY += combinedHeight + 8;
-    cursorY += drawNotes(doc, template.notes, contentX, cursorY, contentWidth);
-  } else {
-    cursorY += combinedHeight;
+  if (isSaleInvoiceA4 && template.notes?.length) {
+    cursorY = ensurePageSpace(doc, cursorY, 120);
+    cursorY += drawNotes(doc, template.notes, contentX, cursorY, contentWidth) + 8;
   }
 
-  cursorY += 12;
-  cursorY = ensurePageSpace(doc, cursorY, 60);
+  if (visibleFooterLines.length) {
+    cursorY += 12;
+    cursorY = ensurePageSpace(doc, cursorY, 60);
 
-  doc
-    .fillColor(COLORS.muted)
-    .font("Helvetica")
-    .fontSize(8.3)
-    .text(template.footerLines.join("\n"), contentX, cursorY, {
-      width: contentWidth,
-      lineGap: 2,
-    });
+    doc
+      .fillColor(COLORS.muted)
+      .font("Helvetica")
+      .fontSize(8.3)
+      .text(visibleFooterLines.join("\n"), contentX, cursorY, {
+        width: contentWidth,
+        lineGap: 2,
+      });
+  }
 
   doc.end();
   return bufferPromise;

@@ -486,16 +486,12 @@ export const PurchaseReturnEditorPage = () => {
             ) : null}
           </>
         }
-        description="Create a compact item-wise supplier return against a finalized purchase, with backend-safe quantity and stock checks."
         eyebrow="Purchase management"
         title={isEditing ? "Edit draft purchase return" : "Create purchase return"}
       />
 
       {!activePurchaseId && !isEditing ? (
-        <SectionCard
-          description="Search a finalized purchase first. Returns can only be created against finalized purchase entries."
-          title="Select finalized purchase"
-        >
+        <SectionCard title="Select finalized purchase">
           <div className="space-y-4">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Search purchase
@@ -555,7 +551,6 @@ export const PurchaseReturnEditorPage = () => {
               </div>
             ) : (
               <EmptyState
-                description="No finalized purchases match your current search."
                 title="No finalized purchases found"
               />
             )}
@@ -575,13 +570,13 @@ export const PurchaseReturnEditorPage = () => {
         ) : returnablePurchaseQuery.data ? (
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard hint="Original purchase number" label="Purchase" value={returnablePurchaseQuery.data.purchase.purchaseNumber} />
-              <SummaryCard hint="Supplier on purchase" label="Supplier" value={returnablePurchaseQuery.data.supplier.supplierName} />
-              <SummaryCard hint="Original purchase value" label="Purchase total" value={formatCurrency(returnablePurchaseQuery.data.purchase.grandTotal)} />
-              <SummaryCard hint="Preview from selected items" label="Return preview" value={formatCurrency(previewTotal)} />
+              <SummaryCard label="Purchase" value={returnablePurchaseQuery.data.purchase.purchaseNumber} />
+              <SummaryCard label="Supplier" value={returnablePurchaseQuery.data.supplier.supplierName} />
+              <SummaryCard label="Purchase total" value={formatCurrency(returnablePurchaseQuery.data.purchase.grandTotal)} />
+              <SummaryCard label="Return preview" value={formatCurrency(previewTotal)} />
             </div>
 
-            <SectionCard description="Review the original purchase context before posting the supplier return." title="Original purchase summary">
+            <SectionCard title="Original purchase summary">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   ["Finalized at", formatDateTime(returnablePurchaseQuery.data.purchase.finalizedAt)],
@@ -602,7 +597,7 @@ export const PurchaseReturnEditorPage = () => {
               </div>
             </SectionCard>
 
-            <SectionCard description="Choose only the lines and quantities being returned. Remaining quantity is protected by the backend." title="Return items">
+            <SectionCard title="Return items">
               {activeItems.some((item) => item.remainingReturnableQuantity > 0) ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 xl:hidden">
@@ -866,14 +861,13 @@ export const PurchaseReturnEditorPage = () => {
                 </div>
               ) : (
                 <EmptyState
-                  description="All items on this purchase have already been fully returned."
                   title="No returnable quantity left"
                 />
               )}
             </SectionCard>
 
             <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-              <SectionCard description="Capture how the supplier-side refund should be recorded for this return." title="Refund details">
+              <SectionCard title="Refund details">
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Refund amount
@@ -894,9 +888,6 @@ export const PurchaseReturnEditorPage = () => {
                       type="number"
                       value={refundAmount}
                     />
-                    <span className="text-xs text-slate-500">
-                      Purchase due adjusts first. Maximum refundable amount is {formatCurrency(maxRefundAmount)}.
-                    </span>
                   </label>
 
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -950,7 +941,7 @@ export const PurchaseReturnEditorPage = () => {
                 </div>
               </SectionCard>
 
-              <SectionCard description="Preview totals before saving the draft or posting the stock deduction." title="Return totals">
+              <SectionCard title="Return totals">
                 <div className="space-y-3">
                   {[
                     ["Selected items", selectedItems.length.toString()],
